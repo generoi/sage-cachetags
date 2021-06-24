@@ -1,15 +1,36 @@
 # sage-cachetags
 
+## Installation
+
+```sh
+composer require generoi/sage-cachetags
+```
+
+Start by publishing the config/cachetags.php configuration file using Acorn:
+
+```sh
+wp acorn vendor:publish --provider="Genero\Sage\CacheTags\CacheTagsServiceProvider"
+```
+
+Edit it to your liking and if you're using the database store, scaffold the required database table:
+
+```sh
+wp acorn cachetags:database
+```
+
 ## Usage
+
+Currently it only supports WP Super Cache but plan is to integrate with Cloudflare and other page caches.
 
 ### Composers
 
 ```php
 namespace App\View\Composers;
 
-use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Concerns\ComposerCacheTags;
+use Genero\Sage\CacheTags\Tags\CoreTags;
 use Roots\Acorn\View\Composer;
+use Illuminate\View\View;
 
 class ContentSingle extends Composer
 {
@@ -27,18 +48,21 @@ class ContentSingle extends Composer
         $post = get_post();
 
         return [
+            'post' => $post,
             'date' => $this->date($post),
             'authors' => $this->authors($post),
             'excerpt' => $this->excerpt($post),
             'related' => $this->related($post),
+            'categories' => $this->categories($post),
         ];
     }
 
-    public function cacheTags(): array
+    public function cacheTags(View $view): array
     {
         return [
-            ...CacheTags::getPostCacheTags(),
-            ...CacheTags::getQueryCacheTags($this->related())
+            ...CoreTags::posts($view->post),
+            ...CoreTags::terms($view->categories),
+            ...CoreTags::query($this->related())
         ];
     }
 }
@@ -50,7 +74,7 @@ class ContentSingle extends Composer
 ```php
 namespace App\Blocks;
 
-use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Concerns\BlockCacheTags;
 
 class ArticleList extends Block
@@ -65,7 +89,8 @@ class ArticleList extends Block
         $query = $this->buildQuery();
 
         return [
-            ...CacheTags::getArchiveCacheTags('post'),
+            ...CoreTags::archive('post'),
+            ...CoreTags::query($query),
         ];
     }
 }

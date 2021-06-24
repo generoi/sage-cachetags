@@ -16,6 +16,7 @@
     }
   },
   "require": {
+    "php": ">=7.4",
     "roots/acorn": "*"
   },
   "require-dev": {

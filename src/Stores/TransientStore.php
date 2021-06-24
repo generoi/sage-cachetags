@@ -26,9 +26,7 @@ class TransientStore implements Store
     public function get(array $tags): array
     {
         $urls = collect($this->getCache())
-            ->filter(function ($urls, $tag) use ($tags) {
-                return in_array($tag, $tags);
-            })
+            ->filter(fn ($urls, $tag) => in_array($tag, $tags))
             ->values()
             ->flatten()
             ->all();
@@ -39,9 +37,7 @@ class TransientStore implements Store
     public function clear(array $urls): bool
     {
         $transient = collect($this->getCache())
-            ->map(function ($tagUrls) use ($urls) {
-                return array_diff($tagUrls, $urls);
-            })
+            ->map(fn ($tagUrls) => array_diff($tagUrls, $urls))
             ->filter()
             ->all();
 

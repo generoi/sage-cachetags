@@ -17,6 +17,7 @@ trait BlockCacheTags
     {
         $result = parent::view($view, $with);
 
+        // @TODO: $view/$with?
         app(CacheTags::class)->add($this->cacheTags());
 
         return $result;

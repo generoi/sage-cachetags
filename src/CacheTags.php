@@ -4,147 +4,35 @@ namespace Genero\Sage\CacheTags;
 
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
-use WP_Term;
-use Exception;
-use Illuminate\Support\Facades\Log;
-use WP_Query;
 
 class CacheTags
 {
     /**
      * @var string[]
      */
-    protected $cacheTags;
+    protected array $cacheTags;
+
+    /**
+     * @var string[]
+     */
+    protected array $purgeTags;
 
     /**
      * @var Store $store
      */
-    protected $store;
+    protected Store $store;
 
     /**
      * @var Invalidator[] $invalidators
      */
-    protected $invalidators = [];
+    protected array $invalidators = [];
 
     public function __construct(Store $store, Invalidator ...$invalidators)
     {
         $this->store = $store;
         $this->invalidators = $invalidators;
         $this->cacheTags = [];
-    }
-
-    /**
-     * Return cache tags for a WP_Query.
-     *
-     * @param WP_Query $query
-     */
-    public static function getQueryCacheTags(WP_Query $query): array
-    {
-        return collect($query->get_posts())
-            ->pluck('ID')
-            ->map(function ($postId) {
-                return self::getPostCacheTags($postId);
-            })
-            ->flatten()
-            ->all();
-    }
-
-    /**
-     * Return cache tags for one or many post types.
-     *
-     * @param string|string[] $postTypes
-     */
-    public static function getPostTypeCacheTags($postTypes): array
-    {
-        if (is_string($postTypes) && $postTypes === 'any') {
-            $postTypes = self::getCacheablePostTypes();
-        } elseif (is_string($postTypes)) {
-            $postTypes = [$postTypes];
-        }
-        return $postTypes;
-    }
-
-    /**
-     * Return cache tags for one or many post type archives.
-     *
-     * @param string|string[] $postTypes
-     */
-    public static function getArchiveCacheTags($postTypes): array
-    {
-        return collect(self::getPostTypeCacheTags($postTypes))
-            ->map(function ($postType) {
-                return sprintf('archive:%s', $postType);
-            })
-            ->all();
-    }
-
-    /**
-     * Return cache tags for a post.
-     *
-     * @param int $postId
-     */
-    public static function getPostCacheTags(int $postId = null): array
-    {
-        if (!$postId) {
-            $postId = \get_the_ID();
-        }
-        return ["post:$postId"];
-    }
-
-    /**
-     * Return cache tags for multiple posts.
-     *
-     * @param int[] $postIds
-     */
-    public static function getMultiplePostCacheTags(array $postIds): array
-    {
-        return collect($postIds)
-            ->map(function ($postId) {
-                return CacheTags::getPostCacheTags($postId);
-            })
-            ->flatten()
-            ->all();
-    }
-
-    /**
-     * Return cache tags for one term.
-     *
-     * @param int|null $termId
-     */
-    public static function getTermCacheTags(int $termId = null): array
-    {
-        if (!$termId) {
-            $term = \get_queried_object();
-            if (!($term instanceof WP_Term)) {
-                throw new Exception();
-            }
-            $termId = $term->term_id;
-        }
-
-        return ["term:$termId"];
-    }
-
-    /**
-     * Return cache tags for multiple terms.
-     *
-     * @param int[] $termIds
-     */
-    public static function getMultipleTermCacheTags(array $termIds): array
-    {
-        return collect($termIds)
-            ->map(function ($termId) {
-                return CacheTags::getTermCacheTags($termId);
-            })
-            ->flatten()
-            ->all();
-    }
-
-    /**
-     * Return all cacheable post types.
-     */
-    protected static function getCacheablePostTypes(): array
-    {
-        return \get_post_types(['exclude_from_search' => false]);
+        $this->purgeTags = [];
     }
 
     /**
@@ -166,6 +54,7 @@ class CacheTags
     public function get(): array
     {
         return collect($this->cacheTags)
+            ->flatten()
             ->filter()
             ->unique()
             ->all();
@@ -180,21 +69,42 @@ class CacheTags
     }
 
     /**
-     * Clear caches for tags.
+     * Queue tags to be cleared from cache.
      */
-    public function clear(array $tags): bool
+    public function clear(array $tags): void
     {
-        $urls = $this->store->get($tags);
-        // Clear tag caches
-        $result = $this->store->clear($urls);
+        $this->purgeTags = [
+            ...$this->purgeTags,
+            ...$tags,
+        ];
+    }
 
-        return collect($this->invalidators)
-            ->map(function ($invalidator) use ($urls) {
-                return $invalidator->clear($urls);
-            })
-            ->reduce(function ($result, $invalidatorResult) {
-                return $invalidatorResult ? $result : false;
-            }, $result);
+    public function purgeQueued(): bool
+    {
+        $tags = collect($this->purgeTags)
+            ->flatten()
+            ->filter()
+            ->unique()
+            ->all();
+
+        if (empty($tags)) {
+            return true;
+        }
+
+        $urls = $this->store->get($tags);
+
+        // Run all invalidators but keep track if something failed.
+        $result = collect($this->invalidators)
+            ->map(fn ($invalidator) => $invalidator->clear($urls))
+            // Return false if any of the invalidators did
+            ->reduce(fn ($result, $invalidatorResult) => $invalidatorResult ? $result : false, true);
+
+        if ($result) {
+            // Clear tag caches only if the invalidators succeeded.
+            $result = $this->store->clear($urls);
+        }
+
+        return $result;
     }
 
     /**
@@ -202,14 +112,17 @@ class CacheTags
      */
     public function flush(): bool
     {
-        $result = $this->store->flush();
+        // Run all invalidators but keep track if something failed.
+        $result = collect($this->invalidators)
+            ->map(fn ($invalidator) => $invalidator->flush())
+            // Return false if any of the invalidators did
+            ->reduce(fn ($result, $invalidatorResult) => $invalidatorResult ? $result : false, true);
 
-        return collect($this->invalidators)
-            ->map(function ($invalidator) {
-                return $invalidator->flush();
-            })
-            ->reduce(function ($result, $invalidatorResult) {
-                return $invalidatorResult ? $result : false;
-            }, $result);
+        if ($result) {
+            // Flush the tag caches only if invalidators succeeded.
+            $result = $this->store->flush();
+        }
+
+        return $result;
     }
 }

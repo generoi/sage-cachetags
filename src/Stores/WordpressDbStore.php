@@ -16,18 +16,15 @@ class WordpressDbStore implements Store
                     SET `tag` = %s, `url` = %s
                 ", $tag, $url));
             })
-            ->reduce(function ($result, $insertResult) {
-                return $insertResult ? $result : false;
-            }, true);
+            // Return false if any of the queries failed.
+            ->reduce(fn ($result, $insertResult) => $insertResult ? $result : false, true);
     }
 
     public function get(array $tags): array
     {
         global $wpdb;
         $inClause = collect($tags)
-            ->map(function ($tag) {
-                return sprintf("'%s'", \esc_sql($tag));
-            })
+            ->map(fn ($tag) => sprintf("'%s'", \esc_sql($tag)))
             ->join(',');
 
         $urls = $wpdb->get_col(sprintf("
@@ -43,9 +40,7 @@ class WordpressDbStore implements Store
         global $wpdb;
 
         $inClause = collect($urls)
-            ->map(function ($url) {
-                return sprintf("'%s'", \esc_sql($url));
-            })
+            ->map(fn ($url) => sprintf("'%s'", \esc_sql($url)))
             ->join(',');
 
         $count = $wpdb->query(sprintf("

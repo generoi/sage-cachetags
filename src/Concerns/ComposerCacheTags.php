@@ -9,7 +9,7 @@ use function Roots\app;
 
 trait ComposerCacheTags
 {
-    public function cacheTags(): array
+    public function cacheTags(View $view): array
     {
         return [];
     }
@@ -18,6 +18,6 @@ trait ComposerCacheTags
     {
         parent::compose($view);
 
-        app(CacheTags::class)->add($this->cacheTags());
+        app(CacheTags::class)->add($this->cacheTags($view));
     }
 }
