@@ -8,14 +8,9 @@ class SuperCacheInvalidator implements Invalidator
 {
     public function clear(array $urls): bool
     {
-        $result = true;
-        foreach ($urls as $url) {
-            if (! \wpsc_delete_url_cache($url)) {
-                $result = false;
-            }
-        }
-
-        return $result;
+        return collect($urls)
+            ->map(fn ($url) => \wpsc_delete_url_cache($url))
+            ->reduce(fn ($result, $urlResult) => $urlResult ? $result : false, true);
     }
 
     public function flush(): bool

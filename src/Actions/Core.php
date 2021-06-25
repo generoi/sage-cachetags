@@ -139,7 +139,7 @@ class Core implements Action
     /**
      * When a term is added to an object, clear caches.
      */
-    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy)
+    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy): void
     {
         if (!CoreTags::isCacheableTaxonomy($taxonomy)) {
             return;

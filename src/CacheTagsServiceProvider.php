@@ -7,7 +7,6 @@ use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Contracts\Action;
-use Roots\Acorn\Application;
 use Roots\Acorn\ServiceProvider;
 
 class CacheTagsServiceProvider extends ServiceProvider
@@ -76,14 +75,6 @@ class CacheTagsServiceProvider extends ServiceProvider
     public function saveCacheTags(): void
     {
         $this->cacheTags->save($this->currentUrl());
-
-        if ($header = $this->app->config->get('cachetags.http-header')) {
-            header(sprintf(
-                '%s: %s',
-                $header,
-                collect($this->cacheTags->get())->join(',')
-            ));
-        }
     }
 
     /**

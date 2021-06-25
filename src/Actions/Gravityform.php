@@ -21,14 +21,14 @@ class Gravityform implements Action
         \add_action('gform_after_save_form', [$this, 'onSaveForm'], 10, 2);
     }
 
-    public function addGravityformCacheTags(array $form)
+    public function addGravityformCacheTags(array $form): void
     {
         $this->cacheTags->add([
             ...GravityformTags::forms($form['id']),
         ]);
     }
 
-    public function onSaveForm(array $form, bool $isNew)
+    public function onSaveForm(array $form, bool $isNew): void
     {
         if ($isNew) {
             return;
