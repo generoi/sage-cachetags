@@ -233,7 +233,7 @@ class CoreTags
     /**
      * Return all cacheable post types.
      */
-    protected static function getCacheablePostTypes(): array
+    public static function getCacheablePostTypes(): array
     {
         return \get_post_types(['exclude_from_search' => false]);
     }
@@ -241,7 +241,7 @@ class CoreTags
     /**
      * Return all cacheable taxonomies.
      */
-    protected static function getCacheableTaxonomies(): array
+    public static function getCacheableTaxonomies(): array
     {
         return \get_taxonomies(['public' => true]);
     }
