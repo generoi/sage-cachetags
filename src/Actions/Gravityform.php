@@ -17,15 +17,17 @@ class Gravityform implements Action
 
     public function bind(): void
     {
-        \add_action('gform_pre_render', [$this, 'addGravityformCacheTags']);
+        \add_filter('gform_pre_render', [$this, 'addGravityformCacheTags']);
         \add_action('gform_after_save_form', [$this, 'onSaveForm'], 10, 2);
     }
 
-    public function addGravityformCacheTags(array $form): void
+    public function addGravityformCacheTags(array $form): array
     {
         $this->cacheTags->add([
             ...GravityformTags::forms($form['id']),
         ]);
+        
+        return $form;
     }
 
     public function onSaveForm(array $form, bool $isNew): void
