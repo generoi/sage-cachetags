@@ -93,6 +93,10 @@ class CacheTags
 
         $urls = $this->store->get($tags);
 
+        if (empty($urls)) {
+            return true;
+        }
+
         // Run all invalidators but keep track if something failed.
         $result = collect($this->invalidators)
             ->map(fn ($invalidator) => $invalidator->clear($urls))

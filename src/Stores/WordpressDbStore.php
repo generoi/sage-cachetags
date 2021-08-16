@@ -39,6 +39,10 @@ class WordpressDbStore implements Store
     {
         global $wpdb;
 
+        if (empty($urls)) {
+            return true;
+        }
+
         $inClause = collect($urls)
             ->map(fn ($url) => sprintf("'%s'", \esc_sql($url)))
             ->join(',');
