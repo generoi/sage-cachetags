@@ -232,6 +232,31 @@ class CoreTags
         }
     }
 
+    /**
+     * Return cache tags for changes to any term in taxonomies.
+     *
+     * @param mixed $taxonomies
+     */
+    public static function anyTerm($taxonomies): array
+    {
+        if (is_string($taxonomies) && $taxonomies === 'any') {
+            $taxonomies = self::getCacheableTaxonomies();
+        }
+
+        if (is_string($taxonomies)) {
+            $taxonomies = [$taxonomies];
+        }
+
+        if (is_array($taxonomies)) {
+            return collect($taxonomies)
+                ->map(fn ($taxonomy) => sprintf('taxonomy:%s:any', $taxonomy))
+                ->all();
+        }
+
+        return [];
+    }
+
+
     public static function isCacheablePostType($postType): bool
     {
         if (is_numeric($postType)) {

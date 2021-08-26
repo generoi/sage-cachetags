@@ -196,6 +196,7 @@ class Core implements Action
         $cacheTags = [
             ...CoreTags::terms($termId),
             ...CoreTags::termPages($termId),
+            ...CoreTags::anyTerm($taxonomy),
         ];
 
         // If it's a new term, clear taxonomy listings.
