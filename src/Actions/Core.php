@@ -25,7 +25,7 @@ class Core implements Action
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
         \add_action('transition_comment_status', [$this, 'onCommentStatusTransition'], 10, 3);
         \add_action('comment_post', [$this, 'onCommentPost'], 10, 3);
-        \add_action('saved_term', [$this, 'onTermSave'], 10, 3);
+        \add_action('saved_term', [$this, 'onTermSave'], 10, 4);
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 2);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
