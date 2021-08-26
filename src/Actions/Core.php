@@ -29,6 +29,8 @@ class Core implements Action
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 2);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
+        \add_action('profile_update', [$this, 'onUserUpdate']);
+        \add_action('user_register', [$this, 'onUserCreate']);
     }
 
     /**
@@ -55,6 +57,12 @@ class Core implements Action
                 $this->cacheTags->add([
                     ...CoreTags::archive(get_query_var('post_type')),
                 ]);
+                break;
+            case is_author():
+                $this->cacheTags->add([
+                    ...CoreTags::users(get_query_var('author')),
+                ]);
+                break;
         }
     }
 
@@ -207,6 +215,20 @@ class Core implements Action
     {
         $this->cacheTags->clear([
             ...CoreTags::menu($menuId),
+        ]);
+    }
+
+    public function onUserUpdate(int $userId): void
+    {
+        $this->cacheTags->clear([
+            ...CoreTags::users($userId),
+        ]);
+    }
+
+    public function onUserCreate(int $userId): void
+    {
+        $this->cacheTags->clear([
+            ...CoreTags::users($userId),
         ]);
     }
 }

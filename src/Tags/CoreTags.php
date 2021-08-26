@@ -8,6 +8,7 @@ use WP_Comment;
 use WP_Post;
 use WP_Query;
 use WP_Term;
+use WP_User;
 
 class CoreTags
 {
@@ -67,6 +68,29 @@ class CoreTags
         return collect(self::terms($terms))
             ->map(fn ($tag) => "$tag:full")
             ->all();
+    }
+
+    /**
+     * Return cache tags for one or multiple users.
+     *
+     * @param mixed $users
+     */
+    public static function users($users = null): array
+    {
+        if (is_numeric($users) || $users instanceof WP_User) {
+            $users = [$users];
+        }
+
+        if (is_array($users)) {
+            return collect($users)
+                // Pluck the IDs if it's a list of objects.
+                ->map(fn ($user) => $user instanceof WP_User ? $user->ID : $user)
+                ->map(fn ($userId) => ["user:$userId"])
+                ->flatten()
+                ->all();
+        }
+
+        return [];
     }
 
     /**
