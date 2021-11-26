@@ -137,7 +137,7 @@ class Core implements Action
             // @TODO: Could potentially compare new to old terms and only clear those.
             $cacheTags = [
                 ...$cacheTags,
-                ...CoreTags::taxonomy($taxonomies),
+                ...CoreTags::taxonomy(array_values($taxonomies)),
             ];
         }
 

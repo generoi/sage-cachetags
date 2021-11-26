@@ -230,6 +230,8 @@ class CoreTags
                 ->map(fn ($taxonomy) => sprintf('taxonomy:%s', $taxonomy))
                 ->all();
         }
+
+        return [];
     }
 
     /**
