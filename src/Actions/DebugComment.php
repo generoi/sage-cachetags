@@ -28,7 +28,7 @@ class DebugComment implements Action
         $cacheTags = collect($this->cacheTags->get())
             ->map(function ($tag) {
                 $label = null;
-                [$entity, $id,] = explode(':', $tag);
+                [$entity, $id,] = explode(':', $tag . ':');
 
                 switch ($entity) {
                     case 'menu':
