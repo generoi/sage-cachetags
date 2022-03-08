@@ -39,6 +39,9 @@ class Core implements Action
     public function addTemplateCacheTags(): void
     {
         switch (true) {
+            case is_feed():
+                // Skip feeds
+                break;
             case is_single():
             case is_page():
                 $this->cacheTags->add([
