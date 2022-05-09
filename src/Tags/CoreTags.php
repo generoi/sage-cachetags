@@ -258,6 +258,30 @@ class CoreTags
         return [];
     }
 
+    /**
+     * Return cache tags for changes to any user in roles.
+     *
+     * @param mixed $roels
+     */
+    public static function anyUser($roles): array
+    {
+        if (is_string($roles) && $roles === 'any') {
+            $roles = self::getCacheableUserRoles();
+        }
+
+        if (is_string($roles)) {
+            $roles = [$roles];
+        }
+
+        if (is_array($roles)) {
+            return collect($roles)
+                ->map(fn ($role) => sprintf('role:%s', $role))
+                ->all();
+        }
+
+        return [];
+    }
+
 
     public static function isCacheablePostType($postType): bool
     {
@@ -295,5 +319,13 @@ class CoreTags
     public static function getCacheableTaxonomies(): array
     {
         return \get_taxonomies(['public' => true]);
+    }
+
+    /**
+     * Return all cacheable user roles.
+     */
+    public static function getCacheableUserRoles(): array
+    {
+        return \wp_roles()->get_names();
     }
 }

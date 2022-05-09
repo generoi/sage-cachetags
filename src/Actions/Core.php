@@ -7,6 +7,7 @@ use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Comment;
 use WP_Post;
+use WP_User;
 
 class Core implements Action
 {
@@ -29,6 +30,7 @@ class Core implements Action
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 2);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
+        \add_action('delete_user', [$this, 'onUserDelete'], 10, 3);
         \add_action('profile_update', [$this, 'onUserUpdate']);
         \add_action('user_register', [$this, 'onUserCreate']);
     }
@@ -222,10 +224,19 @@ class Core implements Action
         ]);
     }
 
+    public function onUserDelete(int $userId, ?int $reassign, WP_User $user): void
+    {
+        $this->cacheTags->clear([
+            ...CoreTags::users($userId),
+            ...CoreTags::anyUser($user->roles),
+        ]);
+    }
+
     public function onUserUpdate(int $userId): void
     {
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
+            ...CoreTags::anyUser(get_userdata($userId)->roles),
         ]);
     }
 
@@ -233,6 +244,7 @@ class Core implements Action
     {
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
+            ...CoreTags::anyUser(get_userdata($userId)->roles),
         ]);
     }
 }
