@@ -61,8 +61,10 @@ class CacheTagsServiceProvider extends ServiceProvider
 
     public function bindActions(): void
     {
-        \add_action('wp_footer', [$this, 'saveCacheTags']);
-        \add_action('shutdown', [$this, 'purgeCacheTags']);
+        if (!$this->app->config->get('cachetags.disable', false)) {
+            \add_action('wp_footer', [$this, 'saveCacheTags']);
+            \add_action('shutdown', [$this, 'purgeCacheTags']);
+        }
 
         // Bind all actions
         $this->app->make(Actions::class)->bind();

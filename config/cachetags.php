@@ -7,6 +7,7 @@ use Genero\Sage\CacheTags\Invalidators\SuperCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 
 return [
+    'disable' => false,
     'debug' => defined('WP_DEBUG') ? WP_DEBUG : false,
     'http-header' => 'Cache-Tag',
     'store' => WordpressDbStore::class,
