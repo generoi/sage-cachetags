@@ -208,6 +208,8 @@ class CoreTags
                 ->map(fn ($postType) => sprintf('archive:%s', $postType))
                 ->all();
         }
+
+        return [];
     }
 
     /**
