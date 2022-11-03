@@ -58,6 +58,11 @@ class Core implements Action
                     ...CoreTags::taxonomy(\get_queried_object()->taxonomy),
                 ]);
                 break;
+            case is_home():
+                $this->cacheTags->add([
+                    ...CoreTags::archive('post'),
+                ]);
+                break;
             case is_post_type_archive():
                 $this->cacheTags->add([
                     ...CoreTags::archive(get_query_var('post_type')),
