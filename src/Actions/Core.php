@@ -129,15 +129,7 @@ class Core implements Action
             ...CoreTags::posts($post->ID),
         ];
 
-        // If it's a new post, clear the cache of the archive pages.
-        if ($isStatusChanged && $newStatus === 'publish') {
-            $cacheTags = [
-                ...$cacheTags,
-                ...CoreTags::archive($post->post_type),
-            ];
-        }
-
-        // If it's new or unpublished, clear the taxonomy pages
+        // If it's new or unpublished, clear the taxonomy pages and the archive page
         if ($isStatusChanged && ($newStatus === 'publish' || $oldStatus === 'publish')) {
             $taxonomies = array_intersect(
                 CoreTags::getCacheableTaxonomies(),
@@ -147,6 +139,7 @@ class Core implements Action
             // @TODO: Could potentially compare new to old terms and only clear those.
             $cacheTags = [
                 ...$cacheTags,
+                ...CoreTags::archive($post->post_type),
                 ...CoreTags::taxonomy(array_values($taxonomies)),
             ];
         }
