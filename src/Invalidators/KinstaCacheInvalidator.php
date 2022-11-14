@@ -6,7 +6,7 @@ use Genero\Sage\CacheTags\Contracts\Invalidator;
 
 class KinstaCacheInvalidator implements Invalidator
 {
-    const THROTTLED_PATH = 'https://localhost/kinsta-clear-cache/v2/throttled';
+    const IMMEDIATE_PATH = 'https://localhost/kinsta-clear-cache/v2/immediate';
     const CLEAR_ALL_PATH = 'https://localhost/kinsta-clear-cache-all';
 
     public function clear(array $urls): bool
@@ -22,8 +22,8 @@ class KinstaCacheInvalidator implements Invalidator
             })
             ->all();
 
-        $purgeRequest = apply_filters('KinstaCache/purgeThrottled', $purgeRequest);
-        $response = wp_remote_post(self::THROTTLED_PATH, [
+        $purgeRequest = apply_filters('KinstaCache/purgeImmediate', $purgeRequest);
+        $response = wp_remote_post(self::IMMEDIATE_PATH, [
             'sslverify' => false,
             'timeout' => 5,
             'body' => $purgeRequest,
