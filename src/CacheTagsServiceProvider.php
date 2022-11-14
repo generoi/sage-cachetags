@@ -92,6 +92,8 @@ class CacheTagsServiceProvider extends ServiceProvider
     protected function currentUrl(): string
     {
         global $wp;
-        return \home_url($wp->request);
+        return trailingslashit(
+            \home_url($wp->request)
+        );
     }
 }
