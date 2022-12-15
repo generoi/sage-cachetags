@@ -28,7 +28,7 @@ class Core implements Action
         \add_action('comment_post', [$this, 'onCommentPost'], 10, 3);
         \add_action('saved_term', [$this, 'onTermSave'], 10, 4);
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
-        \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 2);
+        \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
         \add_action('delete_user', [$this, 'onUserDelete'], 10, 3);
         \add_action('profile_update', [$this, 'onUserUpdate']);
@@ -175,9 +175,16 @@ class Core implements Action
     /**
      * Whenever a post meta is updated, clear the cache of the post.
      */
-    public function onPostMetaUpdate(int $metaId, int $objectId): void
+    public function onPostMetaUpdate(int $metaId, int $objectId, string $metaKey): void
     {
         if (!CoreTags::isCacheablePostType($objectId)) {
+            return;
+        }
+        if (wp_is_post_revision($objectId)) {
+            return;
+        }
+
+        if (!CoreTags::isCacheablePostMeta($metaKey, $objectId)) {
             return;
         }
 

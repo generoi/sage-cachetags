@@ -284,6 +284,14 @@ class CoreTags
         return [];
     }
 
+    public static function isCacheablePostMeta(string $metaKey, int $postId): bool
+    {
+        $value = true;
+        if ($metaKey[0] === '_') {
+            $value = false;
+        }
+        return apply_filters('cachetags/postmeta', $value, $metaKey, $postId);
+    }
 
     public static function isCacheablePostType($postType): bool
     {
