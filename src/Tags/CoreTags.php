@@ -320,7 +320,7 @@ class CoreTags
      */
     public static function getCacheablePostTypes(): array
     {
-        return \get_post_types(['exclude_from_search' => false]);
+        return \get_post_types(['public' => true]);
     }
 
     /**
