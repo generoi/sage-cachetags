@@ -8,6 +8,7 @@ use Roots\Acorn\Application;
 
 class HttpHeader implements Action
 {
+    protected Application $app;
     protected CacheTags $cacheTags;
 
     public function __construct(Application $app, CacheTags $cacheTags)
@@ -27,7 +28,7 @@ class HttpHeader implements Action
             header(sprintf(
                 '%s: %s',
                 $header,
-                collect($this->cacheTags->get())->join(',')
+                collect($this->cacheTags->get())->join(' ')
             ));
         }
     }
