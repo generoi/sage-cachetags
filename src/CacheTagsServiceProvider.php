@@ -6,6 +6,7 @@ use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
+use Genero\Sage\CacheTags\Console\FlushCommand;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Roots\Acorn\ServiceProvider;
 
@@ -56,6 +57,7 @@ class CacheTagsServiceProvider extends ServiceProvider
 
         $this->commands([
             DatabaseCommand::class,
+            FlushCommand::class,
         ]);
     }
 
