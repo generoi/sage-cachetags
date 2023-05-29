@@ -19,6 +19,6 @@ class Actions
     public function bind(): void
     {
         collect($this->actions)
-            ->each(fn ($action) => $action->bind());
+            ->each(fn (Action $action) => $action->bind());
     }
 }

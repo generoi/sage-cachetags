@@ -7,6 +7,8 @@ use Genero\Sage\CacheTags\Contracts\Store;
 
 class CacheTags
 {
+    const FILTER_TAGS = 'cachetags/filter-tags';
+
     /**
      * @var string[]
      */
@@ -53,11 +55,13 @@ class CacheTags
      */
     public function get(): array
     {
-        return collect($this->cacheTags)
+        $tags = collect($this->cacheTags)
             ->flatten()
             ->filter()
             ->unique()
             ->all();
+
+        return apply_filters(self::FILTER_TAGS, $tags);
     }
 
     /**
@@ -86,6 +90,8 @@ class CacheTags
             ->filter()
             ->unique()
             ->all();
+
+        $tags = apply_filters(self::FILTER_TAGS, $tags);
 
         if (empty($tags)) {
             return true;
