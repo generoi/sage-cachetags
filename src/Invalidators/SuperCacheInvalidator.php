@@ -6,7 +6,7 @@ use Genero\Sage\CacheTags\Contracts\Invalidator;
 
 class SuperCacheInvalidator implements Invalidator
 {
-    public function clear(array $urls): bool
+    public function clear(array $urls, array $tags): bool
     {
         return collect($urls)
             ->map(fn ($url) => \wpsc_delete_url_cache($url))

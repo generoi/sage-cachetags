@@ -9,7 +9,7 @@ class KinstaCacheInvalidator implements Invalidator
     const IMMEDIATE_PATH = 'https://localhost/kinsta-clear-cache/v2/immediate';
     const CLEAR_ALL_PATH = 'https://localhost/kinsta-clear-cache-all';
 
-    public function clear(array $urls): bool
+    public function clear(array $urls, array $tags): bool
     {
         if (defined('KINSTAMU_DISABLE_AUTOPURGE') && KINSTAMU_DISABLE_AUTOPURGE === true) {
             return false;

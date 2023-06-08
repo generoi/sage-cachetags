@@ -16,7 +16,7 @@ class CacheTagStore implements Store
         return $tags;
     }
 
-    public function clear(array $urls): bool
+    public function clear(array $urls, array $tags): bool
     {
         return true;
     }

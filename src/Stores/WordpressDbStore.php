@@ -35,7 +35,7 @@ class WordpressDbStore implements Store
         return $urls;
     }
 
-    public function clear(array $urls): bool
+    public function clear(array $urls, array $tags): bool
     {
         global $wpdb;
 

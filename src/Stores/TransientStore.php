@@ -34,7 +34,7 @@ class TransientStore implements Store
         return $urls;
     }
 
-    public function clear(array $urls): bool
+    public function clear(array $urls, array $tags): bool
     {
         $transient = collect($this->getCache())
             ->map(fn ($tagUrls) => array_diff($tagUrls, $urls))

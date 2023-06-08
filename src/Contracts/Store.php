@@ -19,7 +19,7 @@ interface Store
     /**
      * Clear internal cache tag entries.
      */
-    public function clear(array $urls): bool;
+    public function clear(array $urls, array $tags): bool;
 
     /**
      * Flush internal cache tag entries.

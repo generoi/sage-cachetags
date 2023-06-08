@@ -105,13 +105,13 @@ class CacheTags
 
         // Run all invalidators but keep track if something failed.
         $result = collect($this->invalidators)
-            ->map(fn ($invalidator) => $invalidator->clear($urls))
+            ->map(fn ($invalidator) => $invalidator->clear($urls, $tags))
             // Return false if any of the invalidators did
             ->reduce(fn ($result, $invalidatorResult) => $invalidatorResult ? $result : false, true);
 
         if ($result) {
             // Clear tag caches only if the invalidators succeeded.
-            $result = $this->store->clear($urls);
+            $result = $this->store->clear($urls, $tags);
         }
 
         return $result;

@@ -22,7 +22,7 @@ class FastlyCacheInvalidator implements Invalidator
         $this->apiKey = env('FASTLY_API_KEY');
     }
 
-    public function clear(array $tags): bool
+    public function clear(array $urls, array $tags): bool
     {
         $response = $this->apiCall('/purge/', [
             'surrogate_keys' => $tags,
@@ -33,7 +33,8 @@ class FastlyCacheInvalidator implements Invalidator
     public function flush(): bool
     {
         if ($this->hasAction(Site::class)) {
-            return $this->clear(SiteTags::sites('any'));
+            $tags = SiteTags::sites('any');
+            return $this->clear($tags, $tags);
         } else {
             $response = $this->apiCall('/purge_all');
         }

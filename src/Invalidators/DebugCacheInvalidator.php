@@ -6,7 +6,7 @@ use Genero\Sage\CacheTags\Contracts\Invalidator;
 
 class DebugCacheInvalidator implements Invalidator
 {
-    public function clear(array $urls): bool
+    public function clear(array $urls, array $tags): bool
     {
         collect($urls)
             ->each(fn ($url) => $this->log($url));
