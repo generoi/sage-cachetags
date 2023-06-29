@@ -35,7 +35,11 @@ wp acorn cachetags:database
 
 ## Usage
 
-Currently it only supports WP Super Cache but plan is to integrate with Cloudflare and other page caches.
+Currently it only supports WP Super Cache and SiteGround Optimizer but plan is to integrate with Cloudflare and other page caches.
+
+### SiteGround Optimizer
+
+Integration eists if you add the invalidator in the `config/cachetags.php` file.
 
 ### Super Cache
 
