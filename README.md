@@ -51,7 +51,7 @@ Integration exists if you add the `KinstaCacheInvalidator` in the `config/cachet
 
 ### Cloudflare
 
-Cloudflare Pro plan supports [HTTP header purging](https://blog.cloudflare.com/introducing-a-powerful-way-to-purge-cache-on-cloudflare-purge-by-cache-tag/) but an invalidot doesn't exist at the moment. You you're up for it, take a look at the Fastly one as an example.
+Cloudflare Pro plan supports [HTTP header purging](https://blog.cloudflare.com/introducing-a-powerful-way-to-purge-cache-on-cloudflare-purge-by-cache-tag/) but an invalidor doesn't exist at the moment. If you're up for it, take a look at the Fastly one as an example.
 
 ### Fastly
 
