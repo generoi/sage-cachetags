@@ -39,7 +39,7 @@ Currently it only supports WP Super Cache and SiteGround Optimizer but plan is t
 
 ### SiteGround Optimizer
 
-Integration eists if you add the invalidator in the `config/cachetags.php` file.
+Integration exists if you add the invalidator in the `config/cachetags.php` file.
 
 ### Super Cache
 
