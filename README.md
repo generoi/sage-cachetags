@@ -33,21 +33,49 @@ Edit it to your liking and if you're using the database store, scaffold the requ
 wp acorn cachetags:database
 ```
 
-## Usage
+## Invalidators
 
-Currently it only supports WP Super Cache and SiteGround Optimizer but plan is to integrate with Cloudflare and other page caches.
+Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
 
 ### SiteGround Optimizer
 
-Integration exists if you add the invalidator in the `config/cachetags.php` file.
+Integration exists if you add the `SiteGroundCacheInvalidator` invalidator in the `config/cachetags.php` file.
 
 ### Super Cache
 
-Integration exists if you add the invalidator in the `config/cachetags.php` file.
+Integration exists if you add the `SuperCacheInvalidator` invalidator in the `config/cachetags.php` file.
+
+### Kinsta
+
+Integration exists if you add the `KinstaCacheInvalidator` in the `config/cachetags.php` file.
 
 ### Cloudflare
 
-If you have a cloudflare pro plan you can already use this package with the HTTP headers. The goal is to add support for the basic plans as well.
+Cloudflare Pro plan supports [HTTP header purging](https://blog.cloudflare.com/introducing-a-powerful-way-to-purge-cache-on-cloudflare-purge-by-cache-tag/) but an invalidot doesn't exist at the moment. You you're up for it, take a look at the Fastly one as an example.
+
+### Fastly
+
+There's both a `FastlySoftCacheInvalidator` and a `FastlyCacheInvalidator` (hard) cache invalidator for Fastly (Varnish) proxy cache. Using this set up you do not need a persistent `store` since Fastly works with HTTP headers. Example `config/cachetags.php`
+
+```php
+$isProduction = in_array(parse_url(WP_HOME, PHP_URL_HOST), [
+    'www.example.com',
+]);
+
+return [
+    'http-header' => 'Surrogate-Key',
+    'store' => CacheTagStore::class,
+    'invalidator' => array_filter([
+        $isProduction ? FastlySoftCacheInvalidator::class : null,
+    ]),
+    'action' => [
+        Core::class,
+        HttpHeader::class,
+    ],
+];
+````
+
+## Traits for use with roots/sage
 
 ### Composers
 
@@ -121,4 +149,25 @@ class ArticleList extends Block
         ];
     }
 }
+```
+
+## CLI
+
+```sh
+# Flush the entire cache
+wp acorn cachetags:flush
+```
+
+## API
+
+### Create a custom tag
+
+Nicest way is to look at the code of this repo and create a custom `Action` and maybe a `CustomTag` class that you use, but the logic is really nothing more than:
+
+```php
+// Tag content
+app(CacheTags::class)->add(['custom-tag']);
+
+// Clear it whenever you want
+\add_action('custom/update', fn() => app(CacheTags::class)->clear(['custom-tag']));
 ```
