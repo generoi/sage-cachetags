@@ -4,7 +4,7 @@ namespace Genero\Sage\CacheTags\Invalidators;
 
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 
-class SiteGroundOptimizerCacheInvalidator implements Invalidator
+class SiteGroundCacheInvalidator implements Invalidator
 {
     public function clear(array $urls, array $tags): bool
     {
