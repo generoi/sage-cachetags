@@ -8,6 +8,7 @@ use Roots\Acorn\Application;
 
 class DebugComment implements Action
 {
+    protected Application $app;
     protected CacheTags $cacheTags;
 
     public function __construct(Application $app, CacheTags $cacheTags)
