@@ -8,7 +8,7 @@ use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
 use Genero\Sage\CacheTags\Contracts\Action;
-use Roots\Acorn\ServiceProvider;
+use Illuminate\Support\ServiceProvider;
 
 class CacheTagsServiceProvider extends ServiceProvider
 {
