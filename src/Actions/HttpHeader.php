@@ -19,6 +19,13 @@ class HttpHeader implements Action
 
     public function bind(): void
     {
+        if (! $this->app->config->get('cachetags.http-header')) {
+            return;
+        }
+
+        // Core registers wp_ob_end_flush_all() as a shutdown action 
+        ob_start();
+        
         \add_action('wp_footer', [$this, 'addHttpHeader']);
     }
 
