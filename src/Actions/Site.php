@@ -19,6 +19,7 @@ class Site implements Action
     {
         \add_filter(CacheTags::FILTER_TAGS, [$this, 'addSitePrefix']);
         \add_action('template_redirect', [$this, 'addSiteTag']);
+        \add_action('rest_api_init', [$this, 'addSiteTag']);
     }
 
     public function addSitePrefix(array $tags): array
