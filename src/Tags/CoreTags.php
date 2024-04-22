@@ -6,6 +6,7 @@ use Exception;
 use Illuminate\Support\Arr;
 use WP_Comment;
 use WP_Post;
+use WP_Post_Type;
 use WP_Query;
 use WP_Term;
 use WP_User;
@@ -170,6 +171,9 @@ class CoreTags
                 ...self::terms($object),
                 ...self::termPages($object),
             ];
+        }
+        if ($object instanceof WP_Post_Type) {
+            return self::archive($object->name);
         }
         throw new Exception();
     }
