@@ -30,4 +30,13 @@ class WooCommerceTags
 
         return [];
     }
+
+    public static function shop(): array
+    {
+        $pageId = wc_get_page_id('shop');
+        if ($pageId === -1) {
+            return [];
+        }
+        return ["post:$pageId"];
+    }
 }
