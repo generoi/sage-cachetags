@@ -36,6 +36,7 @@ class DebugComment implements Action
                     case 'term':
                         return sprintf('[%s] %s', $tag, get_term($id)->name);
                     case 'comment':
+                        return sprintf('[%s] %s', $tag, get_comment($id)->comment_author);
                     case 'post':
                         return sprintf('[%s] %s', $tag, get_post($id)->post_title);
                     default:
