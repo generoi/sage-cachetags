@@ -5,6 +5,7 @@ namespace Genero\Sage\CacheTags\Actions;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
+use WP_Block;
 use WP_Comment;
 use WP_Post;
 use WP_User;
@@ -21,6 +22,7 @@ class Core implements Action
     public function bind(): void
     {
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
+        \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
 
         // Clear caches
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
@@ -74,6 +76,64 @@ class Core implements Action
                 ]);
                 break;
         }
+    }
+
+    public function addBlockCacheTags(string $content, array $block, WP_Block $instance): string
+    {
+        $attributes = $block['attrs'] ?? [];
+        $tags = [];
+
+        if (isset($instance->context['postId'])) {
+            $tags[] = CoreTags::posts($instance->context['postId']);
+        }
+
+        if (isset($attributes['ref'])) {
+            $tags[] = CoreTags::posts($attributes['ref']);
+        }
+
+        switch ($block['blockName']) {
+            case 'core/categories':
+                $tags[] = CoreTags::anyTerm('category');
+                break;
+            case 'core/comments':
+                // @TODO could get individual comments
+                break;
+            case 'core/post-author-name':
+            case 'core/post-author':
+                $authorId = isset($instance->context['postId'])
+                    ? get_post_field('post_author', $instance->context['postId'])
+                    : get_query_var('author');
+
+                $tags[] = CoreTags::users([$authorId]);
+                break;
+            case 'core/tag-cloud':
+                $tags[] = CoreTags::anyTerm('post_tag');
+                break;
+            case 'core/page-list':
+                $tags[] = CoreTags::archive('page');
+                break;
+            case 'core/latest-posts':
+                $tags[] = CoreTags::archive('post');
+                break;
+            case 'core/latest-comments':
+                $tags[] = CoreTags::archive('comment');
+                break;
+            case 'core/navigation-link':
+                if ($attributes['kind'] === 'post-type') {
+                    $tags[] = CoreTags::posts($attributes['id']);
+                }
+                break;
+            case 'core/query':
+                $tags[] = CoreTags::archive($attributes['query']['postType'] ?? 'post');
+                break;
+            case 'core/post-terms':
+                $tags[] = CoreTags::terms(get_the_terms($instance->context['postId'], $attributes['term']));
+                break;
+        }
+
+        $this->cacheTags->add($tags);
+
+        return $content;
     }
 
     /**
