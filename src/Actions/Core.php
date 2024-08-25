@@ -127,7 +127,9 @@ class Core implements Action
                 $tags[] = CoreTags::archive($attributes['query']['postType'] ?? 'post');
                 break;
             case 'core/post-terms':
-                $tags[] = CoreTags::terms(get_the_terms($instance->context['postId'], $attributes['term']));
+                if (!empty($attributes['term'])) {
+                    $tags[] = CoreTags::terms(get_the_terms($instance->context['postId'], $attributes['term']));
+                }
                 break;
         }
 
