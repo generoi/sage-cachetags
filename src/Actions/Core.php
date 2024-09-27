@@ -88,6 +88,7 @@ class Core implements Action
         }
 
         if (isset($attributes['ref'])) {
+            // @note that these realistically these might be deleted and point to unexisting posts
             $tags[] = CoreTags::posts($attributes['ref']);
         }
 
