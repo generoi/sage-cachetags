@@ -324,7 +324,10 @@ class CoreTags
      */
     public static function getCacheablePostTypes(): array
     {
-        return \get_post_types(['public' => true]);
+        return \apply_filters(
+            'cachetags/post_types',
+            \get_post_types(['public' => true])
+        );
     }
 
     /**
@@ -332,7 +335,10 @@ class CoreTags
      */
     public static function getCacheableTaxonomies(): array
     {
-        return \get_taxonomies(['public' => true]);
+        return \apply_filters(
+            'cachetags/taxonomies',
+            \get_taxonomies(['public' => true])
+        );
     }
 
     /**
