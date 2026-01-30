@@ -4,23 +4,15 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
-use Roots\Acorn\Application;
 use WP_REST_Response;
 
 class HttpHeader implements Action
 {
-    protected Application $app;
-    protected CacheTags $cacheTags;
-
-    public function __construct(Application $app, CacheTags $cacheTags)
-    {
-        $this->app = $app;
-        $this->cacheTags = $cacheTags;
-    }
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
-        if (! $this->app->config->get('cachetags.http-header')) {
+        if (! $this->cacheTags->httpHeader) {
             return;
         }
 
@@ -33,11 +25,11 @@ class HttpHeader implements Action
 
     public function addHttpHeader(): void
     {
-        if ($header = $this->app->config->get('cachetags.http-header')) {
+        if ($header = $this->cacheTags->httpHeader) {
             header(sprintf(
                 '%s: %s',
                 $header,
-                collect($this->cacheTags->get())->join(' ')
+                implode(' ', $this->cacheTags->get())
             ));
         }
     }
@@ -47,9 +39,9 @@ class HttpHeader implements Action
      */
     public function restPostDispatch(WP_REST_Response $response): WP_REST_Response
     {
-        if ($header = $this->app->config->get('cachetags.http-header')) {
+        if ($header = $this->cacheTags->httpHeader) {
             $headers = $response->get_headers();
-            $headers[$header] = collect($this->cacheTags->get())->join(' ');
+            $headers[$header] = implode(' ', $this->cacheTags->get());
             $response->set_headers($headers);
         }
 

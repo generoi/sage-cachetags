@@ -14,7 +14,7 @@ trait ComposerCacheTags
         return [];
     }
 
-    public function compose(View $view)
+    public function compose(View $view): void
     {
         parent::compose($view);
 

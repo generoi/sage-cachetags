@@ -8,12 +8,7 @@ use Genero\Sage\CacheTags\Tags\GravityformTags;
 
 class Gravityform implements Action
 {
-    protected CacheTags $cacheTags;
-
-    public function __construct(CacheTags $cacheTags)
-    {
-        $this->cacheTags = $cacheTags;
-    }
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
@@ -21,15 +16,26 @@ class Gravityform implements Action
         \add_action('gform_after_save_form', [$this, 'onSaveForm'], 10, 2);
     }
 
-    public function addGravityformCacheTags(array $form): array
+    /**
+     * @param  array<string, mixed>|bool  $form
+     * @return array<string, mixed>|bool
+     */
+    public function addGravityformCacheTags(array|bool $form): array|bool
     {
+        if (! is_array($form)) {
+            return $form;
+        }
+
         $this->cacheTags->add([
             ...GravityformTags::forms($form['id']),
         ]);
-        
+
         return $form;
     }
 
+    /**
+     * @param  array<string, mixed>  $form
+     */
     public function onSaveForm(array $form, bool $isNew): void
     {
         if ($isNew) {

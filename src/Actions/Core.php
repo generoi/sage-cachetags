@@ -12,12 +12,7 @@ use WP_User;
 
 class Core implements Action
 {
-    protected CacheTags $cacheTags;
-
-    public function __construct(CacheTags $cacheTags)
-    {
-        $this->cacheTags = $cacheTags;
-    }
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
@@ -78,6 +73,9 @@ class Core implements Action
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $block  WordPress block array
+     */
     public function addBlockCacheTags(string $content, array $block, WP_Block $instance): string
     {
         $attributes = $block['attrs'] ?? [];
@@ -128,7 +126,7 @@ class Core implements Action
                 $tags[] = CoreTags::archive($attributes['query']['postType'] ?? 'post');
                 break;
             case 'core/post-terms':
-                if (!empty($attributes['term'])) {
+                if (! empty($attributes['term'])) {
                     $tags[] = CoreTags::terms(get_the_terms($instance->context['postId'], $attributes['term']));
                 }
                 break;
@@ -147,7 +145,7 @@ class Core implements Action
         if ($commentApproved !== 1) {
             return;
         }
-        if (!isset($commentData['comment_post_ID'])) {
+        if (! isset($commentData['comment_post_ID'])) {
             return;
         }
 
@@ -167,7 +165,7 @@ class Core implements Action
 
         // If attached to a post, and it either was or is approved, clear the post cache.
         $isCommentStatusChanged = ($newStatus === 'approved' || $oldStatus === 'approved');
-        if (!empty($comment->comment_post_ID) && $isCommentStatusChanged) {
+        if (! empty($comment->comment_post_ID) && $isCommentStatusChanged) {
             $cacheTags = [
                 ...$cacheTags,
                 ...CoreTags::posts($comment->comment_post_ID),
@@ -183,7 +181,7 @@ class Core implements Action
      */
     public function onPostStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
     {
-        if (!CoreTags::isCacheablePostType($post->post_type)) {
+        if (! CoreTags::isCacheablePostType($post->post_type)) {
             return;
         }
 
@@ -215,7 +213,7 @@ class Core implements Action
      */
     public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy): void
     {
-        if (!CoreTags::isCacheableTaxonomy($taxonomy)) {
+        if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
             return;
         }
 
@@ -240,14 +238,14 @@ class Core implements Action
      */
     public function onPostMetaUpdate(int $metaId, int $objectId, string $metaKey): void
     {
-        if (!CoreTags::isCacheablePostType($objectId)) {
+        if (! CoreTags::isCacheablePostType($objectId)) {
             return;
         }
         if (wp_is_post_revision($objectId)) {
             return;
         }
 
-        if (!CoreTags::isCacheablePostMeta($metaKey, $objectId)) {
+        if (! CoreTags::isCacheablePostMeta($metaKey, $objectId)) {
             return;
         }
 
@@ -256,13 +254,12 @@ class Core implements Action
         ]);
     }
 
-
     /**
      * When a term is updated, clear relevant caches.
      */
     public function onTermSave(int $termId, int $taxonomyId, string $taxonomy, bool $updated): void
     {
-        if (!CoreTags::isCacheableTaxonomy($taxonomy)) {
+        if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
             return;
         }
 
@@ -273,7 +270,7 @@ class Core implements Action
         ];
 
         // If it's a new term, clear taxonomy listings.
-        if (!$updated) {
+        if (! $updated) {
             $cacheTags = [
                 ...CoreTags::taxonomy($taxonomy),
             ];

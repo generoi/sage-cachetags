@@ -12,11 +12,11 @@ return [
     'http-header' => 'Cache-Tag',
     'store' => WordpressDbStore::class,
     'invalidator' => [
-        SuperCacheInvalidator::class
+        SuperCacheInvalidator::class,
     ],
     'action' => [
         Core::class,
         DebugComment::class,
         Gravityform::class,
-    ]
+    ],
 ];

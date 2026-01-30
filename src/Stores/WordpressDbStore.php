@@ -6,35 +6,56 @@ use Genero\Sage\CacheTags\Contracts\Store;
 
 class WordpressDbStore implements Store
 {
+    /**
+     * @param  string[]  $tags
+     */
     public function save(array $tags, string $url): bool
     {
-        return collect($tags)
-            ->map(function ($tag) use ($url) {
-                global $wpdb;
-                return $wpdb->query($wpdb->prepare("
-                    INSERT IGNORE INTO `{$wpdb->prefix}cache_tags`
-                    SET `tag` = %s, `url` = %s
-                ", $tag, $url));
-            })
-            // Return false if any of the queries failed.
-            ->reduce(fn ($result, $insertResult) => $insertResult ? $result : false, true);
+        if (empty($tags)) {
+            return true;
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($tags), '(%s, %s)'));
+        $values = [];
+        foreach ($tags as $tag) {
+            $values[] = $tag;
+            $values[] = $url;
+        }
+
+        $result = $wpdb->query($wpdb->prepare("
+            INSERT IGNORE INTO `{$wpdb->prefix}cache_tags` (`tag`, `url`)
+            VALUES {$placeholders}
+        ", ...$values));
+
+        return $result !== false;
     }
 
+    /**
+     * @param  string[]  $tags
+     * @return string[]
+     */
     public function get(array $tags): array
     {
-        global $wpdb;
-        $inClause = collect($tags)
-            ->map(fn ($tag) => sprintf("'%s'", \esc_sql($tag)))
-            ->join(',');
+        if (empty($tags)) {
+            return [];
+        }
 
-        $urls = $wpdb->get_col(sprintf("
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($tags), '%s'));
+
+        $urls = $wpdb->get_col($wpdb->prepare("
             SELECT url FROM `{$wpdb->prefix}cache_tags`
-            WHERE tag IN (%s)
-        ", $inClause));
+            WHERE tag IN ({$placeholders})
+        ", ...$tags));
 
         return $urls;
     }
 
+    /**
+     * @param  string[]  $urls
+     * @param  string[]  $tags
+     */
     public function clear(array $urls, array $tags): bool
     {
         global $wpdb;
@@ -43,14 +64,12 @@ class WordpressDbStore implements Store
             return true;
         }
 
-        $inClause = collect($urls)
-            ->map(fn ($url) => sprintf("'%s'", \esc_sql($url)))
-            ->join(',');
+        $placeholders = implode(',', array_fill(0, count($urls), '%s'));
 
-        $count = $wpdb->query(sprintf("
+        $count = $wpdb->query($wpdb->prepare("
             DELETE FROM `{$wpdb->prefix}cache_tags`
-            WHERE `url` IN (%s)
-        ", $inClause));
+            WHERE `url` IN ({$placeholders})
+        ", ...$urls));
 
         return $count ? true : false;
     }

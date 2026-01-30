@@ -2,6 +2,8 @@
 
 namespace Genero\Sage\CacheTags\Tags;
 
+use Genero\Sage\CacheTags\Util;
+
 class GravityformTags
 {
     /**
@@ -9,7 +11,8 @@ class GravityformTags
      *
      * @see https://docs.gravityforms.com/form-object/
      *
-     * @param mixed $forms
+     * @param  mixed  $forms
+     * @return string[]
      */
     public static function forms($forms = null): array
     {
@@ -18,12 +21,12 @@ class GravityformTags
         }
 
         if (is_array($forms)) {
-            return collect($forms)
-                // Pluck the IDs if it's a list of objects.
-                ->map(fn ($form) => isset($form['id']) ? $form['id'] : $form)
-                ->map(fn ($formId) => ["gform:$formId"])
-                ->flatten()
-                ->all();
+            $tags = array_map(
+                fn ($form) => [sprintf('gform:%d', isset($form['id']) ? $form['id'] : $form)],
+                $forms
+            );
+
+            return Util::flatten($tags);
         }
 
         return [];

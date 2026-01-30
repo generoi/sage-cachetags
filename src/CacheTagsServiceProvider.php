@@ -2,57 +2,29 @@
 
 namespace Genero\Sage\CacheTags;
 
-use Genero\Sage\CacheTags\Contracts\Invalidator;
-use Genero\Sage\CacheTags\Contracts\Store;
-use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
-use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Illuminate\Support\ServiceProvider;
 
 class CacheTagsServiceProvider extends ServiceProvider
 {
     /**
-     * @var CacheTags $cacheTags
+     * @var CacheTags
      */
     protected $cacheTags;
 
-    /**
-     * Register any application services.
-     *
-     * @return void
-     */
-    public function register()
+    public function register(): void
     {
-        $this->app->singleton(CacheTags::class);
-
-        $this->app->when(CacheTags::class)
-            ->needs(Invalidator::class)
-            ->give($this->app->config->get('cachetags.invalidator'));
-
-        $this->app->when(CacheTags::class)
-            ->needs(Store::class)
-            ->give($this->app->config->get('cachetags.store', WordpressDbStore::class));
-
-        $this->app->bind(Actions::class);
-        $this->app->when(Actions::class)
-            ->needs(Action::class)
-            ->give($this->app->config->get('cachetags.action'));
+        $this->app->singleton(CacheTags::class, fn () => $this->createBootstrap()->bootstrap());
     }
 
-    /**
-     * Bootstrap any application services.
-     *
-     * @return void
-     */
-    public function boot()
+    public function boot(): void
     {
         $this->cacheTags = $this->app->make(CacheTags::class);
 
-        $this->bindActions();
-
         $this->publishes([
-            __DIR__ . '/../config/cachetags.php' => $this->app->configPath('cachetags.php'),
+            __DIR__.'/../config/cachetags.php' => $this->app->configPath('cachetags.php'),
         ], 'config');
 
         $this->commands([
@@ -61,41 +33,17 @@ class CacheTagsServiceProvider extends ServiceProvider
         ]);
     }
 
-    public function bindActions(): void
+    protected function createBootstrap(): Bootstrap
     {
-        if (!$this->app->config->get('cachetags.disable', false)) {
-            \add_action('wp_footer', [$this, 'saveCacheTags']);
-            \add_action('shutdown', [$this, 'purgeCacheTags']);
-        }
+        $config = $this->app->config;
 
-        // Bind all actions
-        $this->app->make(Actions::class)->bind();
-    }
-
-    /**
-     * Save the cache tags used on the rendered page.
-     */
-    public function saveCacheTags(): void
-    {
-        $this->cacheTags->save($this->currentUrl());
-    }
-
-    /**
-     * At the end of the page load, purge any invalidated caches.
-     */
-    public function purgeCacheTags(): void
-    {
-        $this->cacheTags->purgeQueued();
-    }
-
-    /**
-     * Return the current page url.
-     */
-    protected function currentUrl(): string
-    {
-        global $wp;
-        return trailingslashit(
-            \home_url($wp->request)
+        return new Bootstrap(
+            debug: $config->get('cachetags.debug', defined('WP_DEBUG') ? WP_DEBUG : false),
+            httpHeader: $config->get('cachetags.http-header', 'Cache-Tag'),
+            disable: $config->get('cachetags.disable', false),
+            store: $config->get('cachetags.store', WordpressDbStore::class),
+            invalidators: $config->get('cachetags.invalidator', []),
+            actions: $config->get('cachetags.action', []),
         );
     }
 }

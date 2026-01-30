@@ -8,12 +8,7 @@ use Genero\Sage\CacheTags\Tags\SiteTags;
 
 class Site implements Action
 {
-    protected CacheTags $cacheTags;
-
-    public function __construct(CacheTags $cacheTags)
-    {
-        $this->cacheTags = $cacheTags;
-    }
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
@@ -22,25 +17,29 @@ class Site implements Action
         \add_action('rest_api_init', [$this, 'addSiteTag']);
     }
 
+    /**
+     * @param  string[]  $tags
+     * @return string[]
+     */
     public function addSitePrefix(array $tags): array
     {
         $siteId = get_current_blog_id();
         $siteTags = SiteTags::sites();
 
-        return collect($tags)
-            ->map(function (string $tag) use ($siteId, $siteTags) {
-                if (in_array($tag, $siteTags)) {
-                    return $tag;
-                }
-                return sprintf('site:%d:%s', $siteId, $tag);
-            })
-            ->all();
+        return array_map(
+            function (string $tag) use ($siteId, $siteTags) {
+                return in_array($tag, $siteTags)
+                    ? $tag
+                    : sprintf('site:%d:%s', $siteId, $tag);
+            },
+            $tags
+        );
     }
 
-    public function addSiteTag()
+    public function addSiteTag(): void
     {
         $this->cacheTags->add([
-            ...SiteTags::sites()
+            ...SiteTags::sites(),
         ]);
     }
 }

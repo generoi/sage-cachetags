@@ -4,32 +4,24 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
-use Roots\Acorn\Application;
+use Genero\Sage\CacheTags\Util;
 
 class DebugComment implements Action
 {
-    protected Application $app;
-    protected CacheTags $cacheTags;
-
-    public function __construct(Application $app, CacheTags $cacheTags)
-    {
-        $this->app = $app;
-        $this->cacheTags = $cacheTags;
-    }
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
-        if ($this->app->config->get('cachetags.debug')) {
+        if ($this->cacheTags->debug) {
             \add_action('wp_footer', [$this, 'printCacheTagsDebug']);
         }
     }
 
     public function printCacheTagsDebug(): void
     {
-        $cacheTags = collect($this->cacheTags->get())
-            ->map(function ($tag) {
-                $label = null;
-                [$entity, $id,] = explode(':', $tag . ':');
+        $cacheTags = array_map(
+            function ($tag) {
+                [$entity, $id] = explode(':', $tag.':');
 
                 switch ($entity) {
                     case 'menu':
@@ -42,22 +34,20 @@ class DebugComment implements Action
                     default:
                         return sprintf('[%s]', $tag);
                 }
-            });
+            },
+            $this->cacheTags->get()
+        );
 
-        echo sprintf("
+        echo sprintf('
             <!-- sage-cachetags
             Url: %s
             Tags: %s
             -->
-        ", $this->currentUrl(), $cacheTags->join(PHP_EOL . str_repeat(' ', 18)));
+        ', $this->currentUrl(), implode(PHP_EOL.str_repeat(' ', 18), $cacheTags));
     }
 
-    /**
-     * Return the current page url.
-     */
     protected function currentUrl(): string
     {
-        global $wp;
-        return \home_url($wp->request);
+        return Util::currentUrl();
     }
 }
