@@ -21,12 +21,7 @@ class FlushCommand extends Command
      */
     protected $description = 'Flush all caches';
 
-    /**
-     * Execute the console command.
-     *
-     * @return void
-     */
-    public function handle()
+    public function handle(): void
     {
         $result = $this->app->make(CacheTags::class)
             ->flush();

@@ -2,6 +2,7 @@
 
 namespace Genero\Sage\CacheTags;
 
+use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 
@@ -9,38 +10,57 @@ class CacheTags
 {
     const FILTER_TAGS = 'cachetags/filter-tags';
 
-    /**
-     * @var string[]
-     */
-    protected array $cacheTags;
+    protected static ?CacheTags $instance = null;
 
     /**
      * @var string[]
      */
-    protected array $purgeTags;
+    protected array $cacheTags = [];
 
     /**
-     * @var Store $store
+     * @var string[]
      */
-    protected Store $store;
+    protected array $purgeTags = [];
 
     /**
-     * @var Invalidator[] $invalidators
+     * @var Action[]
      */
-    protected array $invalidators = [];
+    protected array $actions = [];
 
-    public function __construct(Store $store, Invalidator ...$invalidators)
+    protected function __construct(
+        public readonly Store $store,
+        public readonly bool $debug = false,
+        public readonly ?string $httpHeader = 'Cache-Tag',
+        /** @var Invalidator[] */
+        public readonly array $invalidators = [],
+    ) {}
+
+    public static function getInstance(): ?CacheTags
     {
-        $this->store = $store;
-        $this->invalidators = $invalidators;
-        $this->cacheTags = [];
-        $this->purgeTags = [];
+        return self::$instance;
+    }
+
+    /**
+     * Create or get the singleton instance.
+     */
+    public static function make(
+        Store $store,
+        bool $debug = false,
+        ?string $httpHeader = 'Cache-Tag',
+        /** @var Invalidator[] */
+        array $invalidators = [],
+    ): CacheTags {
+        if (self::$instance === null) {
+            self::$instance = new self($store, $debug, $httpHeader, $invalidators);
+        }
+
+        return self::$instance;
     }
 
     /**
      * Add a set of cache tags to this page load.
      *
-     * @param string[] $tags
+     * @param  string[]  $tags
      */
     public function add(array $tags): void
     {
@@ -52,14 +72,12 @@ class CacheTags
 
     /**
      * Return all cache tags for this page load.
+     *
+     * @return string[]
      */
     public function get(): array
     {
-        $tags = collect($this->cacheTags)
-            ->flatten()
-            ->filter()
-            ->unique()
-            ->all();
+        $tags = Util::normalizeTags($this->cacheTags);
 
         return apply_filters(self::FILTER_TAGS, $tags);
     }
@@ -74,6 +92,8 @@ class CacheTags
 
     /**
      * Queue tags to be cleared from cache.
+     *
+     * @param  string[]  $tags
      */
     public function clear(array $tags): void
     {
@@ -85,12 +105,7 @@ class CacheTags
 
     public function purgeQueued(): bool
     {
-        $tags = collect($this->purgeTags)
-            ->flatten()
-            ->filter()
-            ->unique()
-            ->all();
-
+        $tags = Util::normalizeTags($this->purgeTags);
         $tags = apply_filters(self::FILTER_TAGS, $tags);
 
         if (empty($tags)) {
@@ -104,10 +119,11 @@ class CacheTags
         }
 
         // Run all invalidators but keep track if something failed.
-        $result = collect($this->invalidators)
-            ->map(fn ($invalidator) => $invalidator->clear($urls, $tags))
-            // Return false if any of the invalidators did
-            ->reduce(fn ($result, $invalidatorResult) => $invalidatorResult ? $result : false, true);
+        $result = array_reduce(
+            $this->invalidators,
+            fn ($result, $invalidator) => $invalidator->clear($urls, $tags) ? $result : false,
+            true
+        );
 
         if ($result) {
             // Clear tag caches only if the invalidators succeeded.
@@ -123,10 +139,11 @@ class CacheTags
     public function flush(): bool
     {
         // Run all invalidators but keep track if something failed.
-        $result = collect($this->invalidators)
-            ->map(fn ($invalidator) => $invalidator->flush())
-            // Return false if any of the invalidators did
-            ->reduce(fn ($result, $invalidatorResult) => $invalidatorResult ? $result : false, true);
+        $result = array_reduce(
+            $this->invalidators,
+            fn ($result, $invalidator) => $invalidator->flush() ? $result : false,
+            true
+        );
 
         if ($result) {
             // Flush the tag caches only if invalidators succeeded.
@@ -134,5 +151,30 @@ class CacheTags
         }
 
         return $result;
+    }
+
+    /**
+     * Bind and track an action instance.
+     */
+    public function bindAction(Action $action): void
+    {
+        $action->bind();
+        $this->actions[] = $action;
+    }
+
+    /**
+     * Check if an action is registered (by class name or instance).
+     */
+    public function hasAction(string|Action $action): bool
+    {
+        $actionClass = is_string($action) ? $action : get_class($action);
+
+        foreach ($this->actions as $registeredAction) {
+            if (get_class($registeredAction) === $actionClass) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

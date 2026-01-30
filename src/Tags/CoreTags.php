@@ -3,11 +3,13 @@
 namespace Genero\Sage\CacheTags\Tags;
 
 use Exception;
-use Illuminate\Support\Arr;
+use Genero\Sage\CacheTags\Util;
 use WP_Comment;
 use WP_Post;
 use WP_Post_Type;
 use WP_Query;
+use WP_Role;
+use WP_Taxonomy;
 use WP_Term;
 use WP_User;
 
@@ -16,7 +18,8 @@ class CoreTags
     /**
      * Return cache tags for one or multiple posts.
      *
-     * @param mixed $posts
+     * @param  int|WP_Post|array<int|WP_Post>|null  $posts
+     * @return string[]
      */
     public static function posts($posts = null): array
     {
@@ -25,12 +28,12 @@ class CoreTags
         }
 
         if (is_array($posts)) {
-            return collect($posts)
-                // Pluck the IDs if it's a list of objects.
-                ->map(fn ($post) => $post instanceof WP_Post ? $post->ID : $post)
-                ->map(fn ($postId) => ["post:$postId"])
-                ->flatten()
-                ->all();
+            $tags = array_map(
+                fn ($post) => [sprintf('post:%d', $post instanceof WP_Post ? $post->ID : $post)],
+                $posts
+            );
+
+            return Util::flatten($tags);
         }
 
         return [];
@@ -39,7 +42,8 @@ class CoreTags
     /**
      * Return cache tags for one or multiple terms.
      *
-     * @param mixed $terms
+     * @param  int|WP_Term|array<int|WP_Term>|null  $terms
+     * @return string[]
      */
     public static function terms($terms = null): array
     {
@@ -48,12 +52,12 @@ class CoreTags
         }
 
         if (is_array($terms)) {
-            return collect($terms)
-                // Pluck the IDs if it's a list of objects.
-                ->map(fn ($term) => $term instanceof WP_Term ? $term->term_id : $term)
-                ->map(fn ($termId) => ["term:$termId"])
-                ->flatten()
-                ->all();
+            $tags = array_map(
+                fn ($term) => [sprintf('term:%d', $term instanceof WP_Term ? $term->term_id : $term)],
+                $terms
+            );
+
+            return Util::flatten($tags);
         }
 
         return [];
@@ -62,19 +66,19 @@ class CoreTags
     /**
      * Return cache tags for one or multiple term pages.
      *
-     * @param mixed $terms
+     * @param  int|WP_Term|array<int|WP_Term>|null  $terms
+     * @return string[]
      */
     public static function termPages($terms = null): array
     {
-        return collect(self::terms($terms))
-            ->map(fn ($tag) => "$tag:full")
-            ->all();
+        return array_map(fn ($tag) => "$tag:full", self::terms($terms));
     }
 
     /**
      * Return cache tags for one or multiple users.
      *
-     * @param mixed $users
+     * @param  int|WP_User|array<int|WP_User>|null  $users
+     * @return string[]
      */
     public static function users($users = null): array
     {
@@ -83,12 +87,12 @@ class CoreTags
         }
 
         if (is_array($users)) {
-            return collect($users)
-                // Pluck the IDs if it's a list of objects.
-                ->map(fn ($user) => $user instanceof WP_User ? $user->ID : $user)
-                ->map(fn ($userId) => ["user:$userId"])
-                ->flatten()
-                ->all();
+            $tags = array_map(
+                fn ($user) => [sprintf('user:%d', $user instanceof WP_User ? $user->ID : $user)],
+                $users
+            );
+
+            return Util::flatten($tags);
         }
 
         return [];
@@ -97,7 +101,8 @@ class CoreTags
     /**
      * Return cache tags for one or multiple comments.
      *
-     * @param mixed $comments
+     * @param  int|WP_Comment|array<int|WP_Comment>|null  $comments
+     * @return string[]
      */
     public static function comments($comments = null): array
     {
@@ -106,12 +111,12 @@ class CoreTags
         }
 
         if (is_array($comments)) {
-            return collect($comments)
-                // Pluck the IDs if it's a list of objects.
-                ->map(fn ($comment) => $comment instanceof WP_Comment ? $comment->comment_ID : $comment)
-                ->map(fn ($commentId) => ["comment:$commentId"])
-                ->flatten()
-                ->all();
+            $tags = array_map(
+                fn ($comment) => [sprintf('comment:%d', $comment instanceof WP_Comment ? $comment->comment_ID : $comment)],
+                $comments
+            );
+
+            return Util::flatten($tags);
         }
 
         return [];
@@ -120,30 +125,36 @@ class CoreTags
     /**
      * Return cache tags for the menu in a navigation location.
      *
-     * @param string $location
+     * @return string[]
      */
-    public static function navigation(string $location = null): array
+    public static function navigation(?string $location = null): array
     {
-        $menu = Arr::get(get_nav_menu_locations(), $location);
-        if (!$menu) {
+        if ($location === null) {
+            return [];
+        }
+
+        $locations = get_nav_menu_locations();
+        $menu = $locations[$location] ?? null;
+        if (! $menu) {
             // @TODO: wp normally picks the first menu
             return [];
         }
+
         return self::menu($menu);
     }
 
     /**
      * Return cache tags for a menu.
      *
-     * @param int|string $menuId
+     * @return string[]
      */
-    public static function menu($menuId = null): array
+    public static function menu(int|string|null $menuId = null): array
     {
         if (is_string($menuId)) {
             $menuId = get_term_by('slug', $menuId, 'nav_menu')->term_id ?? null;
 
-            if (!$menuId) {
-                throw new Exception();
+            if (! $menuId) {
+                throw new Exception;
             }
         }
 
@@ -156,6 +167,9 @@ class CoreTags
 
     /**
      * Return cache tags for the current queried object.
+     *
+     * @param  WP_Post|WP_Term|WP_Post_Type|null  $object
+     * @return string[]
      */
     public static function queriedObject($object = null): array
     {
@@ -175,27 +189,29 @@ class CoreTags
         if ($object instanceof WP_Post_Type) {
             return self::archive($object->name);
         }
-        throw new Exception();
+        throw new Exception;
     }
 
     /**
      * Return cache tags for a WP_Query.
      *
-     * @param WP_Query $query
+     * @return string[]
      */
     public static function query(WP_Query $query): array
     {
-        return collect($query->get_posts())
-            ->pluck('ID')
-            ->map(fn ($postId) => self::posts($postId))
-            ->flatten()
-            ->all();
+        $tags = array_map(
+            fn ($post) => self::posts($post->ID),
+            $query->get_posts()
+        );
+
+        return Util::flatten($tags);
     }
 
     /**
      * Return cache tags for one or many post type archives.
      *
-     * @param mixed $postTypes
+     * @param  string|WP_Post_Type|array<string|WP_Post_Type>  $postTypes
+     * @return string[]
      */
     public static function archive($postTypes): array
     {
@@ -203,14 +219,19 @@ class CoreTags
             $postTypes = self::getCacheablePostTypes();
         }
 
+        if ($postTypes instanceof WP_Post_Type) {
+            $postTypes = [$postTypes];
+        }
+
         if (is_string($postTypes)) {
             $postTypes = [$postTypes];
         }
 
         if (is_array($postTypes)) {
-            return collect($postTypes)
-                ->map(fn ($postType) => sprintf('archive:%s', $postType))
-                ->all();
+            return array_map(
+                fn ($postType) => sprintf('archive:%s', $postType instanceof WP_Post_Type ? $postType->name : $postType),
+                $postTypes
+            );
         }
 
         return [];
@@ -219,7 +240,8 @@ class CoreTags
     /**
      * Return cache tags for one or many taxonomy pages.
      *
-     * @param mixed $taxonomies
+     * @param  string|WP_Taxonomy|array<string|WP_Taxonomy>  $taxonomies
+     * @return string[]
      */
     public static function taxonomy($taxonomies): array
     {
@@ -227,14 +249,19 @@ class CoreTags
             $taxonomies = self::getCacheableTaxonomies();
         }
 
+        if ($taxonomies instanceof WP_Taxonomy) {
+            $taxonomies = [$taxonomies];
+        }
+
         if (is_string($taxonomies)) {
             $taxonomies = [$taxonomies];
         }
 
         if (is_array($taxonomies)) {
-            return collect($taxonomies)
-                ->map(fn ($taxonomy) => sprintf('taxonomy:%s', $taxonomy))
-                ->all();
+            return array_map(
+                fn ($taxonomy) => sprintf('taxonomy:%s', $taxonomy instanceof WP_Taxonomy ? $taxonomy->name : $taxonomy),
+                $taxonomies
+            );
         }
 
         return [];
@@ -243,7 +270,8 @@ class CoreTags
     /**
      * Return cache tags for changes to any term in taxonomies.
      *
-     * @param mixed $taxonomies
+     * @param  string|WP_Taxonomy|array<string|WP_Taxonomy>  $taxonomies
+     * @return string[]
      */
     public static function anyTerm($taxonomies): array
     {
@@ -251,14 +279,19 @@ class CoreTags
             $taxonomies = self::getCacheableTaxonomies();
         }
 
+        if ($taxonomies instanceof WP_Taxonomy) {
+            $taxonomies = [$taxonomies];
+        }
+
         if (is_string($taxonomies)) {
             $taxonomies = [$taxonomies];
         }
 
         if (is_array($taxonomies)) {
-            return collect($taxonomies)
-                ->map(fn ($taxonomy) => sprintf('taxonomy:%s:any', $taxonomy))
-                ->all();
+            return array_map(
+                fn ($taxonomy) => sprintf('taxonomy:%s:any', $taxonomy instanceof WP_Taxonomy ? $taxonomy->name : $taxonomy),
+                $taxonomies
+            );
         }
 
         return [];
@@ -267,7 +300,8 @@ class CoreTags
     /**
      * Return cache tags for changes to any user in roles.
      *
-     * @param mixed $roels
+     * @param  string|WP_Role|array<string|WP_Role>  $roles
+     * @return string[]
      */
     public static function anyUser($roles): array
     {
@@ -275,14 +309,19 @@ class CoreTags
             $roles = self::getCacheableUserRoles();
         }
 
+        if ($roles instanceof WP_Role) {
+            $roles = [$roles];
+        }
+
         if (is_string($roles)) {
             $roles = [$roles];
         }
 
         if (is_array($roles)) {
-            return collect($roles)
-                ->map(fn ($role) => sprintf('role:%s', $role))
-                ->all();
+            return array_map(
+                fn ($role) => sprintf('role:%s', $role instanceof WP_Role ? $role->name : $role),
+                $roles
+            );
         }
 
         return [];
@@ -294,12 +333,18 @@ class CoreTags
         if ($metaKey[0] === '_') {
             $value = false;
         }
+
         return apply_filters('cachetags/postmeta', $value, $metaKey, $postId);
     }
 
+    /**
+     * @param  int|WP_Post|WP_Post_Type|string  $postType
+     */
     public static function isCacheablePostType($postType): bool
     {
-        if (is_numeric($postType)) {
+        if ($postType instanceof WP_Post_Type) {
+            $postType = $postType->name;
+        } elseif (is_numeric($postType)) {
             $postType = get_post_type($postType);
         } elseif ($postType instanceof WP_Post) {
             $postType = $postType->post_type;
@@ -308,9 +353,14 @@ class CoreTags
         return in_array($postType, self::getCacheablePostTypes());
     }
 
+    /**
+     * @param  int|WP_Term|WP_Taxonomy|string  $taxonomy
+     */
     public static function isCacheableTaxonomy($taxonomy): bool
     {
-        if (is_numeric($taxonomy)) {
+        if ($taxonomy instanceof WP_Taxonomy) {
+            $taxonomy = $taxonomy->name;
+        } elseif (is_numeric($taxonomy)) {
             $taxonomy = get_term($taxonomy)->taxonomy;
         } elseif ($taxonomy instanceof WP_Term) {
             $taxonomy = $taxonomy->taxonomy;
@@ -321,6 +371,8 @@ class CoreTags
 
     /**
      * Return all cacheable post types.
+     *
+     * @return string[]
      */
     public static function getCacheablePostTypes(): array
     {
@@ -332,6 +384,8 @@ class CoreTags
 
     /**
      * Return all cacheable taxonomies.
+     *
+     * @return string[]
      */
     public static function getCacheableTaxonomies(): array
     {
@@ -343,6 +397,8 @@ class CoreTags
 
     /**
      * Return all cacheable user roles.
+     *
+     * @return string[]
      */
     public static function getCacheableUserRoles(): array
     {

@@ -4,7 +4,7 @@ A sage package for tracking what data rendered pages rely on using Cache Tags (i
 
 ## Example
 
-Front page displays the the page content as well 3 recipe previews. The cache tags might be:
+Front page displays the page content as well as 3 recipe previews. The cache tags might be:
 
 - `post:1` for the front page
 - `post:232`, `post:233`, `post:234` for the 3 recipe previews
@@ -21,6 +21,8 @@ When any of the  posts or terms are updated, page caches and reverse proxies kno
 composer require generoi/sage-cachetags
 ```
 
+### With Acorn (Sage theme)
+
 Start by publishing the config/cachetags.php configuration file using Acorn:
 
 ```sh
@@ -31,6 +33,33 @@ Edit it to your liking and if you're using the database store, scaffold the requ
 
 ```sh
 wp acorn cachetags:database
+```
+
+### Standalone (without Acorn)
+
+For WordPress sites without Acorn, use the `Bootstrap` class in your theme's `functions.php` or a mu-plugin. The `Bootstrap` class provides a fluent interface for configuration:
+
+```php
+use Genero\Sage\CacheTags\Bootstrap;
+use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Actions\HttpHeader;
+use Genero\Sage\CacheTags\Invalidators\SuperCacheInvalidator;
+use Genero\Sage\CacheTags\Stores\WordpressDbStore;
+
+// Bootstrap CacheTags using fluent interface
+(new Bootstrap())
+    ->store(WordpressDbStore::class)
+    ->invalidators([SuperCacheInvalidator::class])
+    ->actions([Core::class, HttpHeader::class])
+    ->debug(defined('WP_DEBUG') && WP_DEBUG)
+    ->httpHeader('Cache-Tag')
+    ->bootstrap();
+```
+
+If you're using the database store, scaffold the required database table using WP-CLI:
+
+```sh
+wp cachetags database
 ```
 
 ## Invalidators
@@ -153,21 +182,68 @@ class ArticleList extends Block
 
 ## CLI
 
+**With Acorn:**
+
 ```sh
 # Flush the entire cache
 wp acorn cachetags:flush
+
+# Scaffold database table
+wp acorn cachetags:database
+```
+
+**Standalone:**
+
+```sh
+# Flush the entire cache
+wp cachetags flush
+
+# Scaffold database table
+wp cachetags database
 ```
 
 ## API
 
+### Accessing CacheTags instance
+
+**With Acorn:**
+```php
+use Genero\Sage\CacheTags\CacheTags;
+
+// Get instance from container
+$cacheTags = app(CacheTags::class);
+```
+
+**Standalone:**
+```php
+use Genero\Sage\CacheTags\CacheTags;
+
+// Get the singleton instance
+$cacheTags = CacheTags::getInstance();
+```
+
 ### Create a custom tag
 
-Nicest way is to look at the code of this repo and create a custom `Action` and maybe a `CustomTag` class that you use, but the logic is really nothing more than:
+The nicest way is to look at the code of this repo and create a custom `Action` and maybe a `CustomTag` class that you use, but the logic is really nothing more than:
 
+**With Acorn:**
 ```php
+use Genero\Sage\CacheTags\CacheTags;
+
 // Tag content
 app(CacheTags::class)->add(['custom-tag']);
 
 // Clear it whenever you want
 \add_action('custom/update', fn() => app(CacheTags::class)->clear(['custom-tag']));
+```
+
+**Standalone:**
+```php
+use Genero\Sage\CacheTags\CacheTags;
+
+// Tag content
+CacheTags::getInstance()?->add(['custom-tag']);
+
+// Clear it whenever you want
+\add_action('custom/update', fn() => CacheTags::getInstance()?->clear(['custom-tag']));
 ```

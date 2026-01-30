@@ -10,12 +10,7 @@ use WP_Block;
 
 class WooCommerce implements Action
 {
-    protected CacheTags $cacheTags;
-
-    public function __construct(CacheTags $cacheTags)
-    {
-        $this->cacheTags = $cacheTags;
-    }
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
@@ -23,7 +18,7 @@ class WooCommerce implements Action
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
     }
 
-    public function addTemplateCacheTags()
+    public function addTemplateCacheTags(): void
     {
         switch (true) {
             case function_exists('is_shop') && is_shop():
@@ -34,6 +29,9 @@ class WooCommerce implements Action
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $block  WordPress block array
+     */
     public function addBlockCacheTags(string $content, array $block, WP_Block $instance): string
     {
         $attributes = $block['attrs'] ?? [];

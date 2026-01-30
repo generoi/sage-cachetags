@@ -8,6 +8,7 @@ class FastlySoftCacheInvalidator extends FastlyCacheInvalidator
     {
         $args = parent::buildRequest($payload);
         $args['headers']['fastly-soft-purge'] = '1';
+
         return $args;
     }
 }

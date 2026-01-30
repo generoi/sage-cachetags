@@ -8,6 +8,8 @@ class SiteTags
 {
     /**
      * Return cache tag for the current site
+     *
+     * @return string[]
      */
     public static function sites($sites = null): array
     {
@@ -20,10 +22,13 @@ class SiteTags
         }
 
         if (is_array($sites)) {
-            return collect($sites)
-                ->map(fn ($site) => $site instanceof WP_Site ? $site->blog_id : $site)
-                ->map(fn ($site) => sprintf('site:%d', $site))
-                ->all();
+            return array_map(
+                fn ($site) => sprintf(
+                    'site:%d',
+                    $site instanceof WP_Site ? $site->blog_id : $site
+                ),
+                $sites
+            );
         }
 
         return [];
