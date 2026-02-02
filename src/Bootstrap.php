@@ -7,6 +7,8 @@ use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
+use WP_REST_Request;
+use WP_REST_Response;
 
 /**
  * Bootstrap CacheTags for standalone WordPress usage (without Acorn).
@@ -113,6 +115,7 @@ class Bootstrap
         // Set up WordPress hooks
         if (! $this->disable) {
             add_action('wp_footer', [$this, 'saveCacheTags']);
+            add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
         }
 
@@ -149,6 +152,17 @@ class Bootstrap
     public function saveCacheTags(): void
     {
         $this->cacheTags->save(Util::currentUrl());
+    }
+
+    public function saveCacheTagsRest(WP_REST_Response $response, $server, WP_REST_Request $request): WP_REST_Response
+    {
+        $route = $request->get_route();
+        $restUrl = rest_url($route);
+        $url = strtok($restUrl, '?');
+
+        $this->cacheTags->save($url);
+
+        return $response;
     }
 
     public function purgeCacheTags(): void
