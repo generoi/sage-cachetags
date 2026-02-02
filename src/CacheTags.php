@@ -87,6 +87,16 @@ class CacheTags
      */
     public function save(string $url): void
     {
+        if (is_admin()) {
+            return;
+        }
+
+        // Avoid cluttering if there's admin-like urls
+        $adminUrl = admin_url();
+        if ($adminUrl && str_starts_with($url, $adminUrl)) {
+            return;
+        }
+
         $this->store->save($this->get(), $url);
     }
 
