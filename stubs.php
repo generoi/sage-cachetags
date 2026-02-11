@@ -44,6 +44,23 @@ if (! function_exists('sg_cachepress_purge_cache')) {
     }
 }
 
+if (! function_exists('rocket_clean_files')) {
+    /**
+     * @param  string|string[]  $urls
+     */
+    function rocket_clean_files($urls, $filesystem = null, $run_actions = true)
+    {
+        return true;
+    }
+}
+
+if (! function_exists('rocket_clean_domain')) {
+    function rocket_clean_domain($lang = '')
+    {
+        return true;
+    }
+}
+
 if (! function_exists('env')) {
     function env($key)
     {
