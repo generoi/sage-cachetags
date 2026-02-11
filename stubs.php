@@ -38,7 +38,7 @@ if (! function_exists('get_supercache_dir')) {
 }
 
 if (! function_exists('sg_cachepress_purge_cache')) {
-    function sg_cachepress_purge_cache($url)
+    function sg_cachepress_purge_cache($url = false)
     {
         return true;
     }
