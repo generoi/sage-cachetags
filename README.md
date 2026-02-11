@@ -17,9 +17,15 @@ When any of the  posts or terms are updated, page caches and reverse proxies kno
 
 ## Installation
 
+### Composer
+
 ```sh
 composer require generoi/sage-cachetags
 ```
+
+### Plugin
+
+Download the zip, install like a regular plugin, then follow the [standalone installation](#standalone-without-acorn) instructions below.
 
 ### With Acorn (Sage theme)
 
