@@ -37,13 +37,16 @@ class CacheTagsServiceProvider extends ServiceProvider
     {
         $config = $this->app->config;
 
-        return new Bootstrap(
+        $bootstrap = new Bootstrap(
             debug: $config->get('cachetags.debug', defined('WP_DEBUG') ? WP_DEBUG : false),
             httpHeader: $config->get('cachetags.http-header', 'Cache-Tag'),
             disable: $config->get('cachetags.disable', false),
             store: $config->get('cachetags.store', WordpressDbStore::class),
             invalidators: $config->get('cachetags.invalidator', []),
             actions: $config->get('cachetags.action', []),
+            nonceCron: $config->get('cachetags.nonce-cron', false),
         );
+
+        return $bootstrap;
     }
 }

@@ -19,4 +19,16 @@ return [
         DebugComment::class,
         Gravityform::class,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nonce Cron
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, WP-Cron will purge cache for pages tagged with 'nonce'
+    | every 12 hours. Enable this when using forms with file uploads (e.g.
+    | Gravity Forms) that are cached, since nonces expire after 12-24 hours.
+    |
+    */
+    'nonce-cron' => false,
 ];

@@ -30,6 +30,13 @@ class Gravityform implements Action
             ...GravityformTags::forms($form['id']),
         ]);
 
+        foreach ($form['fields'] as $field) {
+            // 2.9.24+ uses nonce for file uploads
+            if ($field['type'] === 'fileupload') {
+                $this->cacheTags->add(['nonce']);
+            }
+        }
+
         return $form;
     }
 

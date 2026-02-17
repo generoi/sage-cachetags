@@ -27,6 +27,7 @@ class Bootstrap
         protected array $invalidators = [],
         /** @var Action[] */
         protected array $actions = [Core::class],
+        protected bool $nonceCron = false,
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -91,6 +92,13 @@ class Bootstrap
         return $this;
     }
 
+    public function nonceCron(bool $enable = true): static
+    {
+        $this->nonceCron = $enable;
+
+        return $this;
+    }
+
     /**
      * Bootstrap CacheTags and return the instance.
      */
@@ -117,6 +125,14 @@ class Bootstrap
             add_action('wp_footer', [$this, 'saveCacheTags']);
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
+
+            if ($this->nonceCron) {
+                NonceCron::register();
+            } else {
+                NonceCron::unschedule();
+            }
+        } else {
+            NonceCron::unschedule();
         }
 
         return $this->cacheTags;
