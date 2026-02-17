@@ -146,6 +146,7 @@ class Bootstrap
 
         \WP_CLI::add_command('cachetags database', WpCli\DatabaseCommand::class);
         \WP_CLI::add_command('cachetags flush', WpCli\FlushCommand::class);
+        \WP_CLI::add_command('cachetags clear', WpCli\ClearCommand::class);
     }
 
     protected function bindActions(): void
