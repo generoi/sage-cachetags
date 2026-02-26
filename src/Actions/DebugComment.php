@@ -21,16 +21,20 @@ class DebugComment implements Action
     {
         $cacheTags = array_map(
             function ($tag) {
-                [$entity, $id] = explode(':', $tag.':');
+                $subtag = $tag;
+                if (str_starts_with($tag, 'site:')) {
+                    [$prefix, $site, $subtag] = explode(':', $tag.':', 3);
+                }
+                [$entity, $id] = explode(':', $subtag.':');
 
                 switch ($entity) {
                     case 'menu':
                     case 'term':
-                        return sprintf('[%s] %s', $tag, get_term($id)->name);
+                        return sprintf('[%s] %s (%s)', $tag, get_term($id)->name, get_term($id)->taxonomy);
                     case 'comment':
                         return sprintf('[%s] %s', $tag, get_comment($id)->comment_author);
                     case 'post':
-                        return sprintf('[%s] %s', $tag, get_post($id)?->post_title ?: $id);
+                        return sprintf('[%s] %s (%s)', $tag, get_post($id)?->post_title ?: $id, get_post_type($id));
                     default:
                         return sprintf('[%s]', $tag);
                 }
