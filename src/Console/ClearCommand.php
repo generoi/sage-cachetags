@@ -4,7 +4,6 @@ namespace Genero\Sage\CacheTags\Console;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Roots\Acorn\Console\Commands\Command;
-use Symfony\Component\Console\Input\InputArgument;
 
 class ClearCommand extends Command
 {

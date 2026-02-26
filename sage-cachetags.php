@@ -9,13 +9,13 @@
  * Author URI:   https://genero.fi/
  * License:      MIT License
  */
-
-if (file_exists(__DIR__ . '/vendor/autoload.php')) {
-    require_once __DIR__ . '/vendor/autoload.php';
+if (file_exists(__DIR__.'/vendor/autoload.php')) {
+    require_once __DIR__.'/vendor/autoload.php';
 }
 
 register_activation_hook(__FILE__, function (): void {
-    $activator = new class {
+    $activator = new class
+    {
         use \Genero\Sage\CacheTags\Concerns\CreatesDatabaseTable;
 
         public function run(): void
