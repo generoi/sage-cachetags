@@ -78,6 +78,14 @@ class Core implements Action
      */
     public function addBlockCacheTags(string $content, array $block, WP_Block $instance): string
     {
+        if (is_admin()) {
+            return $content;
+        }
+        // Eg relevanssi indexing
+        if (doing_action('wp_after_insert_post')) {
+            return $content;
+        }
+
         $attributes = $block['attrs'] ?? [];
         $tags = [];
 
