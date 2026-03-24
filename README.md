@@ -76,6 +76,16 @@ Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer an
 
 Integration exists if you add the `SiteGroundCacheInvalidator` invalidator in the `config/cachetags.php` file.
 
+When more than 50 URLs need purging, the invalidator performs a full cache flush instead of purging each URL individually. This avoids overwhelming SiteGround's cache API with thousands of synchronous requests. The threshold is configurable:
+
+```php
+// Change the threshold (default: 50)
+add_filter('cachetags/siteground-bulk-purge-threshold', fn () => 100);
+
+// Always flush (never purge individual URLs)
+add_filter('cachetags/siteground-bulk-purge-threshold', fn () => 0);
+```
+
 ### Super Cache
 
 Integration exists if you add the `SuperCacheInvalidator` invalidator in the `config/cachetags.php` file.
