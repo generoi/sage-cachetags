@@ -28,6 +28,7 @@ class Bootstrap
         /** @var Action[] */
         protected array $actions = [Core::class],
         protected bool $nonceCron = false,
+        protected int $storeClearDelay = 0,
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -99,19 +100,32 @@ class Bootstrap
         return $this;
     }
 
+    public function storeClearDelay(int $seconds): static
+    {
+        $this->storeClearDelay = $seconds;
+
+        return $this;
+    }
+
     /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
     {
+        $store = $this->resolve($this->store, Store::class);
+
+        if ($this->storeClearDelay > 0) {
+            $store = new Stores\DeferredClearStore($store, $this->storeClearDelay);
+        }
+
         $this->cacheTags = CacheTags::make(
-            store: $this->resolve($this->store, Store::class),
+            store: $store,
             debug: $this->debug,
             httpHeader: $this->httpHeader,
             invalidators: array_map(
                 fn ($invalidator) => $this->resolve($invalidator, Invalidator::class),
                 array_filter($this->invalidators)
-            )
+            ),
         );
 
         // Bind actions
@@ -125,6 +139,10 @@ class Bootstrap
             add_action('wp_footer', [$this, 'saveCacheTags']);
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
+
+            if ($this->cacheTags->store instanceof Stores\DeferredClearStore) {
+                $this->cacheTags->store->register();
+            }
 
             if ($this->nonceCron) {
                 NonceCron::register();
