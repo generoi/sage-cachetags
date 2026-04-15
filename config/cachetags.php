@@ -22,6 +22,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Store Clear Delay
+    |--------------------------------------------------------------------------
+    |
+    | Delay in seconds before clearing the tag store after a successful purge.
+    | When set to 0 (default), the store is cleared immediately. Setting a
+    | delay (e.g. 60) prevents race conditions when multiple related posts
+    | are trashed or updated in quick succession — each operation can still
+    | find URLs in the store for its purge before the store is cleaned up.
+    |
+    */
+    'store-clear-delay' => 0,
+
+    /*
+    |--------------------------------------------------------------------------
     | Nonce Cron
     |--------------------------------------------------------------------------
     |
