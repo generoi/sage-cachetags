@@ -26,7 +26,7 @@ class Polylang implements Action
         \add_filter(CacheTags::FILTER_TAGS, [$this, 'filterArchiveTags'], 5);
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 9, 3);
         \add_action('template_redirect', [$this, 'addLanguageTag']);
-        \add_filter('rest_post_dispatch', [$this, 'addLanguageTag']);
+        \add_filter('rest_post_dispatch', [$this, 'addLanguageTagRest']);
     }
 
     /**
@@ -35,6 +35,16 @@ class Polylang implements Action
     public function addLanguageTag(): void
     {
         $this->cacheTags->add(PolylangTags::language());
+    }
+
+    /**
+     * Add the current language as a cache tag to REST responses.
+     */
+    public function addLanguageTagRest(\WP_REST_Response $response): \WP_REST_Response
+    {
+        $this->cacheTags->add(PolylangTags::language());
+
+        return $response;
     }
 
     /**
