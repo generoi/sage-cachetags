@@ -14,10 +14,15 @@ class Polylang implements Action
 
     public function bind(): void
     {
-        if (! function_exists('pll_current_language')) {
-            return;
+        if (did_action('pll_init')) {
+            $this->init();
+        } else {
+            \add_action('pll_init', [$this, 'init']);
         }
+    }
 
+    public function init(): void
+    {
         \add_filter(CacheTags::FILTER_TAGS, [$this, 'filterArchiveTags'], 5);
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 9, 3);
         \add_action('template_redirect', [$this, 'addLanguageTag']);
