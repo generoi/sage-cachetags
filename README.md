@@ -256,9 +256,28 @@ REST:
   read from the registered facets.
 - **`WooCommerce`** — shop sorting/filtering (`orderby`, `min_price`,
   `max_price`, `rating_filter`, `product-page`, `filter_<attribute>`) and
-  single-product variation selection (`attribute_pa_<attribute>`). Marks
-  cart/checkout/account, `add-to-cart`/`wc-ajax`, and any page rendering a
-  login/register/lost-password form non-cacheable.
+  single-product variation selection (`attribute_<slug>`, enumerated from the
+  product's own variation attributes so both global and custom/local attributes
+  are covered). Marks cart/checkout/account, `add-to-cart`/`wc-ajax`, and any
+  page rendering a login/register/lost-password form non-cacheable.
+
+  Cart and checkout stay non-cacheable whether built with the classic shortcodes
+  or the newer blocks — WooCommerce's own guidance is to bypass them (the block
+  shell preloads the Store API cart into the HTML and the mini-cart renders the
+  count server-side).
+
+  **Caching logged-in customers** is opt-in. A plain `customer`/`subscriber`
+  sees identical catalog pages to anonymous and WooCommerce hides their admin
+  bar, so they can be served the cached page — once the theme renders no
+  per-user markup server-side (mini-cart/account link hydrated client-side) and
+  the edge no longer bypasses their cookie:
+
+  ```php
+  add_filter('cachetags/woocommerce-cache-customers', '__return_true');
+  ```
+
+  Cart/checkout/account still bypass for them. For non-WooCommerce sites, the
+  general `cachetags/cache-logged-in` filter does the same.
 - **`Polylang`** / **`WPML`** — contribute the `lang` query var (enable whichever
   multilingual plugin the site uses; applies to all views).
 

@@ -25,6 +25,7 @@ class WooCommerce implements Action
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
         \add_filter(Bootstrap::FILTER_ALLOWED_PARAMS, [$this, 'allowQueryParams']);
         \add_filter('cachetags/cacheable', [$this, 'isCacheable']);
+        \add_filter('cachetags/cache-logged-in', [$this, 'cacheLoggedInCustomer']);
 
         // Auth forms can be embedded on any page (a login widget, a
         // [woocommerce_my_account] shortcode), not just My Account — flag them
@@ -55,20 +56,75 @@ class WooCommerce implements Action
 
         $params = [...$params, 'orderby', 'min_price', 'max_price', 'rating_filter', 'product-page'];
 
-        // Per global attribute taxonomy: layered-nav filters on archives
-        // (filter_<attr> + query_type_<attr>) and variation selection on single
-        // products (attribute_pa_<attr>). Custom (non-taxonomy) product
-        // attributes use attribute_<slug> and aren't enumerable here — add via
-        // the cachetags/url-allowed-params filter if used.
+        // Layered-nav filters on archives use global (taxonomy) attributes:
+        // filter_<attr> + query_type_<attr>. Local attributes can't drive
+        // layered nav, so the global taxonomy list is complete here.
         if (function_exists('wc_get_attribute_taxonomies')) {
             foreach (wc_get_attribute_taxonomies() as $attribute) {
                 $params[] = 'filter_'.$attribute->attribute_name;
                 $params[] = 'query_type_'.$attribute->attribute_name;
-                $params[] = 'attribute_pa_'.$attribute->attribute_name;
             }
         }
 
-        return $params;
+        // Variation selection on a single variable product. Enumerate the
+        // product's own variation attributes — this covers both global (pa_*)
+        // and custom/local attributes, with the exact attribute_<slug> param
+        // the variation form uses. No global list needed.
+        $params = [...$params, ...$this->variationParams()];
+
+        return array_values(array_unique($params));
+    }
+
+    /**
+     * attribute_<slug> params for the current variable product's variation
+     * attributes (global and local alike).
+     *
+     * @return string[]
+     */
+    protected function variationParams(): array
+    {
+        if (! function_exists('is_product') || ! is_product()) {
+            return [];
+        }
+
+        $product = wc_get_product();
+        if (! $product || ! $product->is_type('variable')) {
+            return [];
+        }
+
+        return array_map(
+            fn ($attribute) => 'attribute_'.sanitize_title($attribute),
+            array_keys($product->get_variation_attributes())
+        );
+    }
+
+    /**
+     * Opt logged-in shop customers into caching: they see identical catalog
+     * pages to anonymous visitors and WooCommerce hides their admin bar. Off by
+     * default — enable cachetags/woocommerce-cache-customers once the theme
+     * renders no per-user markup server-side (mini-cart/account hydrated
+     * client-side) and the edge no longer passes their cookie. Cart/checkout/
+     * account stay non-cacheable via isCacheable().
+     */
+    public function cacheLoggedInCustomer(bool $cacheable): bool
+    {
+        if ($cacheable) {
+            return true;
+        }
+
+        return $this->isShopCustomer()
+            && (bool) \apply_filters('cachetags/woocommerce-cache-customers', false);
+    }
+
+    /**
+     * A logged-in user with no editing/management capability — i.e. a customer
+     * or subscriber, for whom WooCommerce hides the admin bar.
+     */
+    protected function isShopCustomer(): bool
+    {
+        return is_user_logged_in()
+            && ! current_user_can('edit_posts')
+            && ! current_user_can('manage_woocommerce');
     }
 
     /**

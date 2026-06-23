@@ -209,8 +209,33 @@ class TestQueryVary extends WP_UnitTestCase
     {
         wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
         add_filter('show_admin_bar', '__return_false');
-        add_filter('cachetags/cacheable', '__return_true');
+        add_filter('cachetags/cache-logged-in', '__return_true');
 
         $this->assertTrue(Util::isCacheableRequest());
+    }
+
+    // --- WooCommerce customer caching (opt-in) -----------------------------
+
+    public function test_woocommerce_does_not_cache_customers_by_default(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+
+        $this->assertFalse((new WooCommerce(CacheTags::getInstance()))->cacheLoggedInCustomer(false));
+    }
+
+    public function test_woocommerce_caches_customers_when_opted_in(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        add_filter('cachetags/woocommerce-cache-customers', '__return_true');
+
+        $this->assertTrue((new WooCommerce(CacheTags::getInstance()))->cacheLoggedInCustomer(false));
+    }
+
+    public function test_woocommerce_never_treats_editors_as_customers(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
+        add_filter('cachetags/woocommerce-cache-customers', '__return_true');
+
+        $this->assertFalse((new WooCommerce(CacheTags::getInstance()))->cacheLoggedInCustomer(false));
     }
 }
