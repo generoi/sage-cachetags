@@ -96,7 +96,7 @@ class Util
      * string is included, so it doesn't bloat the store. This is a generic
      * starting default — to actually *match* a URL-keyed edge it must equal
      * that edge's own strip list, which is site-specific (our Fastly VCLs strip
-     * anywhere from 5 to 16 params: beamex strips utm_*/gclid only, herrfors
+     * anywhere from 5 to 16 params: beamex strips only utm_ and gclid, herrfors
      * also strips campaign_id, tduid, gad_source, wbraid, dclid, _gl, …). Align
      * it per site via cachetags/url-ignored-params; comprehensive normalization
      * belongs at the edge.
