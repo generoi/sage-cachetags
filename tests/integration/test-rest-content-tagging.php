@@ -1,6 +1,7 @@
 <?php
 
 use Genero\Sage\CacheTags\Actions\RestApi;
+use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Tests\RestTestCase;
 
 /**
@@ -203,6 +204,34 @@ class TestRestContentTagging extends RestTestCase
         $this->cacheTags->purgeQueued();
 
         $this->assertNotContains($url, $this->storedUrls("post:{$this->postId}"));
+    }
+
+    public function test_oversized_tag_sets_collapse_to_coarse_any_tags(): void
+    {
+        add_filter(CacheTags::FILTER_MAX_HEADER_BYTES, fn () => 30);
+        self::factory()->post->create_many(3, ['post_status' => 'publish']);
+
+        $tags = $this->cacheTagHeader($this->dispatch(new WP_REST_Request('GET', '/wp/v2/posts')));
+
+        $this->assertContains('archive:post:any', $tags);
+        $this->assertNotContains("post:{$this->postId}", $tags, 'Individual post tags are collapsed when over budget');
+    }
+
+    public function test_collapsed_collection_is_purged_on_any_post_change(): void
+    {
+        add_filter(CacheTags::FILTER_MAX_HEADER_BYTES, fn () => 30);
+
+        $url = $this->storedUrl('/wp/v2/posts');
+        $this->dispatch(new WP_REST_Request('GET', '/wp/v2/posts'));
+        $this->assertContains($url, $this->storedUrls('archive:post:any'));
+
+        // Editing any post of the type clears the coarse tag the collapsed
+        // collection was stored under.
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $this->postId, 'post_title' => 'Updated']);
+        $this->cacheTags->purgeQueued();
+
+        $this->assertNotContains($url, $this->storedUrls('archive:post:any'));
     }
 
     private function collection(array $queryParams): WP_REST_Request

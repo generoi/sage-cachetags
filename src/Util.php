@@ -52,7 +52,8 @@ class Util
     }
 
     /**
-     * Normalize cache tags: flatten, filter empty values, remove duplicates, and re-index.
+     * Normalize cache tags: flatten, drop invalid values, remove duplicates,
+     * and re-index.
      *
      * @param  array<string|array<string>>  $tags
      * @return string[]
@@ -60,10 +61,34 @@ class Util
     public static function normalizeTags(array $tags): array
     {
         $tags = self::flatten($tags);
-        $tags = array_filter($tags);
+        $tags = array_filter($tags, [self::class, 'isValidTag']);
         $tags = array_unique($tags);
 
         return array_values($tags);
+    }
+
+    /**
+     * Whether a value is a usable cache tag: a non-empty, single header token
+     * (no whitespace or control characters) that fits the store column.
+     *
+     * A tag with whitespace would split the space-delimited header, and an
+     * over-long tag both overflows the store and, on Fastly, gets dropped
+     * along with every following key. Such tags are discarded.
+     */
+    public static function isValidTag(mixed $tag): bool
+    {
+        if (! is_string($tag) || $tag === '') {
+            return false;
+        }
+
+        if (strlen($tag) > (int) apply_filters('cachetags/max-tag-length', 191)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            apply_filters('cachetags/tag-pattern', '/^[^\s\x00-\x1F]+$/'),
+            $tag
+        );
     }
 
     public static function currentUrl(): string
