@@ -147,10 +147,14 @@ are still collected through Core's `render_block` hook during the REST request.
 What gets tagged:
 
 - **Single resources** (`/wp/v2/posts/123`, `/wp/v2/categories/5`, `/wp/v2/users/2`,
-  `/wp/v2/comments/9`) — the object itself, plus a post's related terms, author
-  and featured media.
+  `/wp/v2/comments/9`) — the object itself, plus a post's related terms, author,
+  featured media and parent.
 - **Collections** (`/wp/v2/posts`) — each item plus the relevant `archive:` /
-  `taxonomy:` listing tag.
+  `taxonomy:` listing tag. The listing tag is added even for empty/filtered
+  collections, so they refresh when their membership changes.
+- **Search** (`/wp/v2/search`) — each matched post/term.
+- **Headless post types** — public types plus any non-builtin post type/taxonomy
+  exposed to REST (`show_in_rest`), so `public=false` content types are covered.
 
 Only responses that may be publicly cached are tagged: requests are skipped when
 they are authenticated, use `context=edit`, carry a `password`, or are not
