@@ -77,6 +77,37 @@ across all sites.
 
 Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
 
+### Stored URL and query strings
+
+Front-end pages are stored under the **actual requested URL** (including its query
+string), so a URL-based purge matches the variant a page cache keyed on. A default
+set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
+`_`) is stripped and the rest sorted; keys longer than the `varchar(191)` column
+fall back to the path.
+
+On a **query-bypass** edge — Fastly (purges by `Surrogate-Key`, ignores the URL)
+or Kinsta (query-string URLs bypass the cache entirely) — those query-string rows
+are never cached and so never need purging; they just accumulate in the store
+(one row per visited `?…` combination, including bot/scanner params). A
+query-bypass site with heavy parameterised traffic can keep the store lean by
+storing the path only:
+
+```php
+add_filter('cachetags/store-query-string', '__return_false');
+```
+
+**To match a URL-keyed edge that does cache query strings** (SiteGround, or Kinsta
+configured to cache GET params) the strip list must equal that edge's — and that's
+site-specific (our own Fastly VCLs strip anywhere from 5 to 16 params), so align
+it per site:
+
+```php
+add_filter('cachetags/url-ignored-params', fn ($p) => [...$p, 'campaign_id', 'tduid']);
+```
+
+Comprehensive query-param normalization is better done at the edge (CDN/VCL) than
+replicated here.
+
 ### SiteGround Optimizer
 
 Integration exists if you add the `SiteGroundCacheInvalidator` invalidator in the `config/cachetags.php` file.

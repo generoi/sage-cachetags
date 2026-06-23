@@ -109,11 +109,54 @@ class Util
         );
     }
 
+    /**
+     * Tracking/volatile params dropped from the stored URL when the query
+     * string is included, so it doesn't bloat the store. This is a generic
+     * starting default — to actually *match* a URL-keyed edge it must equal
+     * that edge's own strip list, which is site-specific (our Fastly VCLs strip
+     * anywhere from 5 to 16 params: beamex strips only utm_ and gclid, herrfors
+     * also strips campaign_id, tduid, gad_source, wbraid, dclid, _gl, …). Align
+     * it per site via cachetags/url-ignored-params; comprehensive normalization
+     * belongs at the edge.
+     */
+    const IGNORED_URL_PARAMS = [
+        // Campaign / click trackers (Google, Microsoft, Facebook, GA linker).
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
+        'gclid', 'gad_source', 'gbraid', 'wbraid', 'dclid', 'fbclid', 'msclkid', '_gl',
+        // Volatile WordPress per-request params.
+        '_wpnonce', '_',
+    ];
+
     public static function currentUrl(): string
     {
         global $wp;
 
-        return trailingslashit(home_url($wp->request));
+        $url = trailingslashit(home_url($wp->request));
+
+        // Store the actual requested URL — the variant a URL-keyed page cache
+        // would key on — so a purge matches what was cached. Moot for Fastly
+        // (purges by Surrogate-Key, ignores the URL); on Kinsta the query-string
+        // variants bypass the cache, so the extra rows just accumulate. A
+        // query-bypass site with heavy bot/param traffic can opt out to keep the
+        // store lean and avoid no-op purge calls for never-cached URLs.
+        if (empty($_GET) || ! apply_filters('cachetags/store-query-string', true)) {
+            return $url;
+        }
+
+        $ignored = apply_filters('cachetags/url-ignored-params', self::IGNORED_URL_PARAMS);
+        $params = array_diff_key($_GET, array_flip($ignored));
+
+        if (empty($params)) {
+            return $url;
+        }
+
+        ksort($params);
+        $params = map_deep(wp_unslash($params), 'sanitize_text_field');
+        $full = $url.'?'.http_build_query($params);
+
+        // The url column is varchar(191); fall back to the path if the query
+        // string overflows it, which also bounds pathological junk-param keys.
+        return strlen($full) <= apply_filters('cachetags/max-url-length', 191) ? $full : $url;
     }
 
     /**
