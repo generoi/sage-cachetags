@@ -37,8 +37,16 @@ class CacheCustomers implements Action
             return true;
         }
 
-        return is_user_logged_in()
-            && ! current_user_can('edit_posts')
-            && ! current_user_can('manage_woocommerce');
+        if (! is_user_logged_in() || current_user_can('edit_posts') || current_user_can('manage_woocommerce')) {
+            return false;
+        }
+
+        // Never opt a customer's own per-user pages into caching, even if the
+        // WooCommerce action (which also vetoes these) isn't enabled.
+        if (function_exists('is_account_page') && (is_account_page() || is_cart() || is_checkout())) {
+            return false;
+        }
+
+        return true;
     }
 }

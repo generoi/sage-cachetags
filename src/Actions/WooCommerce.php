@@ -112,7 +112,7 @@ class WooCommerce implements Action
             return false;
         }
 
-        if ($this->hasAuthForm) {
+        if ($this->hasAuthForm || $this->hasCartCheckoutContent()) {
             return false;
         }
 
@@ -125,6 +125,26 @@ class WooCommerce implements Action
         }
 
         return ! isset($_GET['add-to-cart']) && ! isset($_GET['wc-ajax']);
+    }
+
+    /**
+     * Whether the current page renders the cart or checkout — as the designated
+     * pages (caught by is_cart/is_checkout), or via the block/shortcode placed
+     * on any page. Both render per-user cart state (the block preloads the Store
+     * API cart into the HTML), so the page must never be publicly cached, block
+     * or classic alike.
+     */
+    protected function hasCartCheckoutContent(): bool
+    {
+        $post = get_post();
+        if (! $post) {
+            return false;
+        }
+
+        return has_block('woocommerce/cart', $post)
+            || has_block('woocommerce/checkout', $post)
+            || has_shortcode($post->post_content, 'woocommerce_cart')
+            || has_shortcode($post->post_content, 'woocommerce_checkout');
     }
 
     public function addTemplateCacheTags(): void

@@ -139,6 +139,35 @@ class TestQueryVary extends WP_UnitTestCase
         $this->assertTrue($action->isCacheable(true), 'no opinion without WooCommerce');
     }
 
+    public function test_woocommerce_never_caches_a_checkout_block_page(): void
+    {
+        $id = self::factory()->post->create([
+            'post_type' => 'page',
+            'post_status' => 'publish',
+            'post_content' => '<!-- wp:woocommerce/checkout /-->',
+        ]);
+        $this->go_to(get_permalink($id));
+
+        $this->assertFalse((new WooCommerce(CacheTags::getInstance()))->isCacheable(true));
+    }
+
+    public function test_woocommerce_never_caches_a_cart_shortcode_page(): void
+    {
+        // has_shortcode only matches registered shortcodes; WooCommerce
+        // registers this one, so register it here to mirror that.
+        add_shortcode('woocommerce_cart', '__return_empty_string');
+        $id = self::factory()->post->create([
+            'post_type' => 'page',
+            'post_status' => 'publish',
+            'post_content' => '[woocommerce_cart]',
+        ]);
+        $this->go_to(get_permalink($id));
+
+        $this->assertFalse((new WooCommerce(CacheTags::getInstance()))->isCacheable(true));
+
+        remove_shortcode('woocommerce_cart');
+    }
+
     public function test_woocommerce_marks_pages_with_an_auth_form_non_cacheable(): void
     {
         $action = new WooCommerce(CacheTags::getInstance());
