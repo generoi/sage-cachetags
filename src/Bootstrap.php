@@ -20,11 +20,15 @@ class Bootstrap
 
     /**
      * Query parameters that never change the cached representation and so are
-     * excluded from the stored REST URL: auth tokens, cache-busters, method
-     * overrides, and the edit/password params (gated out of caching anyway).
-     * These do not change an anonymous GET's cached body.
+     * excluded from the stored REST URL. Deliberately minimal: stripping a
+     * param risks collapsing two distinct CDN entries into one store key (so a
+     * purge would miss one), while keeping a param is always purge-safe. Only
+     * these random per-request values are dropped — any cache entry keyed on
+     * them is never reused, so collapsing them can't cause staleness, and
+     * keeping them would just bloat the store with dead keys. Everything else
+     * (incl. context, which changes the body) is cached separately.
      */
-    const IGNORED_QUERY_PARAMS = ['_wpnonce', '_', '_method', 'context', 'password'];
+    const IGNORED_QUERY_PARAMS = ['_wpnonce', '_'];
 
     /**
      * Server parameters that DO change the response body, so they belong in the

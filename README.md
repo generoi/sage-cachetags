@@ -168,11 +168,13 @@ clients.
 
 Each response is stored under its canonical URL with sort-normalized query
 parameters, so variants that produce a different response — pagination/filters
-(`?page=2`, `?categories=5`) and the server params that shape the body
-(`_embed`, `_fields`, `_envelope`, `_locale`) — get distinct, CDN-matching store
-keys. Parameters the route doesn't register (and aren't response-shaping) are
-dropped so arbitrary client params can't fork the key, as are auth/cache-buster
-params (`_wpnonce`, `_`, `_method`) and the gated `context`/`password`.
+(`?page=2`, `?categories=5`), `context`, and the server params that shape the
+body (`_embed`, `_fields`, `_envelope`, `_locale`) — get distinct, CDN-matching
+store keys and are purged separately. Parameters the route doesn't register (and
+aren't response-shaping) are dropped so arbitrary client params can't fork the
+key. Only the random per-request params `_wpnonce` and `_` are stripped
+unconditionally — any cache entry keyed on them is never reused, so collapsing
+them can't cause staleness.
 
 ### Filters
 
