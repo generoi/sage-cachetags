@@ -64,6 +64,39 @@ class TestAutoTag extends RestTestCase
         $this->assertNotContains('archive:page', $this->cacheTags->get());
     }
 
+    public function test_get_posts_is_tagged_despite_suppressing_filters(): void
+    {
+        // get_posts() forces suppress_filters=true, which skips the_posts — the
+        // exact case the_posts misses and posts_pre_query catches.
+        $id = self::factory()->post->create(['post_status' => 'publish']);
+        $this->resetCacheTags();
+
+        $posts = get_posts(['include' => [$id]]);
+
+        $this->assertCount(1, $posts, 'get_posts still returns its result');
+        $this->assertInstanceOf(WP_Post::class, $posts[0]);
+        $this->assertSame($id, $posts[0]->ID);
+        $this->assertContains("post:{$id}", $this->cacheTags->get());
+    }
+
+    public function test_short_circuit_preserves_the_requested_fields_shape(): void
+    {
+        $ids = self::factory()->post->create_many(2, ['post_status' => 'publish']);
+        $this->resetCacheTags();
+
+        // fields=ids must come back as ints, not WP_Post objects — i.e. running
+        // the query inside posts_pre_query must not corrupt the return value.
+        $result = get_posts(['include' => $ids, 'fields' => 'ids']);
+
+        sort($result);
+        sort($ids);
+        $this->assertSame($ids, array_map('intval', $result));
+        $this->assertContainsOnly('integer', $result);
+        foreach ($ids as $id) {
+            $this->assertContains("post:{$id}", $this->cacheTags->get());
+        }
+    }
+
     public function test_fetching_terms_tags_them(): void
     {
         $postId = self::factory()->post->create(['post_status' => 'publish']);

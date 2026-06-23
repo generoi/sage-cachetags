@@ -258,8 +258,13 @@ return [
 ];
 ```
 
-It hooks `the_posts` (tagging each returned post, plus an `archive:{type}` for
-collection queries) and `get_the_terms` (tagging each term). Page archives are
+It hooks `posts_pre_query` (tagging each returned post, plus an `archive:{type}`
+for collection queries) and `get_the_terms` (tagging each term). `posts_pre_query`
+is used rather than `the_posts` because `get_posts()`/`get_children()`/
+`get_pages()` force `suppress_filters=true` and so never fire `the_posts` — the
+pre-query hook fires for every `WP_Query` regardless, so a plain
+`foreach (get_posts(...) as $post)` loop is covered too. Raw `$wpdb` queries are
+not (no query object to observe) — tag those explicitly. Page archives are
 excluded by default — adjust with the `cachetags/autotag-excluded-archive-types`
 filter. The header-size collapse keeps the broader tag set bounded.
 

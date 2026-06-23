@@ -17,32 +17,45 @@ use WP_Term;
  * Opt-in and complementary to Core — enable both; the header budget collapse in
  * CacheTags keeps the broader tag set bounded.
  *
- * Uses the_posts (fired with the final posts, after the query, for every
- * WP_Query incl. short-circuited ones) rather than short-circuiting
- * posts_pre_query, which avoids the recursion/format pitfalls of running the
- * query from within its own pre-query filter.
+ * Hooks posts_pre_query rather than the_posts because get_posts() (and
+ * get_children()/get_pages()) force suppress_filters=true, which skips the_posts
+ * entirely — so a `foreach (get_posts(...) as $post)` loop would go untagged.
+ * posts_pre_query fires for every WP_Query regardless of suppress_filters. We
+ * run the query once ourselves (guarded against re-entry) and return its rows to
+ * short-circuit, so the query still executes exactly once.
  */
 class AutoTag implements Action
 {
     const FILTER_EXCLUDED_ARCHIVE_TYPES = 'cachetags/autotag-excluded-archive-types';
 
+    /** Guards against re-entry while we run the query inside its own pre-query filter. */
+    protected bool $running = false;
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
-        \add_filter('the_posts', [$this, 'tagQueriedPosts'], PHP_INT_MAX, 2);
+        \add_filter('posts_pre_query', [$this, 'tagQueriedPosts'], PHP_INT_MAX, 2);
         \add_filter('get_the_terms', [$this, 'tagQueriedTerms'], PHP_INT_MAX);
     }
 
     /**
-     * @param  mixed  $posts  Array of WP_Post, ids, or id=>parent rows.
-     * @return mixed
+     * @param  WP_Post[]|int[]|null  $posts  Short-circuit value (null unless another filter set it).
+     * @return WP_Post[]|int[]|null
      */
     public function tagQueriedPosts($posts, WP_Query $query)
     {
-        if (! is_array($posts) || (is_admin() && ! wp_doing_ajax())) {
+        // Bail if re-entrant (our own get_posts() call below), if another filter
+        // already short-circuited, or in a non-AJAX admin request.
+        if ($this->running || $posts !== null || (is_admin() && ! wp_doing_ajax())) {
             return $posts;
         }
+
+        // Run the query once; the guard turns the re-entrant pre-query call into
+        // a no-op so WordPress executes it normally and fills $query->posts.
+        $this->running = true;
+        $query->get_posts();
+        $this->running = false;
 
         $tags = [];
 
@@ -54,13 +67,16 @@ class AutoTag implements Action
             }
         }
 
-        foreach ($posts as $post) {
+        foreach ($query->posts as $post) {
             $tags[] = $this->postTag($post);
         }
 
         $this->cacheTags->add($tags);
 
-        return $posts;
+        // Return the rows so the outer query short-circuits instead of running
+        // a second time. $query->posts is already in the requested `fields`
+        // shape (WP_Post[], ids, or id=>parent rows).
+        return $query->posts;
     }
 
     /**
