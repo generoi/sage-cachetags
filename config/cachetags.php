@@ -22,6 +22,10 @@ return [
         // Tag REST API read responses for headless/decoupled setups. Keep Core
         // enabled alongside it so block-derived tags are collected too.
         // \Genero\Sage\CacheTags\Actions\RestApi::class,
+
+        // Include cache-significant query params (search, sort, Polylang lang,
+        // FacetWP selections) in the front-end + REST cache key.
+        // \Genero\Sage\CacheTags\Actions\AllowList::class,
     ],
 
     /*

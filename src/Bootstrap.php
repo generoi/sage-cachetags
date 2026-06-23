@@ -38,6 +38,13 @@ class Bootstrap
 
     const FILTER_URL_IGNORED_PARAMS = 'cachetags/rest-url-ignored-params';
 
+    /**
+     * Extra query params to include in the cache key on both the front-end and
+     * REST. Empty by default (front-end stays path-only); the opt-in AllowList
+     * action populates it. Shared so both surfaces key consistently.
+     */
+    const FILTER_ALLOWED_PARAMS = 'cachetags/url-allowed-params';
+
     protected bool $debug;
 
     protected ?CacheTags $cacheTags = null;
@@ -234,7 +241,37 @@ class Bootstrap
 
     public function saveCacheTags(): void
     {
-        $this->cacheTags->save(Util::currentUrl());
+        $this->cacheTags->save($this->frontendUrl());
+    }
+
+    /**
+     * The canonical URL a front-end response is cached under.
+     *
+     * Path-only by default (correct for pretty-permalink sites); the opt-in
+     * AllowList action adds cache-significant query params via the shared
+     * allowed-params filter, mirroring how restUrl() keys REST responses.
+     */
+    protected function frontendUrl(): string
+    {
+        $url = Util::currentUrl();
+        $allowed = apply_filters(self::FILTER_ALLOWED_PARAMS, []);
+
+        if (empty($allowed) || empty($_GET)) {
+            return $url;
+        }
+
+        $params = array_intersect_key(
+            map_deep(wp_unslash($_GET), 'sanitize_text_field'),
+            array_flip($allowed)
+        );
+
+        if (empty($params)) {
+            return $url;
+        }
+
+        ksort($params);
+
+        return $url.'?'.http_build_query($params);
     }
 
     public function saveCacheTagsRest($response, $server, WP_REST_Request $request)
@@ -267,7 +304,9 @@ class Bootstrap
         // the cache key while representation-affecting ones are preserved.
         $registered = $request->get_attributes()['args'] ?? [];
         if (! empty($registered)) {
-            $params = array_intersect_key($params, $registered + array_flip(self::RESPONSE_QUERY_PARAMS));
+            $allowed = apply_filters(self::FILTER_ALLOWED_PARAMS, []);
+            $keep = $registered + array_flip(self::RESPONSE_QUERY_PARAMS) + array_flip($allowed);
+            $params = array_intersect_key($params, $keep);
         }
 
         $ignored = apply_filters(self::FILTER_URL_IGNORED_PARAMS, self::IGNORED_QUERY_PARAMS);

@@ -240,6 +240,30 @@ add_filter('cachetags/options', fn (array $options) => [...$options, 'my_option'
 Options not bound to a specific block are usually better handled with a full
 cache flush than by tagging every page that might render them.
 
+### Query parameters in the cache key
+
+By default the front-end cache key is path-only (correct for pretty-permalink
+sites) and REST keys keep the route's registered params. If you full-page-cache
+query-string variants — search, sorting, Polylang language, FacetWP selections —
+enable the opt-in `AllowList` action so those variants are cached and purged
+separately on **both** surfaces:
+
+```php
+use Genero\Sage\CacheTags\Actions\AllowList;
+
+return ['action' => [Core::class, AllowList::class]];
+```
+
+It adds a WP-core allow-list (`s`, `orderby`, `order`, `paged`) plus params for
+active integrations (Polylang `lang`, FacetWP selections), and is extensible:
+
+```php
+add_filter('cachetags/url-allowed-params', fn (array $params) => [...$params, 'my_param']);
+```
+
+It only ever *adds* params to the key (keeping a param is purge-safe), so an
+incomplete list over-caches rather than serving stale content.
+
 ## Traits for use with roots/sage
 
 ### Composers
