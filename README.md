@@ -240,6 +240,33 @@ add_filter('cachetags/options', fn (array $options) => [...$options, 'my_option'
 Options not bound to a specific block are usually better handled with a full
 cache flush than by tagging every page that might render them.
 
+## Cacheability
+
+Some responses must never be stored in a shared cache. `Util::isCacheableRequest()`
+returns `false` for previews and any request showing the admin bar (per-user
+chrome baked into the HTML), and — by default — for logged-in users. When a
+request is not cacheable the plugin skips tagging it and defines `DONOTCACHEPAGE`
+so page caches (WP Super Cache, Batcache, theme cache-control providers) don't
+store it; edge caches should consult `Util::isCacheableRequest()` from the
+theme/VCL since their TTL header is sent earlier.
+
+Integrations veto via `cachetags/cacheable` (runs last) and opt in via
+`cachetags/cache-logged-in`:
+
+- **`WooCommerce`** — non-cacheable on cart/checkout/account, `add-to-cart`/
+  `wc-ajax`, an embedded login/register/lost-password form, and any page with a
+  cart/checkout block or shortcode (these render per-user cart state).
+- **`Gravityform`** — a form prepopulated from the query string is non-cacheable
+  (its prefilled values are per-visitor, often PII).
+- **`CacheCustomers`** (opt-in) — serve cached pages to logged-in customers/
+  subscribers, who see identical catalog pages and whose admin bar WooCommerce
+  hides. Enable only when the theme renders no per-user markup server-side and
+  the edge stops bypassing their login cookie; cart/checkout/account still bail.
+
+  ```php
+  add_filter('cachetags/cacheable', fn ($c) => $c); // (vetoes still apply)
+  ```
+
 ## Traits for use with roots/sage
 
 ### Composers

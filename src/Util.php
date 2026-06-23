@@ -32,6 +32,26 @@ class Util
     }
 
     /**
+     * Whether the current front-end request may be stored in a shared cache.
+     */
+    public static function isCacheableRequest(): bool
+    {
+        // Previews render unsaved content; the admin bar bakes per-user chrome
+        // into the HTML. Never cache either — not overridable.
+        if (is_preview() || is_admin_bar_showing()) {
+            return false;
+        }
+
+        // Logged-in requests are non-cacheable unless an integration opts them
+        // in via cachetags/cache-logged-in (e.g. WooCommerce customers, who see
+        // identical catalog pages and whose admin bar is hidden). The general
+        // cachetags/cacheable filter still runs last and can veto (cart, forms).
+        $cacheable = ! is_user_logged_in() || (bool) apply_filters('cachetags/cache-logged-in', false);
+
+        return (bool) apply_filters('cachetags/cacheable', $cacheable);
+    }
+
+    /**
      * Flatten nested arrays recursively.
      *
      * @param  array<string|array>  $array

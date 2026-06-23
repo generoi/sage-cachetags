@@ -234,7 +234,16 @@ class Bootstrap
 
     public function saveCacheTags(): void
     {
-        $this->cacheTags->save(Util::currentUrl());
+        if (Util::isCacheableRequest()) {
+            $this->cacheTags->save(Util::currentUrl());
+        } elseif (! defined('DONOTCACHEPAGE')) {
+            // Make the non-cacheable verdict (preview, logged-in, forms, cart,
+            // …) actionable: page caches (WP Super Cache, Batcache, the theme
+            // cache-control providers) honour DONOTCACHEPAGE. Edge caches key on
+            // Cache-Control sent earlier, so their bypass must come from the
+            // theme/VCL consulting Util::isCacheableRequest().
+            define('DONOTCACHEPAGE', true);
+        }
     }
 
     public function saveCacheTagsRest($response, $server, WP_REST_Request $request)

@@ -27,12 +27,15 @@ class HttpHeader implements Action
 
     public function addHttpHeader(): void
     {
-        if ($header = $this->cacheTags->httpHeader) {
-            header(sprintf(
-                '%s: %s',
-                $header,
-                implode(' ', $this->cacheTags->get())
-            ));
+        if (! Util::isCacheableRequest()) {
+            return;
+        }
+
+        $tags = $this->cacheTags->get();
+        $header = $this->cacheTags->httpHeader;
+
+        if ($header && ! empty($tags)) {
+            header(sprintf('%s: %s', $header, implode(' ', $tags)));
         }
     }
 

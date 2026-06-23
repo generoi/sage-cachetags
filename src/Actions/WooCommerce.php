@@ -10,12 +10,76 @@ use WP_Block;
 
 class WooCommerce implements Action
 {
+    /**
+     * Set when a login/register/lost-password form renders on the page (these
+     * carry per-session nonces, so the page must not be publicly cached).
+     */
+    protected bool $hasAuthForm = false;
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
         \add_filter('template_redirect', [$this, 'addTemplateCacheTags']);
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
+        \add_filter('cachetags/cacheable', [$this, 'isCacheable']);
+
+        // Auth forms can be embedded on any page (a login widget, a
+        // [woocommerce_my_account] shortcode), not just My Account — flag them
+        // as they render so isCacheable() can bail.
+        foreach (['woocommerce_login_form_start', 'woocommerce_register_form_start', 'woocommerce_lostpassword_form'] as $hook) {
+            \add_action($hook, [$this, 'markAuthForm']);
+        }
+    }
+
+    public function markAuthForm(): void
+    {
+        $this->hasAuthForm = true;
+    }
+
+    /**
+     * Cart, checkout, account, add-to-cart and pages rendering an auth form are
+     * per-session / state-mutating — they must not be publicly cached.
+     */
+    public function isCacheable(bool $cacheable): bool
+    {
+        if (! $cacheable) {
+            return false;
+        }
+
+        if ($this->hasAuthForm || $this->hasCartCheckoutContent()) {
+            return false;
+        }
+
+        if (! function_exists('is_cart')) {
+            return $cacheable;
+        }
+
+        if (is_cart() || is_checkout() || is_account_page()) {
+            return false;
+        }
+
+        return ! isset($_GET['add-to-cart']) && ! isset($_GET['wc-ajax']);
+    }
+
+    /**
+     * Whether the current page renders the cart or checkout — as the designated
+     * pages (caught by is_cart/is_checkout), or via the block/shortcode placed
+     * on any page. Both render per-user cart state (the block preloads the Store
+     * API cart into the HTML), so the page must never be publicly cached, block
+     * or classic alike.
+     */
+    protected function hasCartCheckoutContent(): bool
+    {
+        $post = get_post();
+        if (! $post) {
+            return false;
+        }
+
+        return has_block('woocommerce/cart', $post)
+            || has_block('woocommerce/checkout', $post)
+            || has_shortcode($post->post_content, 'woocommerce_cart')
+            || has_shortcode($post->post_content, 'woocommerce_checkout');
     }
 
     public function addTemplateCacheTags(): void

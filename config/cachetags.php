@@ -22,6 +22,12 @@ return [
         // Tag REST API read responses for headless/decoupled setups. Keep Core
         // enabled alongside it so block-derived tags are collected too.
         // \Genero\Sage\CacheTags\Actions\RestApi::class,
+
+        // Serve cached pages to logged-in customers/subscribers (admin bar
+        // hidden, identical catalog content). Only enable when the theme renders
+        // no per-user markup server-side and the edge stops bypassing their
+        // login cookie. Cart/checkout/account still bypass.
+        // \Genero\Sage\CacheTags\Actions\CacheCustomers::class,
     ],
 
     /*
