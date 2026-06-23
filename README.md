@@ -68,6 +68,11 @@ If you're using the database store, scaffold the required database table using W
 wp cachetags database
 ```
 
+Schema changes are migrated automatically on the next admin request after an
+update (the table version is tracked in the `cachetags_db_version` option). On
+headless or multisite setups, run `wp cachetags database` to apply migrations
+across all sites.
+
 ## Invalidators
 
 Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.

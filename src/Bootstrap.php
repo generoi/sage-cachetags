@@ -159,6 +159,11 @@ class Bootstrap
             add_action('wp_initialize_site', [$this, 'createTableForNewSite'], 100);
         }
 
+        // Apply schema migrations for existing installs — activation hooks don't
+        // re-run on plugin updates. Runs per-site in admin; `wp cachetags
+        // database` covers headless/network upgrades.
+        add_action('admin_init', [$this, 'upgradeTable']);
+
         // Set up WordPress hooks
         if (! $this->disable) {
             add_action('wp_footer', [$this, 'saveCacheTags']);
