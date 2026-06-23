@@ -26,6 +26,12 @@ return [
         // Zero-config: tag every post/term fetched via WP_Query / get_the_terms
         // instead of wiring tags per template or block. Complements Core.
         // \Genero\Sage\CacheTags\Actions\AutoTag::class,
+
+        // Serve cached pages to logged-in customers/subscribers (admin bar
+        // hidden, identical catalog content). Only enable when the theme renders
+        // no per-user markup server-side and the edge stops bypassing their
+        // login cookie. Cart/checkout/account still bypass.
+        // \Genero\Sage\CacheTags\Actions\CacheCustomers::class,
     ],
 
     /*

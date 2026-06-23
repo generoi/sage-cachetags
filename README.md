@@ -268,6 +268,35 @@ not (no query object to observe) — tag those explicitly. Page archives are
 excluded by default — adjust with the `cachetags/autotag-excluded-archive-types`
 filter. The header-size collapse keeps the broader tag set bounded.
 
+## Cacheability
+
+Some responses must never be stored in a shared cache. `Util::isCacheableRequest()`
+returns `false` for previews and any request showing the admin bar (per-user
+chrome baked into the HTML), and — by default — for logged-in users. When a
+request is not cacheable the plugin skips tagging it and defines `DONOTCACHEPAGE`
+so page caches (WP Super Cache, Batcache, theme cache-control providers) don't
+store it; edge caches should consult `Util::isCacheableRequest()` from the
+theme/VCL since their TTL header is sent earlier.
+
+Integrations hook the single `cachetags/cacheable` filter. Responses are vetoed
+at the default priority; opt-ins that re-enable logged-in users run earlier
+(priority `<10`) so the vetoes always win:
+
+- **`WooCommerce`** — non-cacheable on cart/checkout/account, `add-to-cart`/
+  `wc-ajax`, an embedded login/register/lost-password form, and any page with a
+  cart/checkout block or shortcode (these render per-user cart state).
+- **`Gravityform`** — a form prepopulated from the query string is non-cacheable
+  (its prefilled values are per-visitor, often PII).
+- **`CacheCustomers`** (opt-in) — serve cached pages to logged-in customers/
+  subscribers, who see identical catalog pages and whose admin bar WooCommerce
+  hides. Enable only when the theme renders no per-user markup server-side and
+  the edge stops bypassing their login cookie; cart/checkout/account still bail.
+  Roll your own with an early-priority raise:
+
+  ```php
+  add_filter('cachetags/cacheable', fn ($c) => current_user_can('edit_posts') ? $c : true, 5);
+  ```
+
 ## Nonces in cached pages
 
 A page cached for hours can ship a **stale nonce**. WordPress nonces are valid
