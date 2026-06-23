@@ -23,29 +23,41 @@ class KinstaCacheInvalidator implements Invalidator
             return false;
         }
 
-        $cleanedUrls = array_map(
-            fn ($url) => str_replace(['http://', 'https://'], '', $url),
-            $urls
-        );
-        $purgeRequest = [];
-        foreach ($cleanedUrls as $key => $url) {
-            $purgeRequest["single|$key"] = $url;
-        }
+        $requests = Util::chunkRequest($this->purgeList($urls), self::POST_MAX_BODY_SIZE);
 
-        $purgeRequest = apply_filters('KinstaCache/purgeImmediate', $purgeRequest);
-
-        $requests = Util::chunkRequest($purgeRequest, self::POST_MAX_BODY_SIZE);
         if (count($requests) > 3) {
-            $result = $this->flush();
-        } else {
-            $result = array_reduce(
-                $requests,
-                fn (bool $result, string $chunk) => $this->post(self::IMMEDIATE_PATH, $chunk) ? $result : false,
-                true
-            );
+            return $this->flush();
         }
 
-        return $result;
+        return array_reduce(
+            $requests,
+            fn (bool $result, string $chunk) => $this->post(self::IMMEDIATE_PATH, $chunk) ? $result : false,
+            true
+        );
+    }
+
+    /**
+     * Build the Kinsta purge request: a map of `<type>|<key>` => scheme-less URL.
+     *
+     * @param  string[]  $urls
+     * @return array<string, string>
+     */
+    public function purgeList(array $urls): array
+    {
+        $purgeRequest = [];
+        foreach ($urls as $key => $url) {
+            $purgeRequest[$this->purgeKey($key, $url)] = str_replace(['http://', 'https://'], '', $url);
+        }
+
+        return apply_filters('KinstaCache/purgeImmediate', $purgeRequest);
+    }
+
+    /**
+     * Purge-list key for a URL. `single|` purges the exact URL only.
+     */
+    protected function purgeKey(string|int $key, string $url): string
+    {
+        return "single|$key";
     }
 
     protected function post(string $endpoint, string $body): bool
