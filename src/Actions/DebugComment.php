@@ -30,9 +30,17 @@ class DebugComment implements Action
                 switch ($entity) {
                     case 'menu':
                     case 'term':
-                        return sprintf('[%s] %s (%s)', $tag, get_term($id)->name, get_term($id)->taxonomy);
+                        $term = get_term($id);
+
+                        return $term instanceof \WP_Term
+                            ? sprintf('[%s] %s (%s)', $tag, $term->name, $term->taxonomy)
+                            : sprintf('[%s]', $tag);
                     case 'comment':
-                        return sprintf('[%s] %s', $tag, get_comment($id)->comment_author);
+                        $comment = get_comment($id);
+
+                        return $comment instanceof \WP_Comment
+                            ? sprintf('[%s] %s', $tag, $comment->comment_author)
+                            : sprintf('[%s]', $tag);
                     case 'post':
                         return sprintf('[%s] %s (%s)', $tag, get_post($id)?->post_title ?: $id, get_post_type($id));
                     default:
