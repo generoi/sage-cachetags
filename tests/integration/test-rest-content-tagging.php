@@ -246,7 +246,8 @@ class TestRestContentTagging extends RestTestCase
         $request->set_query_params(['search' => 'Zorblax']);
         $tags = $this->cacheTagHeader($this->dispatch($request));
 
-        $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains("post:{$postId}", $tags, 'Matched post is tagged for content edits');
+        $this->assertContains('archive:post', $tags, 'Listing tag so newly published matches refresh results');
     }
 
     public function test_oversized_tag_sets_collapse_to_coarse_any_tags(): void

@@ -162,9 +162,12 @@ they are authenticated, use `context=edit`, carry a `password`, or are not
 clients.
 
 Each response is stored under its canonical URL with sort-normalized query
-parameters, so paginated/filtered collection variants (`?page=2`, `?categories=5`)
-get distinct, CDN-matching store keys. Only parameters the matched route
-registers are kept, so arbitrary client params can't fork the store key.
+parameters, so variants that produce a different response — pagination/filters
+(`?page=2`, `?categories=5`) and the server params that shape the body
+(`_embed`, `_fields`, `_envelope`, `_locale`) — get distinct, CDN-matching store
+keys. Parameters the route doesn't register (and aren't response-shaping) are
+dropped so arbitrary client params can't fork the key, as are auth/cache-buster
+params (`_wpnonce`, `_`, `_method`) and the gated `context`/`password`.
 
 ### Filters
 

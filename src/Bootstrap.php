@@ -20,9 +20,17 @@ class Bootstrap
 
     /**
      * Query parameters that never change the cached representation and so are
-     * excluded from the stored REST URL.
+     * excluded from the stored REST URL: auth tokens, cache-busters, method
+     * overrides, and the edit/password params (gated out of caching anyway).
+     * These do not change an anonymous GET's cached body.
      */
-    const INTERNAL_QUERY_PARAMS = ['_embed', '_fields', '_envelope', '_locale', '_method', '_wpnonce', '_', 'context', 'password'];
+    const IGNORED_QUERY_PARAMS = ['_wpnonce', '_', '_method', 'context', 'password'];
+
+    /**
+     * Server parameters that DO change the response body, so they belong in the
+     * cache key even though they aren't registered route arguments.
+     */
+    const RESPONSE_QUERY_PARAMS = ['_embed', '_fields', '_envelope', '_locale'];
 
     const FILTER_URL_IGNORED_PARAMS = 'cachetags/rest-url-ignored-params';
 
@@ -245,13 +253,15 @@ class Bootstrap
         $url = strtok(rest_url($request->get_route()), '?');
         $params = $request->get_query_params();
 
-        // Restrict to parameters declared by the matched route, when known.
+        // Keep parameters declared by the matched route plus the server params
+        // that change the response body, so arbitrary client params can't fork
+        // the cache key while representation-affecting ones are preserved.
         $registered = $request->get_attributes()['args'] ?? [];
         if (! empty($registered)) {
-            $params = array_intersect_key($params, $registered);
+            $params = array_intersect_key($params, $registered + array_flip(self::RESPONSE_QUERY_PARAMS));
         }
 
-        $ignored = apply_filters(self::FILTER_URL_IGNORED_PARAMS, self::INTERNAL_QUERY_PARAMS);
+        $ignored = apply_filters(self::FILTER_URL_IGNORED_PARAMS, self::IGNORED_QUERY_PARAMS);
         $params = array_diff_key($params, array_flip($ignored));
 
         if (empty($params)) {

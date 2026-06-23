@@ -163,10 +163,16 @@ class RestApi implements Action
     }
 
     /**
-     * Tag each post/term referenced by a search response.
+     * Tag a search response.
+     *
+     * Each current result is tagged so its content edits purge the page, plus
+     * the archive listing tags so publishing/unpublishing any post (which can
+     * add or remove a match — including for an empty result set) purges it too.
      */
     protected function tagSearchResults(WP_REST_Response $response): void
     {
+        $this->cacheTags->add(CoreTags::archive('any'));
+
         foreach ((array) $response->get_data() as $result) {
             if (! is_array($result) || empty($result['id'])) {
                 continue;
