@@ -243,6 +243,13 @@ class Bootstrap
     {
         if (Util::isCacheableRequest()) {
             $this->cacheTags->save($this->frontendUrl());
+        } elseif (! defined('DONOTCACHEPAGE')) {
+            // Make the non-cacheable verdict (preview, logged-in, forms, cart,
+            // …) actionable: page caches (WP Super Cache, Batcache, the theme
+            // cache-control providers) honour DONOTCACHEPAGE. Edge caches key on
+            // Cache-Control sent earlier, so their bypass must come from the
+            // theme/VCL consulting Util::isCacheableRequest().
+            define('DONOTCACHEPAGE', true);
         }
     }
 

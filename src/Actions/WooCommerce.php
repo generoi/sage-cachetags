@@ -25,7 +25,6 @@ class WooCommerce implements Action
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
         \add_filter(Bootstrap::FILTER_ALLOWED_PARAMS, [$this, 'allowQueryParams']);
         \add_filter('cachetags/cacheable', [$this, 'isCacheable']);
-        \add_filter('cachetags/cache-logged-in', [$this, 'cacheLoggedInCustomer']);
 
         // Auth forms can be embedded on any page (a login widget, a
         // [woocommerce_my_account] shortcode), not just My Account — flag them
@@ -96,35 +95,6 @@ class WooCommerce implements Action
             fn ($attribute) => 'attribute_'.sanitize_title($attribute),
             array_keys($product->get_variation_attributes())
         );
-    }
-
-    /**
-     * Opt logged-in shop customers into caching: they see identical catalog
-     * pages to anonymous visitors and WooCommerce hides their admin bar. Off by
-     * default — enable cachetags/woocommerce-cache-customers once the theme
-     * renders no per-user markup server-side (mini-cart/account hydrated
-     * client-side) and the edge no longer passes their cookie. Cart/checkout/
-     * account stay non-cacheable via isCacheable().
-     */
-    public function cacheLoggedInCustomer(bool $cacheable): bool
-    {
-        if ($cacheable) {
-            return true;
-        }
-
-        return $this->isShopCustomer()
-            && (bool) \apply_filters('cachetags/woocommerce-cache-customers', false);
-    }
-
-    /**
-     * A logged-in user with no editing/management capability — i.e. a customer
-     * or subscriber, for whom WooCommerce hides the admin bar.
-     */
-    protected function isShopCustomer(): bool
-    {
-        return is_user_logged_in()
-            && ! current_user_can('edit_posts')
-            && ! current_user_can('manage_woocommerce');
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use Genero\Sage\CacheTags\Actions\CacheCustomers;
 use Genero\Sage\CacheTags\Actions\FacetWP;
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\Actions\QueryVary;
@@ -214,28 +215,28 @@ class TestQueryVary extends WP_UnitTestCase
         $this->assertTrue(Util::isCacheableRequest());
     }
 
-    // --- WooCommerce customer caching (opt-in) -----------------------------
+    // --- CacheCustomers action (opt-in) ------------------------------------
 
-    public function test_woocommerce_does_not_cache_customers_by_default(): void
+    public function test_cache_customers_action_caches_subscribers(): void
     {
         wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
 
-        $this->assertFalse((new WooCommerce(CacheTags::getInstance()))->cacheLoggedInCustomer(false));
+        $this->assertTrue((new CacheCustomers(CacheTags::getInstance()))->cacheCustomers(false));
     }
 
-    public function test_woocommerce_caches_customers_when_opted_in(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
-        add_filter('cachetags/woocommerce-cache-customers', '__return_true');
-
-        $this->assertTrue((new WooCommerce(CacheTags::getInstance()))->cacheLoggedInCustomer(false));
-    }
-
-    public function test_woocommerce_never_treats_editors_as_customers(): void
+    public function test_cache_customers_action_ignores_editors(): void
     {
         wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
-        add_filter('cachetags/woocommerce-cache-customers', '__return_true');
 
-        $this->assertFalse((new WooCommerce(CacheTags::getInstance()))->cacheLoggedInCustomer(false));
+        $this->assertFalse((new CacheCustomers(CacheTags::getInstance()))->cacheCustomers(false));
+    }
+
+    public function test_cache_customers_action_makes_subscriber_requests_cacheable(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        add_filter('show_admin_bar', '__return_false');
+        (new CacheCustomers(CacheTags::getInstance()))->bind();
+
+        $this->assertTrue(Util::isCacheableRequest());
     }
 }

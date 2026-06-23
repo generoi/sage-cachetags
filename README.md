@@ -266,18 +266,19 @@ REST:
   shell preloads the Store API cart into the HTML and the mini-cart renders the
   count server-side).
 
-  **Caching logged-in customers** is opt-in. A plain `customer`/`subscriber`
-  sees identical catalog pages to anonymous and WooCommerce hides their admin
-  bar, so they can be served the cached page — once the theme renders no
-  per-user markup server-side (mini-cart/account link hydrated client-side) and
-  the edge no longer bypasses their cookie:
+  **Caching logged-in customers** is a separate opt-in `CacheCustomers` action.
+  A plain `customer`/`subscriber` sees identical catalog pages to anonymous and
+  WooCommerce hides their admin bar, so they can be served the cached page —
+  once the theme renders no per-user markup server-side (mini-cart/account link
+  hydrated client-side) and the edge no longer bypasses their login cookie:
 
   ```php
-  add_filter('cachetags/woocommerce-cache-customers', '__return_true');
+  return ['action' => [Core::class, WooCommerce::class, CacheCustomers::class]];
   ```
 
-  Cart/checkout/account still bypass for them. For non-WooCommerce sites, the
-  general `cachetags/cache-logged-in` filter does the same.
+  Cart/checkout/account still bypass for them (the `cachetags/cacheable` veto
+  runs last). `CacheCustomers` also works on non-WooCommerce sites for
+  subscribers; integrations can hook `cachetags/cache-logged-in` directly.
 - **`Polylang`** / **`WPML`** — contribute the `lang` query var (enable whichever
   multilingual plugin the site uses; applies to all views).
 

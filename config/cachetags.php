@@ -35,6 +35,12 @@ return [
         // Vary the cache key by WPML's `lang` query var (Polylang sites use the
         // Polylang action instead). No-op unless WPML is active.
         // \Genero\Sage\CacheTags\Actions\WPML::class,
+
+        // Serve cached pages to logged-in customers/subscribers (admin bar
+        // hidden, identical catalog content). Only enable when the theme renders
+        // no per-user markup server-side and the edge stops bypassing their
+        // login cookie. Cart/checkout/account still bypass.
+        // \Genero\Sage\CacheTags\Actions\CacheCustomers::class,
     ],
 
     /*
