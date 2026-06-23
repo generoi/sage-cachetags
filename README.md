@@ -268,6 +268,41 @@ not (no query object to observe) — tag those explicitly. Page archives are
 excluded by default — adjust with the `cachetags/autotag-excluded-archive-types`
 filter. The header-size collapse keeps the broader tag set bounded.
 
+## Nonces in cached pages
+
+A page cached for hours can ship a **stale nonce**. WordPress nonces are valid
+for 12–24h; once one ages out, the action it guards (a form submit, an AJAX
+"load more", an add-to-cart) starts failing for everyone served the cached page.
+
+Two ways to handle a page that bakes a nonce into its HTML:
+
+1. **Tag it `nonce` and enable the nonce cron.** The page is then purged every
+   12 hours, before any embedded nonce can expire. Enable `'nonce-cron' => true`
+   in the config (or `->nonceCron()` on `Bootstrap`), and add the tag wherever
+   the nonce is rendered:
+
+   ```php
+   // e.g. a product page that prints a WooCommerce Store API nonce for add-to-cart
+   add_action('wp_footer', function () {
+       if (function_exists('is_product') && is_product()) {
+           \Genero\Sage\CacheTags\CacheTags::getInstance()?->add(['nonce']);
+       }
+   });
+   ```
+
+   The `Gravityform` action already does this for file-upload fields.
+
+2. **Mark it non-cacheable** when the page also shows genuinely real-time data
+   (e.g. live availability), where a 12h refresh isn't enough:
+
+   ```php
+   add_filter('cachetags/cacheable', fn ($c) => is_page('booking') ? false : $c);
+   ```
+
+Note that modern WooCommerce (10.7+) refetches the Store API nonce client-side
+before a write, so the sitewide Store API nonce is no longer a staleness risk on
+its own — only nonces that are actually *used as rendered* need this treatment.
+
 ## Traits for use with roots/sage
 
 ### Composers
