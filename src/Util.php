@@ -115,14 +115,13 @@ class Util
 
         $url = trailingslashit(home_url($wp->request));
 
-        // Path-only by default. For Fastly this is moot — it purges by
-        // Surrogate-Key (tag) and never reads the stored URL. For Kinsta it
-        // matches what's actually cached, since query-string URLs bypass the
-        // cache entirely. Opt in only on a URL-keyed cache that *does* cache
-        // query strings (SiteGround, or Kinsta set to cache GET params), so the
-        // stored URL matches the cached variant — at the cost of one store row
-        // per visited query combination.
-        if (empty($_GET) || ! apply_filters('cachetags/store-query-string', false)) {
+        // Store the actual requested URL — the variant a URL-keyed page cache
+        // would key on — so a purge matches what was cached. Moot for Fastly
+        // (purges by Surrogate-Key, ignores the URL); on Kinsta the query-string
+        // variants bypass the cache, so the extra rows just accumulate. A
+        // query-bypass site with heavy bot/param traffic can opt out to keep the
+        // store lean and avoid no-op purge calls for never-cached URLs.
+        if (empty($_GET) || ! apply_filters('cachetags/store-query-string', true)) {
             return $url;
         }
 
@@ -135,8 +134,11 @@ class Util
 
         ksort($params);
         $params = map_deep(wp_unslash($params), 'sanitize_text_field');
+        $full = $url.'?'.http_build_query($params);
 
-        return $url.'?'.http_build_query($params);
+        // The url column is varchar(191); fall back to the path if the query
+        // string overflows it, which also bounds pathological junk-param keys.
+        return strlen($full) <= apply_filters('cachetags/max-url-length', 191) ? $full : $url;
     }
 
     /**

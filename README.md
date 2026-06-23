@@ -79,26 +79,27 @@ Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer an
 
 ### Stored URL and query strings
 
-Front-end pages are stored under their **path only** by default. This is correct
-for the common cases: Fastly purges by `Surrogate-Key` (tag), ignoring the URL,
-and Kinsta doesn't cache query-string URLs at all (they bypass to PHP), so there
-is no query-string variant to purge. URL-based invalidators then purge the path,
-which is what was cached.
+Front-end pages are stored under the **actual requested URL** (including its query
+string), so a URL-based purge matches the variant a page cache keyed on. A default
+set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
+`_`) is stripped and the rest sorted; keys longer than the `varchar(191)` column
+fall back to the path.
 
-If you run a URL-keyed cache that **does** cache query-string variants separately
-(SiteGround, or Kinsta configured to cache GET params), opt in so the stored URL
-matches the cached entry and the variant is actually purged:
+On a **query-bypass** edge — Fastly (purges by `Surrogate-Key`, ignores the URL)
+or Kinsta (query-string URLs bypass the cache entirely) — those query-string rows
+are never cached and so never need purging; they just accumulate in the store
+(one row per visited `?…` combination, including bot/scanner params). A
+query-bypass site with heavy parameterised traffic can keep the store lean by
+storing the path only:
 
 ```php
-add_filter('cachetags/store-query-string', '__return_true');
+add_filter('cachetags/store-query-string', '__return_false');
 ```
 
-A default set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…,
-`_wpnonce`, `_`) is stripped and the rest sorted, so the store doesn't bloat with
-campaign-link variants. **To actually match a URL-keyed edge the strip list must
-equal that edge's** — and that's site-specific (our own Fastly VCLs strip
-anywhere from 5 to 16 params), so align it per site with
-`cachetags/url-ignored-params`:
+**To match a URL-keyed edge that does cache query strings** (SiteGround, or Kinsta
+configured to cache GET params) the strip list must equal that edge's — and that's
+site-specific (our own Fastly VCLs strip anywhere from 5 to 16 params), so align
+it per site:
 
 ```php
 add_filter('cachetags/url-ignored-params', fn ($p) => [...$p, 'campaign_id', 'tduid']);
