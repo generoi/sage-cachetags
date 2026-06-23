@@ -18,6 +18,7 @@ class Core implements Action
     {
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
+        \add_filter('wp_nav_menu_args', [$this, 'addNavMenuCacheTags']);
 
         // Clear caches
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
@@ -35,6 +36,7 @@ class Core implements Action
         \add_action('updated_term_meta', [$this, 'onTermMetaUpdate'], 10, 3);
         \add_action('added_term_meta', [$this, 'onTermMetaUpdate'], 10, 3);
         \add_action('edit_attachment', [$this, 'onAttachmentEdit']);
+        \add_action('updated_option', [$this, 'onOptionUpdate'], 10, 3);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
         \add_action('wp_update_nav_menu_item', [$this, 'onMenuUpdate']);
         \add_action('delete_user', [$this, 'onUserDelete'], 10, 3);
@@ -81,7 +83,37 @@ class Core implements Action
                     ...CoreTags::users(get_query_var('author')),
                 ]);
                 break;
+            case is_attachment():
+                $this->cacheTags->add([
+                    ...CoreTags::queriedObject(),
+                ]);
+                break;
+            case is_date():
+            case is_search():
+                // Listings of any post that publishes/unpublishes into them.
+                $this->cacheTags->add([
+                    ...CoreTags::archive('post'),
+                ]);
+                break;
         }
+    }
+
+    /**
+     * Tag the menu rendered by a classic-theme wp_nav_menu() call. Block-theme
+     * navigation is tagged via its wp_navigation post id in addBlockCacheTags.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    public function addNavMenuCacheTags(array $args): array
+    {
+        if (! empty($args['theme_location'])) {
+            $this->cacheTags->add(CoreTags::navigation($args['theme_location']));
+        } elseif (! empty($args['menu'])) {
+            $this->cacheTags->add(CoreTags::menu($args['menu']));
+        }
+
+        return $args;
     }
 
     /**
@@ -104,6 +136,10 @@ class Core implements Action
             $tags[] = CoreTags::posts($instance->context['postId']);
         }
 
+        if (isset($instance->context['commentId'])) {
+            $tags[] = CoreTags::comments($instance->context['commentId']);
+        }
+
         if (isset($attributes['ref'])) {
             // @note that these realistically these might be deleted and point to unexisting posts
             $tags[] = CoreTags::posts($attributes['ref']);
@@ -114,7 +150,26 @@ class Core implements Action
                 $tags[] = CoreTags::anyTerm('category');
                 break;
             case 'core/comments':
-                // @TODO could get individual comments
+                // Individual comments are tagged via the commentId context on
+                // the comment-template inner blocks above.
+                break;
+            case 'core/archives':
+            case 'core/calendar':
+                $tags[] = CoreTags::archive('post');
+                break;
+            case 'core/avatar':
+                if (! empty($attributes['userId'])) {
+                    $tags[] = CoreTags::users($attributes['userId']);
+                }
+                break;
+            case 'core/site-title':
+                $tags[] = CoreTags::option('blogname');
+                break;
+            case 'core/site-tagline':
+                $tags[] = CoreTags::option('blogdescription');
+                break;
+            case 'core/site-logo':
+                $tags[] = CoreTags::option('site_logo');
                 break;
             case 'core/post-author-name':
             case 'core/post-author':
@@ -401,6 +456,20 @@ class Core implements Action
         $this->cacheTags->clear([
             ...CoreTags::terms($termId),
             ...CoreTags::termPages($termId),
+        ]);
+    }
+
+    /**
+     * When a tracked site option changes, clear pages that render it.
+     */
+    public function onOptionUpdate(string $option, $oldValue, $newValue): void
+    {
+        if (! in_array($option, CoreTags::getCacheableOptions(), true)) {
+            return;
+        }
+
+        $this->cacheTags->clear([
+            ...CoreTags::option($option),
         ]);
     }
 

@@ -221,6 +221,25 @@ add_filter('cachetags/max-tag-length', fn () => 191);
 add_filter('cachetags/tag-pattern', fn () => '/^[^\s\x00-\x1F]+$/');
 ```
 
+## Front-end tagging
+
+With the `Core` action enabled, rendered pages are tagged automatically from the
+template (single/page, taxonomy, author, post-type/date/search archives,
+attachments) and from core blocks (queries, terms, authors, comments,
+calendar/archives, site title/tagline/logo, etc.). Classic-theme `wp_nav_menu()`
+output is tagged with its `menu:{id}` so menu edits purge the pages showing it.
+
+Site-identity blocks (`core/site-title`, `core/site-tagline`, `core/site-logo`)
+are tagged with an `option:{name}` tag and purged when that option changes.
+Adjust which options are tracked with the `cachetags/options` filter:
+
+```php
+add_filter('cachetags/options', fn (array $options) => [...$options, 'my_option']);
+```
+
+Options not bound to a specific block are usually better handled with a full
+cache flush than by tagging every page that might render them.
+
 ## Traits for use with roots/sage
 
 ### Composers

@@ -444,4 +444,36 @@ class CoreTags
         // user mutations elsewhere clear role tags by slug.
         return array_keys(\wp_roles()->get_names());
     }
+
+    /**
+     * Return cache tags for one or multiple site options.
+     *
+     * @param  string|string[]  $options
+     * @return string[]
+     */
+    public static function option($options): array
+    {
+        return array_map(
+            fn ($option) => sprintf('option:%s', $option),
+            is_array($options) ? $options : [$options]
+        );
+    }
+
+    /**
+     * Site options that map to an `option:` tag emitted by a block (site-title,
+     * site-tagline, site-logo) and so should purge those pages when changed.
+     *
+     * Options not bound to a specific block are better handled with a full
+     * flush than by tagging every page that might depend on them.
+     *
+     * @return string[]
+     */
+    public static function getCacheableOptions(): array
+    {
+        return \apply_filters('cachetags/options', [
+            'blogname',
+            'blogdescription',
+            'site_logo',
+        ]);
+    }
 }
