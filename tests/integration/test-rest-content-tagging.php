@@ -206,6 +206,49 @@ class TestRestContentTagging extends RestTestCase
         $this->assertNotContains($url, $this->storedUrls("post:{$this->postId}"));
     }
 
+    public function test_empty_collection_is_still_tagged_with_its_listing(): void
+    {
+        $emptyCategory = self::factory()->category->create();
+
+        $request = new WP_REST_Request('GET', '/wp/v2/posts');
+        $request->set_query_params(['categories' => (string) $emptyCategory]);
+        $response = $this->dispatch($request);
+
+        $this->assertSame([], $response->get_data(), 'Collection returns no items');
+        $this->assertContains('archive:post', $this->cacheTagHeader($response));
+    }
+
+    public function test_show_in_rest_only_post_type_is_tagged(): void
+    {
+        register_post_type('headless_thing', [
+            'public' => false,
+            'show_in_rest' => true,
+        ]);
+
+        try {
+            $id = self::factory()->post->create(['post_type' => 'headless_thing', 'post_status' => 'publish']);
+            $tags = $this->cacheTagHeader($this->dispatch(new WP_REST_Request('GET', "/wp/v2/headless_thing/{$id}")));
+
+            $this->assertContains("post:{$id}", $tags);
+        } finally {
+            unregister_post_type('headless_thing');
+        }
+    }
+
+    public function test_search_results_are_tagged(): void
+    {
+        $postId = self::factory()->post->create([
+            'post_status' => 'publish',
+            'post_title' => 'Zorblax unique needle',
+        ]);
+
+        $request = new WP_REST_Request('GET', '/wp/v2/search');
+        $request->set_query_params(['search' => 'Zorblax']);
+        $tags = $this->cacheTagHeader($this->dispatch($request));
+
+        $this->assertContains("post:{$postId}", $tags);
+    }
+
     public function test_oversized_tag_sets_collapse_to_coarse_any_tags(): void
     {
         add_filter(CacheTags::FILTER_MAX_HEADER_BYTES, fn () => 30);

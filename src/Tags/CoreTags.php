@@ -410,9 +410,13 @@ class CoreTags
      */
     public static function getCacheablePostTypes(): array
     {
+        // Public types are rendered on the front end; non-builtin types exposed
+        // to REST are content served headlessly (e.g. public=false CPTs). Core's
+        // internal REST types (wp_block, wp_template, …) are _builtin and stay
+        // excluded. Sites tune the set via the filter.
         return \apply_filters(
             'cachetags/post_types',
-            \get_post_types(['public' => true])
+            \get_post_types(['public' => true]) + \get_post_types(['_builtin' => false, 'show_in_rest' => true])
         );
     }
 
@@ -425,7 +429,7 @@ class CoreTags
     {
         return \apply_filters(
             'cachetags/taxonomies',
-            \get_taxonomies(['public' => true])
+            \get_taxonomies(['public' => true]) + \get_taxonomies(['_builtin' => false, 'show_in_rest' => true])
         );
     }
 

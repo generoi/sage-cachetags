@@ -34,6 +34,8 @@ class RestApi implements Action
 
     const FILTER_CUSTOM_ROUTE_TAGS = 'cachetags/rest-tags';
 
+    const SEARCH_ROUTE = '/wp/v2/search';
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     /**
@@ -42,6 +44,13 @@ class RestApi implements Action
      * @var array<string, string[]>
      */
     protected array $taxonomies = [];
+
+    /**
+     * Map of collection route → listing tag, rebuilt each request.
+     *
+     * @var array<string, string[]>
+     */
+    protected array $listingRoutes = [];
 
     public function bind(): void
     {
@@ -64,10 +73,11 @@ class RestApi implements Action
         \add_filter('rest_prepare_user', [$this, 'tagUser'], 10, 3);
         \add_filter('rest_prepare_comment', [$this, 'tagComment'], 10, 3);
 
-        // Extension point for bespoke controllers that don't map to a core
-        // object. Runs before the save/header hooks (priority 10) so the tags
-        // it adds are persisted and emitted like any other.
-        \add_filter('rest_post_dispatch', [$this, 'tagCustomRoutes'], 9, 3);
+        $this->listingRoutes = $this->mapListingRoutes();
+
+        // Listing, search and custom-route tags need the dispatched response and
+        // must run before the save/header hooks (priority 10).
+        \add_filter('rest_post_dispatch', [$this, 'tagResponse'], 9, 3);
     }
 
     public function tagPost(WP_REST_Response $response, WP_Post $post, WP_REST_Request $request): WP_REST_Response
@@ -76,16 +86,10 @@ class RestApi implements Action
             return $response;
         }
 
-        $tags = [
+        $this->cacheTags->add([
             ...CoreTags::posts($post),
             ...$this->relatedTags($post, $request),
-        ];
-
-        if ($this->isCollection($request)) {
-            $tags = [...$tags, ...CoreTags::archive($post->post_type)];
-        }
-
-        $this->cacheTags->add($tags);
+        ]);
 
         return $response;
     }
@@ -96,16 +100,10 @@ class RestApi implements Action
             return $response;
         }
 
-        $tags = [
+        $this->cacheTags->add([
             ...CoreTags::terms($term),
             ...CoreTags::termPages($term),
-        ];
-
-        if ($this->isCollection($request)) {
-            $tags = [...$tags, ...CoreTags::taxonomy($term->taxonomy)];
-        }
-
-        $this->cacheTags->add($tags);
+        ]);
 
         return $response;
     }
@@ -136,21 +134,50 @@ class RestApi implements Action
     }
 
     /**
-     * Allow tagging of bespoke routes that don't resolve to a core object.
+     * Dispatch-time tagging for things the per-object filters don't cover:
+     * the collection listing tag (added even when zero items are returned),
+     * search results (which resolve to posts/terms but fire no prepare filter),
+     * and bespoke routes via the cachetags/rest-tags filter.
      */
-    public function tagCustomRoutes($response, $server, WP_REST_Request $request)
+    public function tagResponse($response, $server, WP_REST_Request $request)
     {
         if (! $response instanceof WP_REST_Response || ! Util::isCacheableRestRequest($request)) {
             return $response;
         }
 
-        $tags = \apply_filters(self::FILTER_CUSTOM_ROUTE_TAGS, [], $request);
+        $route = $request->get_route();
 
-        if (! empty($tags)) {
-            $this->cacheTags->add($tags);
+        if ($listing = $this->listingRoutes[$route] ?? []) {
+            $this->cacheTags->add($listing);
+        }
+
+        if ($route === self::SEARCH_ROUTE) {
+            $this->tagSearchResults($response);
+        }
+
+        if ($custom = \apply_filters(self::FILTER_CUSTOM_ROUTE_TAGS, [], $request)) {
+            $this->cacheTags->add($custom);
         }
 
         return $response;
+    }
+
+    /**
+     * Tag each post/term referenced by a search response.
+     */
+    protected function tagSearchResults(WP_REST_Response $response): void
+    {
+        foreach ((array) $response->get_data() as $result) {
+            if (! is_array($result) || empty($result['id'])) {
+                continue;
+            }
+
+            $this->cacheTags->add(
+                ($result['type'] ?? '') === 'term'
+                    ? CoreTags::terms((int) $result['id'])
+                    : CoreTags::posts((int) $result['id'])
+            );
+        }
     }
 
     /**
@@ -200,10 +227,35 @@ class RestApi implements Action
     }
 
     /**
-     * A request is a collection (archive listing) when it targets no single id.
+     * Map each REST collection route to the listing tag it should carry.
+     *
+     * @return array<string, string[]>
      */
-    protected function isCollection(WP_REST_Request $request): bool
+    protected function mapListingRoutes(): array
     {
-        return empty($request['id']);
+        $routes = [];
+
+        foreach (\get_post_types(['show_in_rest' => true], 'objects') as $postType) {
+            $routes[$this->restRoute($postType)] = CoreTags::archive($postType->name);
+        }
+
+        foreach (\get_taxonomies(['show_in_rest' => true], 'objects') as $taxonomy) {
+            $routes[$this->restRoute($taxonomy)] = CoreTags::taxonomy($taxonomy->name);
+        }
+
+        return $routes;
+    }
+
+    /**
+     * The collection route for a post type or taxonomy object.
+     *
+     * @param  \WP_Post_Type|\WP_Taxonomy  $object
+     */
+    protected function restRoute($object): string
+    {
+        $namespace = $object->rest_namespace ?: 'wp/v2';
+        $base = $object->rest_base ?: $object->name;
+
+        return "/{$namespace}/{$base}";
     }
 }
