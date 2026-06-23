@@ -1,17 +1,20 @@
 <?php
 
-use Genero\Sage\CacheTags\Actions\QueryParams;
+use Genero\Sage\CacheTags\Actions\FacetWP;
+use Genero\Sage\CacheTags\Actions\Polylang;
+use Genero\Sage\CacheTags\Actions\QueryVary;
 use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 
 /**
- * Including known query params in the front-end + REST cache key.
+ * Including known query params in the front-end + REST cache key, and the
+ * actions that contribute them.
  *
- * @covers \Genero\Sage\CacheTags\Actions\QueryParams
+ * @covers \Genero\Sage\CacheTags\Actions\QueryVary
  * @covers \Genero\Sage\CacheTags\Bootstrap::frontendUrl
  * @covers \Genero\Sage\CacheTags\Bootstrap::restUrl
  */
-class TestQueryParams extends WP_UnitTestCase
+class TestQueryVary extends WP_UnitTestCase
 {
     private Bootstrap $bootstrap;
 
@@ -40,6 +43,13 @@ class TestQueryParams extends WP_UnitTestCase
 
         return $ref->invoke($this->bootstrap, ...$args);
     }
+
+    private function queryVary(): QueryVary
+    {
+        return new QueryVary(CacheTags::getInstance());
+    }
+
+    // --- Shared URL-building mechanism -------------------------------------
 
     public function test_front_end_url_is_path_only_by_default(): void
     {
@@ -75,14 +85,40 @@ class TestQueryParams extends WP_UnitTestCase
         $this->assertStringNotContainsString('junk', $url);
     }
 
-    public function test_action_contributes_the_core_param_allow_list(): void
-    {
-        (new QueryParams(CacheTags::getInstance()))->bind();
+    // --- QueryVary: core params, gated to listing views --------------------
 
-        $params = apply_filters(Bootstrap::FILTER_ALLOWED_PARAMS, []);
+    public function test_query_vary_adds_core_params_on_listing_views(): void
+    {
+        $this->go_to(home_url('/?s=hello'));
+
+        $params = $this->queryVary()->allowedParams([]);
 
         foreach (['s', 'orderby', 'order', 'paged'] as $param) {
             $this->assertContains($param, $params);
         }
+    }
+
+    public function test_query_vary_skips_core_params_on_singular_views(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $this->go_to(get_permalink($postId));
+
+        $this->assertSame([], $this->queryVary()->allowedParams([]));
+    }
+
+    // --- Integration actions contribute their own params -------------------
+
+    public function test_polylang_action_contributes_lang(): void
+    {
+        $params = (new Polylang(CacheTags::getInstance()))->allowLanguageParam([]);
+
+        $this->assertSame(['lang'], $params);
+    }
+
+    public function test_facetwp_action_is_a_passthrough_without_facetwp(): void
+    {
+        $params = (new FacetWP(CacheTags::getInstance()))->allowFacetParams(['existing']);
+
+        $this->assertSame(['existing'], $params);
     }
 }

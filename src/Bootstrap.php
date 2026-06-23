@@ -40,7 +40,7 @@ class Bootstrap
 
     /**
      * Extra query params to include in the cache key on both the front-end and
-     * REST. Empty by default (front-end stays path-only); the opt-in QueryParams
+     * REST. Empty by default (front-end stays path-only); the opt-in QueryVary
      * action populates it. Shared so both surfaces key consistently.
      */
     const FILTER_ALLOWED_PARAMS = 'cachetags/url-allowed-params';
@@ -248,7 +248,7 @@ class Bootstrap
      * The canonical URL a front-end response is cached under.
      *
      * Path-only by default (correct for pretty-permalink sites); the opt-in
-     * QueryParams action adds cache-significant query params via the shared
+     * QueryVary action adds cache-significant query params via the shared
      * allowed-params filter, mirroring how restUrl() keys REST responses.
      */
     protected function frontendUrl(): string

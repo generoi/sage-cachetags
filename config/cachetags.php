@@ -23,10 +23,14 @@ return [
         // enabled alongside it so block-derived tags are collected too.
         // \Genero\Sage\CacheTags\Actions\RestApi::class,
 
-        // Include known query params (search, sort, Polylang lang, FacetWP
-        // selections) in the front-end + REST cache key; arbitrary params are
-        // ignored. Opt-in for sites that know their GET parameters.
-        // \Genero\Sage\CacheTags\Actions\QueryParams::class,
+        // Vary the cache key by WP-core search/sort params (?s, ?orderby,
+        // ?order, ?paged) on listing views. Opt-in for sites that use them.
+        // \Genero\Sage\CacheTags\Actions\QueryVary::class,
+
+        // Vary the cache key by FacetWP selection params. Enable alongside
+        // QueryVary on sites using FacetWP. (Polylang's `lang` is contributed
+        // by the Polylang action.)
+        // \Genero\Sage\CacheTags\Actions\FacetWP::class,
     ],
 
     /*

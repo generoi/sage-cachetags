@@ -243,27 +243,31 @@ cache flush than by tagging every page that might render them.
 ### Query parameters in the cache key
 
 By default the front-end cache key is path-only and REST keys keep the route's
-registered params. If your site varies cached content by a query string —
-search, sorting, Polylang language, FacetWP filters — enable the opt-in
-`QueryParams` action so those variants are cached and purged separately on
-**both** surfaces:
+registered params — arbitrary params (`?utm_*`, `?fbclid`, `?a=b`) are ignored
+so they can't fork the key. If your site varies cached content by a query
+string, opt into the relevant action; each contributes a **known** set to the
+shared `cachetags/url-allowed-params` filter, used by both the front-end and
+REST:
+
+- **`QueryVary`** — WP-core search/sort (`s`, `orderby`, `order`, `paged`),
+  added only on listing/search views (inert on singular pages).
+- **`FacetWP`** — FacetWP selection params (`_<facet>`, `_paged`, `_sort`),
+  read from the registered facets.
+- **`Polylang`** — contributes the `lang` query var (the Polylang action you'd
+  already enable for translations; applies to all views).
 
 ```php
-use Genero\Sage\CacheTags\Actions\QueryParams;
+use Genero\Sage\CacheTags\Actions\QueryVary;
+use Genero\Sage\CacheTags\Actions\FacetWP;
 
-return ['action' => [Core::class, QueryParams::class]];
+return ['action' => [Core::class, QueryVary::class, FacetWP::class]];
 ```
 
-It allow-lists a **known** set — WP-core `s`/`orderby`/`order`/`paged`, plus
-params for active integrations (Polylang `lang`, FacetWP selections) detected
-automatically — and **intentionally ignores everything else**, so arbitrary
-tracking/crawler params (`?utm_*`, `?fbclid`, `?a=b`) don't fork the cache key.
-
-This is for sites that know their GET parameters; verify the list against the
-site's actual behaviour. It only ever *adds* params to the key (keeping a param
-is purge-safe), so a missing one over-caches at worst — but a param the site
-**genuinely varies content by**, if not in the list, would share the base URL's
-key and could go stale. Add such params explicitly:
+These are for sites that know their GET parameters — verify against the site's
+actual behaviour. They only ever *add* params to the key (keeping a param is
+purge-safe), so a missing one over-caches at worst, but a param the site
+**genuinely varies content by**, if not contributed, shares the base URL's key
+and could go stale. Add such params explicitly:
 
 ```php
 add_filter('cachetags/url-allowed-params', fn (array $params) => [...$params, 'my_param']);

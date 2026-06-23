@@ -2,6 +2,7 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
+use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
@@ -24,9 +25,23 @@ class Polylang implements Action
     public function init(): void
     {
         \add_filter(CacheTags::FILTER_TAGS, [$this, 'filterArchiveTags'], 5);
+        \add_filter(Bootstrap::FILTER_ALLOWED_PARAMS, [$this, 'allowLanguageParam']);
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 9, 3);
         \add_action('template_redirect', [$this, 'addLanguageTag']);
         \add_filter('rest_post_dispatch', [$this, 'addLanguageTagRest']);
+    }
+
+    /**
+     * Keep the language query var in the cache key so query-string language
+     * variants (and REST ?lang=) are cached separately. Language applies to all
+     * views, including singular, so it isn't gated.
+     *
+     * @param  string[]  $params
+     * @return string[]
+     */
+    public function allowLanguageParam(array $params): array
+    {
+        return [...$params, 'lang'];
     }
 
     /**
