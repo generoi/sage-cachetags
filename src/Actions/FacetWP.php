@@ -10,10 +10,12 @@ use Genero\Sage\CacheTags\Contracts\Action;
  * Keep FacetWP selection params in the cache key, so facet-filtered listings
  * are cached and purged separately from the unfiltered page.
  *
- * FacetWP reflects selections in the query string as `_<facet-name>` (the
- * leading-underscore prefix), plus `_paged`/`_sort`. The facet names are read
- * from the registered facets. They only appear on facet-filtered requests, so
- * no view gating is needed — an unfiltered request carries none of them.
+ * FacetWP parses the current request's selections into FWP()->request->url_vars
+ * (the selected facet names, plus the paged/per_page/sort features) on a direct
+ * page load. We key only those — so the contribution is naturally scoped to
+ * facet pages with an active selection, and empty selections (which don't change
+ * the page) are ignored. The query-string prefix is a FacetWP setting (default
+ * `_`, can be `fwp_`), so it is read rather than hardcoded.
  */
 class FacetWP implements Action
 {
@@ -30,15 +32,16 @@ class FacetWP implements Action
      */
     public function allowFacetParams(array $params): array
     {
-        if (! function_exists('FWP') || ! is_object(FWP()->helper ?? null)) {
+        if (! function_exists('FWP') || ! is_object(FWP()->request ?? null)) {
             return $params;
         }
 
-        $facets = array_map(
-            fn ($facet) => '_'.$facet['name'],
-            FWP()->helper->get_facets() ?: []
-        );
+        $prefix = FWP()->helper->get_setting('prefix') ?: '_';
+        $selected = array_keys(FWP()->request->url_vars ?? []);
 
-        return [...$params, ...$facets, '_paged', '_sort'];
+        return [
+            ...$params,
+            ...array_map(fn ($name) => $prefix.$name, $selected),
+        ];
     }
 }

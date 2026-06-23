@@ -252,8 +252,8 @@ REST:
 - **`QueryVary`** — WP-core: search/sort (`s`, `orderby`, `order`, `paged`) on
   listing views, and multi-page/comment pagination (`page`, `cpage`) on singular
   views.
-- **`FacetWP`** — FacetWP selection params (`_<facet>`, `_paged`, `_sort`),
-  read from the registered facets.
+- **`FacetWP`** — the facet params actually selected on the request (read from
+  `FWP()->request->url_vars`), using FacetWP's configured prefix (`_` or `fwp_`).
 - **`WooCommerce`** — shop sorting/filtering (`orderby`, `min_price`,
   `max_price`, `rating_filter`, `product-page`, `filter_<attribute>`) and
   single-product variation selection (`attribute_<slug>`, enumerated from the
