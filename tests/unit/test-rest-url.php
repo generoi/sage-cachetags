@@ -41,11 +41,19 @@ class TestRestUrl extends WP_UnitTestCase
         $this->assertStringEndsWith('/wp-json/wp/v2/posts?page=1&per_page=2', $url);
     }
 
-    public function test_internal_params_are_dropped(): void
+    public function test_machinery_params_are_dropped(): void
     {
-        $url = $this->restUrl('/wp/v2/posts', ['_embed' => '1', '_fields' => 'id', 'page' => '2']);
+        $url = $this->restUrl('/wp/v2/posts', ['_wpnonce' => 'abc', 'context' => 'view', 'page' => '2']);
 
         $this->assertStringEndsWith('/wp-json/wp/v2/posts?page=2', $url);
+    }
+
+    public function test_response_shaping_params_are_kept(): void
+    {
+        // _embed / _fields change the response body, so they belong in the key.
+        $url = $this->restUrl('/wp/v2/posts', ['_embed' => '1', '_fields' => 'id', 'page' => '2']);
+
+        $this->assertStringEndsWith('/wp-json/wp/v2/posts?_embed=1&_fields=id&page=2', $url);
     }
 
     public function test_filtered_variants_get_distinct_urls(): void
@@ -58,24 +66,24 @@ class TestRestUrl extends WP_UnitTestCase
         $this->assertNotSame($page1, $category);
     }
 
-    public function test_no_query_string_when_only_internal_params(): void
+    public function test_no_query_string_when_only_ignored_params(): void
     {
-        $url = $this->restUrl('/wp/v2/posts', ['_embed' => '1']);
+        $url = $this->restUrl('/wp/v2/posts', ['_wpnonce' => 'abc', 'context' => 'view']);
 
         $this->assertStringEndsWith('/wp-json/wp/v2/posts', $url);
         $this->assertStringNotContainsString('?', $url);
     }
 
-    public function test_unregistered_params_are_dropped_when_route_args_are_known(): void
+    public function test_unregistered_params_are_dropped_but_server_params_kept(): void
     {
         $request = new WP_REST_Request('GET', '/wp/v2/posts');
-        $request->set_query_params(['page' => '2', 'cache_buster' => 'xyz']);
+        $request->set_query_params(['page' => '2', 'cache_buster' => 'xyz', '_embed' => '1']);
         // Mirror what route matching sets during a real dispatch.
         $request->set_attributes(['args' => ['page' => []]]);
 
         $url = $this->restUrl->invoke($this->bootstrap, $request);
 
-        $this->assertStringEndsWith('/wp-json/wp/v2/posts?page=2', $url);
+        $this->assertStringEndsWith('/wp-json/wp/v2/posts?_embed=1&page=2', $url);
         $this->assertStringNotContainsString('cache_buster', $url);
     }
 }
