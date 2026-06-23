@@ -100,6 +100,25 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("term:{$termId}:full", $tags);
     }
 
+    public function test_updating_a_tagged_option_clears_it(): void
+    {
+        $this->resetCacheTags();
+
+        update_option('blogname', 'A different site name');
+
+        $this->assertContains('option:blogname', $this->queuedPurgeTags());
+    }
+
+    public function test_updating_an_untracked_option_clears_nothing(): void
+    {
+        update_option('cachetags_untracked', 'initial');
+        $this->resetCacheTags();
+
+        update_option('cachetags_untracked', 'changed');
+
+        $this->assertNotContains('option:cachetags_untracked', $this->queuedPurgeTags());
+    }
+
     public function test_updating_a_nav_menu_item_clears_the_menu(): void
     {
         $menuId = wp_create_nav_menu('Primary');
