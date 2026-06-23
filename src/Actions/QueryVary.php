@@ -15,14 +15,17 @@ use Genero\Sage\CacheTags\Contracts\Action;
  * contributing to the shared cachetags/url-allowed-params filter, so they're
  * only in play when that integration is enabled.
  *
- * The core params are added only on listing/search views — they're inert on
- * singular content, so a stray `?orderby=` crawled onto a post or 404 doesn't
- * fork the cache key. REST collections key off their registered route args, so
- * this stays out of the REST path.
+ * Listing params (search/sort) are added only on listing/search views, and
+ * pagination params for multi-page posts / comment pages only on singular
+ * views — so each is in the key exactly where it changes output, and a stray
+ * `?orderby=` crawled onto a post or 404 doesn't fork the cache key. REST
+ * collections key off their registered route args, so this stays out of REST.
  */
 class QueryVary implements Action
 {
-    const CORE_PARAMS = ['s', 'orderby', 'order', 'paged'];
+    const LISTING_PARAMS = ['s', 'orderby', 'order', 'paged'];
+
+    const SINGULAR_PARAMS = ['page', 'cpage'];
 
     public function __construct(protected CacheTags $cacheTags) {}
 
@@ -37,9 +40,17 @@ class QueryVary implements Action
      */
     public function allowedParams(array $params): array
     {
-        return $this->isListingRequest()
-            ? [...$params, ...self::CORE_PARAMS]
-            : $params;
+        if ($this->isListingRequest()) {
+            return [...$params, ...self::LISTING_PARAMS];
+        }
+
+        // Multi-page posts (<!--nextpage-->) and comment pagination render
+        // different content on the same singular URL.
+        if (! (defined('REST_REQUEST') && REST_REQUEST) && is_singular()) {
+            return [...$params, ...self::SINGULAR_PARAMS];
+        }
+
+        return $params;
     }
 
     /**

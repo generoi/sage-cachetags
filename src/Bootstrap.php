@@ -241,7 +241,9 @@ class Bootstrap
 
     public function saveCacheTags(): void
     {
-        $this->cacheTags->save($this->frontendUrl());
+        if (Util::isCacheableRequest()) {
+            $this->cacheTags->save($this->frontendUrl());
+        }
     }
 
     /**
@@ -265,13 +267,28 @@ class Bootstrap
             array_flip($allowed)
         );
 
+        return $this->withQueryParams($url, $params);
+    }
+
+    /**
+     * Append sorted query params to a base URL, falling back to the param-less
+     * URL when the result would overflow the store column (varchar 191) —
+     * storing a truncated key would silently miss on purge.
+     *
+     * @param  array<string, mixed>  $params
+     */
+    protected function withQueryParams(string $url, array $params): string
+    {
         if (empty($params)) {
             return $url;
         }
 
         ksort($params);
+        $full = $url.'?'.http_build_query($params);
 
-        return $url.'?'.http_build_query($params);
+        $max = (int) apply_filters('cachetags/max-url-length', 191);
+
+        return ($max > 0 && strlen($full) > $max) ? $url : $full;
     }
 
     public function saveCacheTagsRest($response, $server, WP_REST_Request $request)
@@ -297,28 +314,21 @@ class Bootstrap
     protected function restUrl(WP_REST_Request $request): string
     {
         $url = strtok(rest_url($request->get_route()), '?');
-        $params = $request->get_query_params();
 
-        // Keep parameters declared by the matched route plus the server params
-        // that change the response body, so arbitrary client params can't fork
-        // the cache key while representation-affecting ones are preserved.
-        $registered = $request->get_attributes()['args'] ?? [];
-        if (! empty($registered)) {
-            $allowed = apply_filters(self::FILTER_ALLOWED_PARAMS, []);
-            $keep = $registered + array_flip(self::RESPONSE_QUERY_PARAMS) + array_flip($allowed);
-            $params = array_intersect_key($params, $keep);
-        }
+        // Keep only the route's registered args, the server params that change
+        // the response body, and the allow-listed params — so arbitrary client
+        // params can't fork the key. Always intersect, including when the route
+        // registers no args (otherwise every client param would survive).
+        $allowed = apply_filters(self::FILTER_ALLOWED_PARAMS, []);
+        $keep = ($request->get_attributes()['args'] ?? [])
+            + array_flip(self::RESPONSE_QUERY_PARAMS)
+            + array_flip($allowed);
+        $params = array_intersect_key($request->get_query_params(), $keep);
 
         $ignored = apply_filters(self::FILTER_URL_IGNORED_PARAMS, self::IGNORED_QUERY_PARAMS);
         $params = array_diff_key($params, array_flip($ignored));
 
-        if (empty($params)) {
-            return $url;
-        }
-
-        ksort($params);
-
-        return $url.'?'.http_build_query($params);
+        return $this->withQueryParams($url, $params);
     }
 
     public function purgeCacheTags(): void

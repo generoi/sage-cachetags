@@ -7,6 +7,23 @@ use WP_REST_Request;
 class Util
 {
     /**
+     * Whether the current front-end response may be publicly cached, and so
+     * safe to tag and emit a Cache-Tag header for.
+     *
+     * Previews render unsaved content and must never be cached; integrations
+     * mark other non-cacheable requests (e.g. WooCommerce cart/checkout/add-to-
+     * cart) via the cachetags/cacheable filter.
+     */
+    public static function isCacheableRequest(): bool
+    {
+        if (is_preview()) {
+            return false;
+        }
+
+        return (bool) apply_filters('cachetags/cacheable', true);
+    }
+
+    /**
      * Whether a REST response may be publicly cached, and so safe to tag,
      * store and emit a Cache-Tag header for.
      *

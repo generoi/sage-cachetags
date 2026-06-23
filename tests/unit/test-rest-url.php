@@ -30,6 +30,9 @@ class TestRestUrl extends WP_UnitTestCase
     {
         $request = new WP_REST_Request('GET', $route);
         $request->set_query_params($queryParams);
+        // Mirror a dispatched request: the matched route registers its params
+        // as args (collection endpoints declare page, per_page, context, …).
+        $request->set_attributes(['args' => array_fill_keys(array_keys($queryParams), [])]);
 
         return $this->restUrl->invoke($this->bootstrap, $request);
     }

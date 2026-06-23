@@ -31,6 +31,10 @@ return [
         // QueryVary on sites using FacetWP. (Polylang's `lang` is contributed
         // by the Polylang action.)
         // \Genero\Sage\CacheTags\Actions\FacetWP::class,
+
+        // Vary the cache key by WPML's `lang` query var (Polylang sites use the
+        // Polylang action instead). No-op unless WPML is active.
+        // \Genero\Sage\CacheTags\Actions\WPML::class,
     ],
 
     /*

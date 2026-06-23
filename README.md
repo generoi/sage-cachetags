@@ -249,12 +249,16 @@ string, opt into the relevant action; each contributes a **known** set to the
 shared `cachetags/url-allowed-params` filter, used by both the front-end and
 REST:
 
-- **`QueryVary`** — WP-core search/sort (`s`, `orderby`, `order`, `paged`),
-  added only on listing/search views (inert on singular pages).
+- **`QueryVary`** — WP-core: search/sort (`s`, `orderby`, `order`, `paged`) on
+  listing views, and multi-page/comment pagination (`page`, `cpage`) on singular
+  views.
 - **`FacetWP`** — FacetWP selection params (`_<facet>`, `_paged`, `_sort`),
   read from the registered facets.
-- **`Polylang`** — contributes the `lang` query var (the Polylang action you'd
-  already enable for translations; applies to all views).
+- **`WooCommerce`** — shop sorting/filtering (`orderby`, `min_price`,
+  `max_price`, `rating_filter`, `product-page`, and each `filter_<attribute>`).
+  Also marks cart/checkout/account and `add-to-cart` requests non-cacheable.
+- **`Polylang`** / **`WPML`** — contribute the `lang` query var (enable whichever
+  multilingual plugin the site uses; applies to all views).
 
 ```php
 use Genero\Sage\CacheTags\Actions\QueryVary;
@@ -262,6 +266,12 @@ use Genero\Sage\CacheTags\Actions\FacetWP;
 
 return ['action' => [Core::class, QueryVary::class, FacetWP::class]];
 ```
+
+Preview requests are never cached; integrations mark other non-cacheable
+requests via the `cachetags/cacheable` filter. The stored key is capped at the
+store column width (`cachetags/max-url-length`, default 191) — an overlong key
+falls back to the param-less URL rather than storing a truncated, unpurgeable
+one.
 
 These are for sites that know their GET parameters — verify against the site's
 actual behaviour. They only ever *add* params to the key (keeping a param is

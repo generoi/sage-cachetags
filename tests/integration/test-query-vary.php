@@ -3,8 +3,11 @@
 use Genero\Sage\CacheTags\Actions\FacetWP;
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\Actions\QueryVary;
+use Genero\Sage\CacheTags\Actions\WooCommerce;
+use Genero\Sage\CacheTags\Actions\WPML;
 use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Util;
 
 /**
  * Including known query params in the front-end + REST cache key, and the
@@ -87,7 +90,7 @@ class TestQueryVary extends WP_UnitTestCase
 
     // --- QueryVary: core params, gated to listing views --------------------
 
-    public function test_query_vary_adds_core_params_on_listing_views(): void
+    public function test_query_vary_adds_listing_params_on_listing_views(): void
     {
         $this->go_to(home_url('/?s=hello'));
 
@@ -96,14 +99,19 @@ class TestQueryVary extends WP_UnitTestCase
         foreach (['s', 'orderby', 'order', 'paged'] as $param) {
             $this->assertContains($param, $params);
         }
+        $this->assertNotContains('page', $params, 'pagination params are singular-only');
     }
 
-    public function test_query_vary_skips_core_params_on_singular_views(): void
+    public function test_query_vary_adds_pagination_params_on_singular_views(): void
     {
         $postId = self::factory()->post->create(['post_status' => 'publish']);
         $this->go_to(get_permalink($postId));
 
-        $this->assertSame([], $this->queryVary()->allowedParams([]));
+        $params = $this->queryVary()->allowedParams([]);
+
+        $this->assertContains('page', $params);
+        $this->assertContains('cpage', $params);
+        $this->assertNotContains('orderby', $params, 'listing params are listing-only');
     }
 
     // --- Integration actions contribute their own params -------------------
@@ -120,5 +128,53 @@ class TestQueryVary extends WP_UnitTestCase
         $params = (new FacetWP(CacheTags::getInstance()))->allowFacetParams(['existing']);
 
         $this->assertSame(['existing'], $params);
+    }
+
+    public function test_woocommerce_action_is_a_passthrough_without_woocommerce(): void
+    {
+        $action = new WooCommerce(CacheTags::getInstance());
+
+        $this->assertSame(['existing'], $action->allowQueryParams(['existing']));
+        $this->assertTrue($action->isCacheable(true), 'no opinion without WooCommerce');
+    }
+
+    public function test_wpml_action_contributes_lang(): void
+    {
+        $params = (new WPML(CacheTags::getInstance()))->allowLanguageParam([]);
+
+        $this->assertSame(['lang'], $params);
+    }
+
+    // --- Store-key safety --------------------------------------------------
+
+    public function test_overlong_query_string_falls_back_to_the_base_url(): void
+    {
+        $_GET = ['s' => str_repeat('x', 300)];
+        add_filter(Bootstrap::FILTER_ALLOWED_PARAMS, fn () => ['s']);
+
+        $url = $this->invoke('frontendUrl');
+
+        $this->assertStringEndsWith('/shop/', $url);
+        $this->assertStringNotContainsString('?', $url, 'no truncated key is stored');
+    }
+
+    public function test_rest_url_drops_unknown_params_on_arg_less_routes(): void
+    {
+        $request = new WP_REST_Request('GET', '/my/v1/thing');
+        $request->set_query_params(['junk' => 'x']);
+        $request->set_attributes(['args' => []]);
+
+        $url = $this->invoke('restUrl', $request);
+
+        $this->assertStringNotContainsString('junk', $url);
+    }
+
+    public function test_non_cacheable_filter_blocks_caching(): void
+    {
+        $this->assertTrue(Util::isCacheableRequest());
+
+        add_filter('cachetags/cacheable', '__return_false');
+
+        $this->assertFalse(Util::isCacheableRequest());
     }
 }
