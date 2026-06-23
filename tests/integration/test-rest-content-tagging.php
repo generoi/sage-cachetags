@@ -241,21 +241,4 @@ class TestRestContentTagging extends RestTestCase
 
         return $request;
     }
-
-    /**
-     * Expected store key for a route. Deliberately re-derives the canonical URL
-     * independently of Bootstrap::restUrl() so the assertion can't pass by
-     * testing the production code against itself; keep the two in lockstep.
-     */
-    private function storedUrl(string $route, array $queryParams = []): string
-    {
-        $url = rest_url($route);
-
-        if ($queryParams) {
-            ksort($queryParams);
-            $url .= '?'.http_build_query($queryParams);
-        }
-
-        return $url;
-    }
 }

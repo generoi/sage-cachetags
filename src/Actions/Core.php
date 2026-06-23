@@ -26,6 +26,7 @@ class Core implements Action
         \add_action('saved_term', [$this, 'onTermSave'], 10, 4);
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
+        \add_action('edit_attachment', [$this, 'onAttachmentEdit']);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
         \add_action('delete_user', [$this, 'onUserDelete'], 10, 3);
         \add_action('profile_update', [$this, 'onUserUpdate']);
@@ -242,6 +243,20 @@ class Core implements Action
                 ...CoreTags::posts($objectId),
             ];
         }
+
+        $this->cacheTags->clear($cacheTags);
+    }
+
+    /**
+     * When an attachment is edited (title, alt, caption, replaced file), clear
+     * the attachment itself so posts that tag it as featured media or render it
+     * are purged.
+     */
+    public function onAttachmentEdit(int $attachmentId): void
+    {
+        $this->cacheTags->clear([
+            ...CoreTags::posts($attachmentId),
+        ]);
     }
 
     /**
@@ -280,9 +295,10 @@ class Core implements Action
             ...CoreTags::anyTerm($taxonomy),
         ];
 
-        // If it's a new term, clear taxonomy listings.
+        // If it's a new term, also clear the taxonomy listings.
         if (! $updated) {
             $cacheTags = [
+                ...$cacheTags,
                 ...CoreTags::taxonomy($taxonomy),
             ];
         }

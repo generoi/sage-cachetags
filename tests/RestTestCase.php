@@ -80,4 +80,21 @@ abstract class RestTestCase extends WP_UnitTestCase
             $tag
         ));
     }
+
+    /**
+     * Expected store key for a route. Deliberately re-derives the canonical URL
+     * independently of Bootstrap::restUrl() so assertions can't pass by testing
+     * the production code against itself; keep the two in lockstep.
+     */
+    protected function storedUrl(string $route, array $queryParams = []): string
+    {
+        $url = rest_url($route);
+
+        if ($queryParams) {
+            ksort($queryParams);
+            $url .= '?'.http_build_query($queryParams);
+        }
+
+        return $url;
+    }
 }

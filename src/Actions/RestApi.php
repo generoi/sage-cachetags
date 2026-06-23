@@ -178,6 +178,11 @@ class RestApi implements Action
             $tags = [...$tags, ...CoreTags::posts((int) $thumbnailId)];
         }
 
+        // Hierarchical responses expose their parent (breadcrumbs, ancestry).
+        if ($post->post_parent) {
+            $tags = [...$tags, ...CoreTags::posts((int) $post->post_parent)];
+        }
+
         return \apply_filters(self::FILTER_RELATED_TAGS, $tags, $post, $request);
     }
 
