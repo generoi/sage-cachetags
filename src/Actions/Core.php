@@ -135,7 +135,8 @@ class Core implements Action
                 break;
             case 'core/post-terms':
                 if (! empty($attributes['term'])) {
-                    $tags[] = CoreTags::terms(get_the_terms($instance->context['postId'], $attributes['term']));
+                    $postId = $instance->context['postId'] ?? get_the_ID();
+                    $tags[] = CoreTags::terms(get_the_terms($postId, $attributes['term']));
                 }
                 break;
         }
