@@ -1,0 +1,39 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, mysql, xml, zip
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install
+        run: composer update --prefer-dist --no-progress --no-interaction
+
+      - name: Lint
+        run: composer lint
+
+      - name: Start wp-env
+        run: npx @wordpress/env@latest start
+
+      - name: Run tests
+        run: npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags ./vendor/bin/phpunit

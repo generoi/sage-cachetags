@@ -2,8 +2,35 @@
 
 namespace Genero\Sage\CacheTags;
 
+use WP_REST_Request;
+
 class Util
 {
+    /**
+     * Whether a REST response may be publicly cached, and so safe to tag,
+     * store and emit a Cache-Tag header for.
+     *
+     * Only anonymous, read-only, non-edit responses qualify. Authenticated or
+     * password-unlocked responses can contain personalized/protected data that
+     * must never end up in a shared cache.
+     */
+    public static function isCacheableRestRequest(WP_REST_Request $request): bool
+    {
+        if (! in_array($request->get_method(), ['GET', 'HEAD'], true)) {
+            return false;
+        }
+
+        if (is_user_logged_in()) {
+            return false;
+        }
+
+        if ($request['context'] === 'edit') {
+            return false;
+        }
+
+        return empty($request['password']);
+    }
+
     /**
      * Flatten nested arrays recursively.
      *
