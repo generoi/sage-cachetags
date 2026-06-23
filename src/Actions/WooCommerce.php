@@ -53,22 +53,27 @@ class WooCommerce implements Action
             return $params;
         }
 
-        $params = [...$params, 'orderby', 'min_price', 'max_price', 'rating_filter', 'product-page'];
+        // Sorting/filtering only applies on the shop and product-taxonomy
+        // archives — not single products — so a stray ?orderby/?min_price on a
+        // product page doesn't fork its cache key.
+        if (is_shop() || is_product_taxonomy()) {
+            $params = [...$params, 'orderby', 'order', 'min_price', 'max_price', 'rating_filter', 'product-page'];
 
-        // Layered-nav filters on archives use global (taxonomy) attributes:
-        // filter_<attr> + query_type_<attr>. Local attributes can't drive
-        // layered nav, so the global taxonomy list is complete here.
-        if (function_exists('wc_get_attribute_taxonomies')) {
-            foreach (wc_get_attribute_taxonomies() as $attribute) {
-                $params[] = 'filter_'.$attribute->attribute_name;
-                $params[] = 'query_type_'.$attribute->attribute_name;
+            // Layered-nav filters use global (taxonomy) attributes:
+            // filter_<attr> + query_type_<attr>. Local attributes can't drive
+            // layered nav, so the global taxonomy list is complete here.
+            if (function_exists('wc_get_attribute_taxonomies')) {
+                foreach (wc_get_attribute_taxonomies() as $attribute) {
+                    $params[] = 'filter_'.$attribute->attribute_name;
+                    $params[] = 'query_type_'.$attribute->attribute_name;
+                }
             }
         }
 
         // Variation selection on a single variable product. Enumerate the
         // product's own variation attributes — this covers both global (pa_*)
         // and custom/local attributes, with the exact attribute_<slug> param
-        // the variation form uses. No global list needed.
+        // the variation form uses.
         $params = [...$params, ...$this->variationParams()];
 
         return array_values(array_unique($params));
