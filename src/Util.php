@@ -16,7 +16,7 @@ class Util
      */
     public static function isCacheableRequest(): bool
     {
-        if (is_preview()) {
+        if (is_preview() || is_user_logged_in()) {
             return false;
         }
 

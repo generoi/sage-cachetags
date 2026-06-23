@@ -188,4 +188,15 @@ class TestQueryVary extends WP_UnitTestCase
 
         $this->assertFalse(Util::isCacheableRequest());
     }
+
+    public function test_logged_in_front_end_request_is_not_cacheable(): void
+    {
+        $this->assertTrue(Util::isCacheableRequest());
+
+        // The edge VCLs pass (never cache) logged-in requests, so we don't tag
+        // or emit a Cache-Tag header for them either.
+        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
+
+        $this->assertFalse(Util::isCacheableRequest());
+    }
 }
