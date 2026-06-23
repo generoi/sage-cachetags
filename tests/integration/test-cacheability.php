@@ -52,7 +52,7 @@ class TestCacheability extends WP_UnitTestCase
     {
         wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
         add_filter('show_admin_bar', '__return_false');
-        add_filter('cachetags/cache-logged-in', '__return_true');
+        add_filter('cachetags/cacheable', '__return_true', 5);
 
         $this->assertTrue(Util::isCacheableRequest());
     }

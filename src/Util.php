@@ -42,13 +42,11 @@ class Util
             return false;
         }
 
-        // Logged-in requests are non-cacheable unless an integration opts them
-        // in via cachetags/cache-logged-in (e.g. WooCommerce customers, who see
-        // identical catalog pages and whose admin bar is hidden). The general
-        // cachetags/cacheable filter still runs last and can veto (cart, forms).
-        $cacheable = ! is_user_logged_in() || (bool) apply_filters('cachetags/cache-logged-in', false);
-
-        return (bool) apply_filters('cachetags/cacheable', $cacheable);
+        // Logged-in requests are non-cacheable by default. An opt-in such as
+        // CacheCustomers re-enables specific users by filtering at an earlier
+        // priority (<10); the response vetoes (cart, forms) run at the default
+        // priority and so always have the final say.
+        return (bool) apply_filters('cachetags/cacheable', ! is_user_logged_in());
     }
 
     /**

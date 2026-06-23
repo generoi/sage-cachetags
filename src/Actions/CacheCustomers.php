@@ -12,7 +12,8 @@ use Genero\Sage\CacheTags\Contracts\Action;
  * `customer`, a `subscriber`, …) typically sees the same catalog/content pages
  * as an anonymous visitor, and WooCommerce hides their admin bar — so they can
  * be served the shared cached page. Per-user surfaces (cart, checkout, account,
- * forms) still bail via the `cachetags/cacheable` veto.
+ * forms) still bail: this raises cacheability at an early filter priority, so
+ * the response vetoes at the default priority run afterwards and win.
  *
  * Opt-in, because it is only safe when:
  *  - the theme renders no per-user markup server-side (mini-cart, account link,
@@ -28,7 +29,9 @@ class CacheCustomers implements Action
 
     public function bind(): void
     {
-        \add_filter('cachetags/cache-logged-in', [$this, 'cacheCustomers']);
+        // Priority 5: raise before the response vetoes (cart/forms) at the
+        // default priority 10, so those still have the final say.
+        \add_filter('cachetags/cacheable', [$this, 'cacheCustomers'], 5);
     }
 
     public function cacheCustomers(bool $cacheable): bool

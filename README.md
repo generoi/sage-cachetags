@@ -250,8 +250,9 @@ so page caches (WP Super Cache, Batcache, theme cache-control providers) don't
 store it; edge caches should consult `Util::isCacheableRequest()` from the
 theme/VCL since their TTL header is sent earlier.
 
-Integrations veto via `cachetags/cacheable` (runs last) and opt in via
-`cachetags/cache-logged-in`:
+Integrations hook the single `cachetags/cacheable` filter. Responses are vetoed
+at the default priority; opt-ins that re-enable logged-in users run earlier
+(priority `<10`) so the vetoes always win:
 
 - **`WooCommerce`** — non-cacheable on cart/checkout/account, `add-to-cart`/
   `wc-ajax`, an embedded login/register/lost-password form, and any page with a
@@ -262,9 +263,10 @@ Integrations veto via `cachetags/cacheable` (runs last) and opt in via
   subscribers, who see identical catalog pages and whose admin bar WooCommerce
   hides. Enable only when the theme renders no per-user markup server-side and
   the edge stops bypassing their login cookie; cart/checkout/account still bail.
+  Roll your own with an early-priority raise:
 
   ```php
-  add_filter('cachetags/cacheable', fn ($c) => $c); // (vetoes still apply)
+  add_filter('cachetags/cacheable', fn ($c) => current_user_can('edit_posts') ? $c : true, 5);
   ```
 
 ## Traits for use with roots/sage
