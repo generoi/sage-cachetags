@@ -91,11 +91,39 @@ class Util
         );
     }
 
+    /**
+     * Tracking/volatile params that no page cache keys on. Stripped from the
+     * stored URL so they don't bloat the store or mismatch the cached entry.
+     */
+    const IGNORED_URL_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', '_wpnonce', '_'];
+
     public static function currentUrl(): string
     {
         global $wp;
 
-        return trailingslashit(home_url($wp->request));
+        $url = trailingslashit(home_url($wp->request));
+
+        // Path-only by default: correct where the edge purges by tag (Fastly,
+        // ignores the URL) or never caches query-string URLs (Kinsta bypasses
+        // them). Sites on a URL-keyed cache that *does* cache query strings
+        // (SiteGround, or Kinsta configured to cache GET params) opt in, so the
+        // stored URL matches the cached entry and the variant is actually
+        // purged — at the cost of one store row per visited query combination.
+        if (empty($_GET) || ! apply_filters('cachetags/store-query-string', false)) {
+            return $url;
+        }
+
+        $ignored = apply_filters('cachetags/url-ignored-params', self::IGNORED_URL_PARAMS);
+        $params = array_diff_key($_GET, array_flip($ignored));
+
+        if (empty($params)) {
+            return $url;
+        }
+
+        ksort($params);
+        $params = map_deep(wp_unslash($params), 'sanitize_text_field');
+
+        return $url.'?'.http_build_query($params);
     }
 
     /**

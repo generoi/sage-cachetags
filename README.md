@@ -77,6 +77,28 @@ across all sites.
 
 Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
 
+### Stored URL and query strings
+
+Front-end pages are stored under their **path only** by default. This is correct
+for the common cases: Fastly purges by `Surrogate-Key` (tag), ignoring the URL,
+and Kinsta doesn't cache query-string URLs at all (they bypass to PHP), so there
+is no query-string variant to purge. URL-based invalidators then purge the path,
+which is what was cached.
+
+If you run a URL-keyed cache that **does** cache query-string variants separately
+(SiteGround, or Kinsta configured to cache GET params), opt in so the stored URL
+matches the cached entry and the variant is actually purged:
+
+```php
+add_filter('cachetags/store-query-string', '__return_true');
+```
+
+Tracking/volatile params (`utm_*`, `gclid`, `fbclid`, `_wpnonce`, `_`) are
+stripped and the rest sorted, so the key matches the edge and the store doesn't
+bloat. Adjust the strip list with `cachetags/url-ignored-params`. (Comprehensive
+param normalization — an allow-list at the edge — is better handled in the
+CDN/VCL than here.)
+
 ### SiteGround Optimizer
 
 Integration exists if you add the `SiteGroundCacheInvalidator` invalidator in the `config/cachetags.php` file.
