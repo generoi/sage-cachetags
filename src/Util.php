@@ -92,10 +92,22 @@ class Util
     }
 
     /**
-     * Tracking/volatile params that no page cache keys on. Stripped from the
-     * stored URL so they don't bloat the store or mismatch the cached entry.
+     * Tracking/volatile params dropped from the stored URL when the query
+     * string is included, so it doesn't bloat the store. This is a generic
+     * starting default — to actually *match* a URL-keyed edge it must equal
+     * that edge's own strip list, which is site-specific (our Fastly VCLs strip
+     * anywhere from 5 to 16 params: beamex strips utm_*/gclid only, herrfors
+     * also strips campaign_id, tduid, gad_source, wbraid, dclid, _gl, …). Align
+     * it per site via cachetags/url-ignored-params; comprehensive normalization
+     * belongs at the edge.
      */
-    const IGNORED_URL_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', '_wpnonce', '_'];
+    const IGNORED_URL_PARAMS = [
+        // Campaign / click trackers (Google, Microsoft, Facebook, GA linker).
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
+        'gclid', 'gad_source', 'gbraid', 'wbraid', 'dclid', 'fbclid', 'msclkid', '_gl',
+        // Volatile WordPress per-request params.
+        '_wpnonce', '_',
+    ];
 
     public static function currentUrl(): string
     {
@@ -103,12 +115,13 @@ class Util
 
         $url = trailingslashit(home_url($wp->request));
 
-        // Path-only by default: correct where the edge purges by tag (Fastly,
-        // ignores the URL) or never caches query-string URLs (Kinsta bypasses
-        // them). Sites on a URL-keyed cache that *does* cache query strings
-        // (SiteGround, or Kinsta configured to cache GET params) opt in, so the
-        // stored URL matches the cached entry and the variant is actually
-        // purged — at the cost of one store row per visited query combination.
+        // Path-only by default. For Fastly this is moot — it purges by
+        // Surrogate-Key (tag) and never reads the stored URL. For Kinsta it
+        // matches what's actually cached, since query-string URLs bypass the
+        // cache entirely. Opt in only on a URL-keyed cache that *does* cache
+        // query strings (SiteGround, or Kinsta set to cache GET params), so the
+        // stored URL matches the cached variant — at the cost of one store row
+        // per visited query combination.
         if (empty($_GET) || ! apply_filters('cachetags/store-query-string', false)) {
             return $url;
         }

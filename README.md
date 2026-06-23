@@ -93,11 +93,19 @@ matches the cached entry and the variant is actually purged:
 add_filter('cachetags/store-query-string', '__return_true');
 ```
 
-Tracking/volatile params (`utm_*`, `gclid`, `fbclid`, `_wpnonce`, `_`) are
-stripped and the rest sorted, so the key matches the edge and the store doesn't
-bloat. Adjust the strip list with `cachetags/url-ignored-params`. (Comprehensive
-param normalization — an allow-list at the edge — is better handled in the
-CDN/VCL than here.)
+A default set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…,
+`_wpnonce`, `_`) is stripped and the rest sorted, so the store doesn't bloat with
+campaign-link variants. **To actually match a URL-keyed edge the strip list must
+equal that edge's** — and that's site-specific (our own Fastly VCLs strip
+anywhere from 5 to 16 params), so align it per site with
+`cachetags/url-ignored-params`:
+
+```php
+add_filter('cachetags/url-ignored-params', fn ($p) => [...$p, 'campaign_id', 'tduid']);
+```
+
+Comprehensive query-param normalization is better done at the edge (CDN/VCL) than
+replicated here.
 
 ### SiteGround Optimizer
 
