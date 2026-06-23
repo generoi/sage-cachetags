@@ -1,17 +1,17 @@
 <?php
 
-use Genero\Sage\CacheTags\Actions\AllowList;
+use Genero\Sage\CacheTags\Actions\QueryParams;
 use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 
 /**
- * Including allow-listed query params in the front-end + REST cache key.
+ * Including known query params in the front-end + REST cache key.
  *
- * @covers \Genero\Sage\CacheTags\Actions\AllowList
+ * @covers \Genero\Sage\CacheTags\Actions\QueryParams
  * @covers \Genero\Sage\CacheTags\Bootstrap::frontendUrl
  * @covers \Genero\Sage\CacheTags\Bootstrap::restUrl
  */
-class TestAllowList extends WP_UnitTestCase
+class TestQueryParams extends WP_UnitTestCase
 {
     private Bootstrap $bootstrap;
 
@@ -77,7 +77,7 @@ class TestAllowList extends WP_UnitTestCase
 
     public function test_action_contributes_the_core_param_allow_list(): void
     {
-        (new AllowList(CacheTags::getInstance()))->bind();
+        (new QueryParams(CacheTags::getInstance()))->bind();
 
         $params = apply_filters(Bootstrap::FILTER_ALLOWED_PARAMS, []);
 

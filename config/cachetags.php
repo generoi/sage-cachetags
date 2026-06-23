@@ -23,9 +23,10 @@ return [
         // enabled alongside it so block-derived tags are collected too.
         // \Genero\Sage\CacheTags\Actions\RestApi::class,
 
-        // Include cache-significant query params (search, sort, Polylang lang,
-        // FacetWP selections) in the front-end + REST cache key.
-        // \Genero\Sage\CacheTags\Actions\AllowList::class,
+        // Include known query params (search, sort, Polylang lang, FacetWP
+        // selections) in the front-end + REST cache key; arbitrary params are
+        // ignored. Opt-in for sites that know their GET parameters.
+        // \Genero\Sage\CacheTags\Actions\QueryParams::class,
     ],
 
     /*

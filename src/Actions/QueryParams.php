@@ -7,19 +7,23 @@ use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 
 /**
- * Include cache-significant query parameters in the cache key for BOTH the
- * front-end and REST API, so paginated/filtered/sorted/translated variants are
- * cached and purged separately instead of collapsing to one key.
+ * Include known cache-significant query parameters in the cache key for BOTH
+ * the front-end and REST API, so paginated/filtered/sorted/translated variants
+ * are cached and purged separately instead of collapsing to one key.
  *
- * Opt-in. Ships a WP-core allow-list and adds parameters for active integrations
- * (Polylang, FacetWP); extend with the cachetags/url-allowed-params filter. ACF
- * isn't included — its data shapes the response body, not the URL, and is
- * covered by content tags rather than the cache key.
+ * Opt-in, for sites that know their GET parameters: it allow-lists a known set
+ * (WP-core search/sort, plus active integrations like Polylang and FacetWP) and
+ * intentionally ignores everything else, so arbitrary params (tracking, crawler
+ * noise) don't fork the cache key. Extend the set with the
+ * cachetags/url-allowed-params filter. ACF isn't included — its data shapes the
+ * response body, not the URL, and is covered by content tags.
  *
- * It only ADDS params to the key (keeping a param is always purge-safe), so an
- * incomplete set over-caches rather than serving stale content.
+ * Verify the allow-list against the site's actual query params: it only ADDS
+ * params (keeping a param is purge-safe), so a missing one means that variant
+ * shares a key with the base URL — over-caching at worst here, but stale if the
+ * site genuinely varies content by a param not in the list.
  */
-class AllowList implements Action
+class QueryParams implements Action
 {
     public function __construct(protected CacheTags $cacheTags) {}
 
