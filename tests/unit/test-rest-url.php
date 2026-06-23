@@ -41,11 +41,20 @@ class TestRestUrl extends WP_UnitTestCase
         $this->assertStringEndsWith('/wp-json/wp/v2/posts?page=1&per_page=2', $url);
     }
 
-    public function test_machinery_params_are_dropped(): void
+    public function test_random_machinery_params_are_dropped(): void
     {
-        $url = $this->restUrl('/wp/v2/posts', ['_wpnonce' => 'abc', 'context' => 'view', 'page' => '2']);
+        $url = $this->restUrl('/wp/v2/posts', ['_wpnonce' => 'abc', '_' => '12345', 'page' => '2']);
 
         $this->assertStringEndsWith('/wp-json/wp/v2/posts?page=2', $url);
+    }
+
+    public function test_body_affecting_params_are_kept_and_cached_separately(): void
+    {
+        // context=embed returns a different body than view, so it must not be
+        // stripped — distinct representations are cached (and purged) separately.
+        $url = $this->restUrl('/wp/v2/posts', ['context' => 'embed', 'page' => '2']);
+
+        $this->assertStringEndsWith('/wp-json/wp/v2/posts?context=embed&page=2', $url);
     }
 
     public function test_response_shaping_params_are_kept(): void
@@ -68,7 +77,7 @@ class TestRestUrl extends WP_UnitTestCase
 
     public function test_no_query_string_when_only_ignored_params(): void
     {
-        $url = $this->restUrl('/wp/v2/posts', ['_wpnonce' => 'abc', 'context' => 'view']);
+        $url = $this->restUrl('/wp/v2/posts', ['_wpnonce' => 'abc', '_' => '12345']);
 
         $this->assertStringEndsWith('/wp-json/wp/v2/posts', $url);
         $this->assertStringNotContainsString('?', $url);
