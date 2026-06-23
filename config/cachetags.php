@@ -22,6 +22,10 @@ return [
         // Tag REST API read responses for headless/decoupled setups. Keep Core
         // enabled alongside it so block-derived tags are collected too.
         // \Genero\Sage\CacheTags\Actions\RestApi::class,
+
+        // Zero-config: tag every post/term fetched via WP_Query / get_the_terms
+        // instead of wiring tags per template or block. Complements Core.
+        // \Genero\Sage\CacheTags\Actions\AutoTag::class,
     ],
 
     /*

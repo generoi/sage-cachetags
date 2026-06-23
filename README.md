@@ -240,6 +240,29 @@ add_filter('cachetags/options', fn (array $options) => [...$options, 'my_option'
 Options not bound to a specific block are usually better handled with a full
 cache flush than by tagging every page that might render them.
 
+### Zero-config auto-tagging
+
+For themes that render content through custom `WP_Query` loops (related posts,
+curated lists) rather than the blocks `Core` understands, enable the opt-in
+`AutoTag` action to tag every queried post and fetched term automatically:
+
+```php
+use Genero\Sage\CacheTags\Actions\AutoTag;
+use Genero\Sage\CacheTags\Actions\Core;
+
+return [
+    'action' => [
+        Core::class,
+        AutoTag::class,
+    ],
+];
+```
+
+It hooks `the_posts` (tagging each returned post, plus an `archive:{type}` for
+collection queries) and `get_the_terms` (tagging each term). Page archives are
+excluded by default — adjust with the `cachetags/autotag-excluded-archive-types`
+filter. The header-size collapse keeps the broader tag set bounded.
+
 ## Traits for use with roots/sage
 
 ### Composers
