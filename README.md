@@ -97,7 +97,21 @@ Integration exists if you add the `SuperCacheInvalidator` invalidator in the `co
 
 ### Kinsta
 
-Integration exists if you add the `KinstaCacheInvalidator` in the `config/cachetags.php` file.
+Two invalidators, differing in how Kinsta resolves the purge:
+
+- **`KinstaGroupCacheInvalidator`** (recommended) purges by `group|` — a prefix
+  wildcard that clears a path together with everything beneath it: its pagination
+  (`/shop/page/2/`) and its query-string variants (`/shop/?orderby=…`) in one
+  request. It disables query-string storage (`cachetags/store-query-string`)
+  since the bare path is enough, keeping the store lean. This is the right choice
+  for a standard Kinsta setup, where query-string URLs bypass the cache anyway.
+- **`KinstaCacheInvalidator`** purges by `single|` — the exact URL only. Use this
+  if you've configured Kinsta to cache query-string URLs and need each variant
+  purged by its full stored URL (see [Stored URL and query strings](#stored-url-and-query-strings)).
+
+Add one of them to the `invalidator` list in `config/cachetags.php`. The site
+root (`/`) is always purged exactly, so a group purge never flushes the whole
+site.
 
 ### Cloudflare
 
