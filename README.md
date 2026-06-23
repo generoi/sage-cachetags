@@ -120,6 +120,68 @@ return [
 ];
 ````
 
+## REST API integration
+
+For headless/decoupled setups where pages are served from the WordPress REST
+API, enable the `RestApi` action to tag REST read responses so a frontend or
+CDN can purge them by cache tag:
+
+```php
+use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Actions\HttpHeader;
+use Genero\Sage\CacheTags\Actions\RestApi;
+
+return [
+    'http-header' => 'Cache-Tag',
+    'action' => [
+        Core::class,
+        HttpHeader::class,
+        RestApi::class,
+    ],
+];
+```
+
+Keep `Core` enabled alongside it: block-derived tags from `content.rendered`
+are still collected through Core's `render_block` hook during the REST request.
+
+What gets tagged:
+
+- **Single resources** (`/wp/v2/posts/123`, `/wp/v2/categories/5`, `/wp/v2/users/2`,
+  `/wp/v2/comments/9`) — the object itself, plus a post's related terms, author
+  and featured media.
+- **Collections** (`/wp/v2/posts`) — each item plus the relevant `archive:` /
+  `taxonomy:` listing tag.
+
+Only responses that may be publicly cached are tagged: requests are skipped when
+they are authenticated, use `context=edit`, carry a `password`, or are not
+`GET`/`HEAD`. The edge **must** strip the `Cache-Tag` header before it reaches
+clients.
+
+Each response is stored under its canonical URL with sort-normalized query
+parameters, so paginated/filtered collection variants (`?page=2`, `?categories=5`)
+get distinct, CDN-matching store keys. Only parameters the matched route
+registers are kept, so arbitrary client params can't fork the store key.
+
+### Filters
+
+```php
+// Tag bespoke REST routes that don't map to a core object.
+add_filter('cachetags/rest-tags', function (array $tags, WP_REST_Request $request) {
+    return $request->get_route() === '/my-plugin/v1/feed'
+        ? [...$tags, 'archive:post']
+        : $tags;
+}, 10, 2);
+
+// Add or trim the related dependencies tagged for a post response.
+// The matched WP_REST_Request is also passed as a third argument.
+add_filter('cachetags/rest-related-tags', function (array $tags, WP_Post $post) {
+    return $tags;
+}, 10, 2);
+
+// Change which query parameters are ignored when building the store URL.
+add_filter('cachetags/rest-url-ignored-params', fn (array $params) => [...$params, 'preview']);
+```
+
 ## Traits for use with roots/sage
 
 ### Composers

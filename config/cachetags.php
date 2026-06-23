@@ -18,6 +18,10 @@ return [
         Core::class,
         DebugComment::class,
         Gravityform::class,
+
+        // Tag REST API read responses for headless/decoupled setups. Keep Core
+        // enabled alongside it so block-derived tags are collected too.
+        // \Genero\Sage\CacheTags\Actions\RestApi::class,
     ],
 
     /*

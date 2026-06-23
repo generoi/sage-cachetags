@@ -1,0 +1,12 @@
+{
+  "phpVersion": "8.2",
+  "plugins": [
+    "."
+  ],
+  "config": {
+    "WP_TESTS_DOMAIN": "localhost",
+    "WP_TESTS_EMAIL": "oskar@genero.fi",
+    "WP_TESTS_TITLE": "Sage Cache Tags",
+    "WP_PHP_BINARY": "php"
+  }
+}

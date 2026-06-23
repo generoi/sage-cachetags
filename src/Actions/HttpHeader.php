@@ -4,6 +4,8 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Util;
+use WP_REST_Request;
 use WP_REST_Response;
 
 class HttpHeader implements Action
@@ -20,7 +22,7 @@ class HttpHeader implements Action
         ob_start();
 
         \add_action('wp_footer', [$this, 'addHttpHeader']);
-        \add_filter('rest_post_dispatch', [$this, 'restPostDispatch']);
+        \add_filter('rest_post_dispatch', [$this, 'restPostDispatch'], 10, 3);
     }
 
     public function addHttpHeader(): void
@@ -35,13 +37,27 @@ class HttpHeader implements Action
     }
 
     /**
-     * REST API response headers
+     * REST API response headers.
+     *
+     * Only emitted for responses that may be publicly cached, and only when
+     * there are tags to emit.
      */
-    public function restPostDispatch(WP_REST_Response $response): WP_REST_Response
+    public function restPostDispatch($response, $server = null, ?WP_REST_Request $request = null)
     {
-        if ($header = $this->cacheTags->httpHeader) {
+        if (! $response instanceof WP_REST_Response) {
+            return $response;
+        }
+
+        if ($request && ! Util::isCacheableRestRequest($request)) {
+            return $response;
+        }
+
+        $tags = $this->cacheTags->get();
+        $header = $this->cacheTags->httpHeader;
+
+        if ($header && ! empty($tags)) {
             $headers = $response->get_headers();
-            $headers[$header] = implode(' ', $this->cacheTags->get());
+            $headers[$header] = implode(' ', $tags);
             $response->set_headers($headers);
         }
 

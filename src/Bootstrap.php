@@ -9,7 +9,6 @@ use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use WP_REST_Request;
-use WP_REST_Response;
 use WP_Site;
 
 /**
@@ -18,6 +17,14 @@ use WP_Site;
 class Bootstrap
 {
     use CreatesDatabaseTable;
+
+    /**
+     * Query parameters that never change the cached representation and so are
+     * excluded from the stored REST URL.
+     */
+    const INTERNAL_QUERY_PARAMS = ['_embed', '_fields', '_envelope', '_locale', '_method', '_wpnonce', '_', 'context', 'password'];
+
+    const FILTER_URL_IGNORED_PARAMS = 'cachetags/rest-url-ignored-params';
 
     protected bool $debug;
 
@@ -213,15 +220,47 @@ class Bootstrap
         $this->cacheTags->save(Util::currentUrl());
     }
 
-    public function saveCacheTagsRest(WP_REST_Response $response, $server, WP_REST_Request $request): WP_REST_Response
+    public function saveCacheTagsRest($response, $server, WP_REST_Request $request)
     {
-        $route = $request->get_route();
-        $restUrl = rest_url($route);
-        $url = strtok($restUrl, '?');
-
-        $this->cacheTags->save($url);
+        if (Util::isCacheableRestRequest($request)) {
+            $this->cacheTags->save($this->restUrl($request));
+        }
 
         return $response;
+    }
+
+    /**
+     * Build the canonical URL a REST response is cached under.
+     *
+     * Query parameters that change the representation (e.g. page, per_page,
+     * filters) are preserved and sorted so paginated/filtered collection
+     * variants get distinct, stable store keys that match what a CDN caches.
+     *
+     * Only parameters the matched route actually registers are kept, so
+     * arbitrary client-supplied params can't fork the cache key and bloat the
+     * store. Parameters internal to the REST machinery are dropped too.
+     */
+    protected function restUrl(WP_REST_Request $request): string
+    {
+        $url = strtok(rest_url($request->get_route()), '?');
+        $params = $request->get_query_params();
+
+        // Restrict to parameters declared by the matched route, when known.
+        $registered = $request->get_attributes()['args'] ?? [];
+        if (! empty($registered)) {
+            $params = array_intersect_key($params, $registered);
+        }
+
+        $ignored = apply_filters(self::FILTER_URL_IGNORED_PARAMS, self::INTERNAL_QUERY_PARAMS);
+        $params = array_diff_key($params, array_flip($ignored));
+
+        if (empty($params)) {
+            return $url;
+        }
+
+        ksort($params);
+
+        return $url.'?'.http_build_query($params);
     }
 
     public function purgeCacheTags(): void

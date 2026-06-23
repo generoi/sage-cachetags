@@ -15,6 +15,11 @@
       "Genero\\Sage\\CacheTags\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Genero\\Sage\\CacheTags\\Tests\\": "tests/"
+    }
+  },
   "require": {
     "php": ">=8.2"
   },
@@ -22,18 +27,31 @@
     "roots/acorn": "Required for Sage theme integration. Use Bootstrap class for standalone WordPress usage."
   },
   "require-dev": {
-    "laravel/pint": "^1.0"
+    "laravel/pint": "^1.0",
+    "phpunit/phpunit": "^9.6",
+    "wp-phpunit/wp-phpunit": "^6.4",
+    "yoast/phpunit-polyfills": "^2.0"
   },
   "minimum-stability": "dev",
   "prefer-stable": true,
-  "scripts": {
-    "test": "@composer lint",
-    "lint": "vendor/bin/pint --test",
-    "lint:fix": "vendor/bin/pint"
+  "config": {
+    "platform": {
+      "php": "8.2"
+    }
   },
-  "archive" : {
+  "scripts": {
+    "lint": "vendor/bin/pint --test",
+    "lint:fix": "vendor/bin/pint",
+    "test:unit": "vendor/bin/phpunit --testsuite unit",
+    "test:integration": "vendor/bin/phpunit --testsuite integration",
+    "test": "vendor/bin/phpunit"
+  },
+  "archive": {
     "exclude": [
-      ".gitignore"
+      ".gitignore",
+      "tests",
+      "phpunit.xml.dist",
+      ".github"
     ]
   },
   "extra": {

@@ -1,5 +1,7 @@
 <?php
 
+use Genero\Sage\CacheTags\Concerns\CreatesDatabaseTable;
+
 /**
  * Plugin Name:  Sage Cache Tags
  * Plugin URI:   https://genero.fi
@@ -16,7 +18,7 @@ if (file_exists(__DIR__.'/vendor/autoload.php')) {
 register_activation_hook(__FILE__, function (): void {
     $activator = new class
     {
-        use \Genero\Sage\CacheTags\Concerns\CreatesDatabaseTable;
+        use CreatesDatabaseTable;
 
         public function run(): void
         {

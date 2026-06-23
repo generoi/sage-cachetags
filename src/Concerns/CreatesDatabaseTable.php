@@ -18,7 +18,8 @@ trait CreatesDatabaseTable
             tag varchar(191) NOT NULL,
             url varchar(191) NOT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY  (tag, url)
+            PRIMARY KEY  (tag, url),
+            KEY url (url)
         ) $charsetCollate");
     }
 }
