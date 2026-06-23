@@ -55,6 +55,19 @@ abstract class RestTestCase extends WP_UnitTestCase
     }
 
     /**
+     * Tags queued for clearing on the singleton (via CacheTags::clear()).
+     *
+     * @return string[]
+     */
+    protected function queuedPurgeTags(): array
+    {
+        $prop = (new ReflectionObject($this->cacheTags))->getProperty('purgeTags');
+        $prop->setAccessible(true);
+
+        return $prop->getValue($this->cacheTags);
+    }
+
+    /**
      * Cache tags emitted on a REST response by the HttpHeader action.
      *
      * @return string[]

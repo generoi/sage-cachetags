@@ -21,16 +21,26 @@ class Core implements Action
 
         // Clear caches
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
+        \add_action('before_delete_post', [$this, 'onPostDelete']);
         \add_action('transition_comment_status', [$this, 'onCommentStatusTransition'], 10, 3);
         \add_action('comment_post', [$this, 'onCommentPost'], 10, 3);
+        \add_action('edit_comment', [$this, 'onCommentEdit']);
+        \add_action('deleted_comment', [$this, 'onCommentDelete'], 10, 2);
         \add_action('saved_term', [$this, 'onTermSave'], 10, 4);
+        \add_action('delete_term', [$this, 'onTermDelete'], 10, 3);
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
+        \add_action('added_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
+        \add_action('deleted_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
+        \add_action('updated_term_meta', [$this, 'onTermMetaUpdate'], 10, 3);
+        \add_action('added_term_meta', [$this, 'onTermMetaUpdate'], 10, 3);
         \add_action('edit_attachment', [$this, 'onAttachmentEdit']);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
+        \add_action('wp_update_nav_menu_item', [$this, 'onMenuUpdate']);
         \add_action('delete_user', [$this, 'onUserDelete'], 10, 3);
         \add_action('profile_update', [$this, 'onUserUpdate']);
         \add_action('user_register', [$this, 'onUserCreate']);
+        \add_action('set_user_role', [$this, 'onUserRoleChange'], 10, 3);
     }
 
     /**
@@ -186,6 +196,33 @@ class Core implements Action
     }
 
     /**
+     * When a comment's content is edited, clear it and its post.
+     */
+    public function onCommentEdit(int $commentId): void
+    {
+        $comment = get_comment($commentId);
+        if (! $comment instanceof WP_Comment) {
+            return;
+        }
+
+        $this->cacheTags->clear([
+            ...CoreTags::comments($commentId),
+            ...CoreTags::posts((int) $comment->comment_post_ID),
+        ]);
+    }
+
+    /**
+     * When a comment is permanently deleted, clear it and its post.
+     */
+    public function onCommentDelete(int $commentId, WP_Comment $comment): void
+    {
+        $this->cacheTags->clear([
+            ...CoreTags::comments($commentId),
+            ...CoreTags::posts((int) $comment->comment_post_ID),
+        ]);
+    }
+
+    /**
      * This hook is misleading but it runs for scheduled posts, editing a
      * published post as well as manually publishing/unpublishing a post.
      */
@@ -219,6 +256,30 @@ class Core implements Action
         }
 
         $this->cacheTags->clear($cacheTags);
+    }
+
+    /**
+     * On permanent deletion (which skips the trash transition, e.g. for
+     * attachments or EMPTY_TRASH), clear the post and the listings it was in.
+     */
+    public function onPostDelete(int $postId): void
+    {
+        $post = get_post($postId);
+        if (! $post || ! CoreTags::isCacheablePostType($post->post_type)) {
+            return;
+        }
+
+        $taxonomies = array_intersect(
+            CoreTags::getCacheableTaxonomies(),
+            get_post_taxonomies($post)
+        );
+
+        $this->cacheTags->clear([
+            ...CoreTags::posts($post->ID),
+            ...CoreTags::anyArchive($post->post_type),
+            ...CoreTags::archive($post->post_type),
+            ...CoreTags::taxonomy(array_values($taxonomies)),
+        ]);
     }
 
     /**
@@ -261,9 +322,12 @@ class Core implements Action
     }
 
     /**
-     * Whenever a post meta is updated, clear the cache of the post.
+     * Whenever a post meta is added, updated or deleted, clear the post.
+     *
+     * The first argument is a meta id for added/updated_post_meta but an array
+     * of ids for deleted_post_meta; it is unused either way.
      */
-    public function onPostMetaUpdate(int $metaId, int $objectId, string $metaKey): void
+    public function onPostMetaUpdate($metaId, int $objectId, string $metaKey): void
     {
         if (! CoreTags::isCacheablePostType($objectId)) {
             return;
@@ -308,6 +372,39 @@ class Core implements Action
     }
 
     /**
+     * When a term is deleted, clear it and its taxonomy listings.
+     */
+    public function onTermDelete(int $term, int $termTaxonomyId, string $taxonomy): void
+    {
+        if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
+            return;
+        }
+
+        $this->cacheTags->clear([
+            ...CoreTags::terms($term),
+            ...CoreTags::termPages($term),
+            ...CoreTags::taxonomy($taxonomy),
+            ...CoreTags::anyTerm($taxonomy),
+        ]);
+    }
+
+    /**
+     * When term meta is added or updated, clear the term.
+     */
+    public function onTermMetaUpdate($metaId, int $termId, string $metaKey): void
+    {
+        $term = get_term($termId);
+        if (! $term instanceof \WP_Term || ! CoreTags::isCacheableTaxonomy($term->taxonomy)) {
+            return;
+        }
+
+        $this->cacheTags->clear([
+            ...CoreTags::terms($termId),
+            ...CoreTags::termPages($termId),
+        ]);
+    }
+
+    /**
      * When a menu is updated, clear caches using it.
      */
     public function onMenuUpdate(int $menuId): void
@@ -338,6 +435,22 @@ class Core implements Action
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
             ...CoreTags::anyUser(get_userdata($userId)->roles),
+        ]);
+    }
+
+    /**
+     * When a user's role changes (incl. programmatically via set_user_role,
+     * which doesn't fire profile_update), clear the user and both the old and
+     * new role listings.
+     *
+     * @param  string[]  $oldRoles
+     */
+    public function onUserRoleChange(int $userId, string $role, array $oldRoles): void
+    {
+        $this->cacheTags->clear([
+            ...CoreTags::users($userId),
+            ...CoreTags::anyUser($role),
+            ...CoreTags::anyUser($oldRoles),
         ]);
     }
 }
