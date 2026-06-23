@@ -11,6 +11,12 @@ use WP_Block;
 
 class WooCommerce implements Action
 {
+    /**
+     * Set when a login/register/lost-password form renders on the page (these
+     * carry per-session nonces, so the page must not be publicly cached).
+     */
+    protected bool $hasAuthForm = false;
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
@@ -19,6 +25,18 @@ class WooCommerce implements Action
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
         \add_filter(Bootstrap::FILTER_ALLOWED_PARAMS, [$this, 'allowQueryParams']);
         \add_filter('cachetags/cacheable', [$this, 'isCacheable']);
+
+        // Auth forms can be embedded on any page (a login widget, a
+        // [woocommerce_my_account] shortcode), not just My Account — flag them
+        // as they render so isCacheable() can bail.
+        foreach (['woocommerce_login_form_start', 'woocommerce_register_form_start', 'woocommerce_lostpassword_form'] as $hook) {
+            \add_action($hook, [$this, 'markAuthForm']);
+        }
+    }
+
+    public function markAuthForm(): void
+    {
+        $this->hasAuthForm = true;
     }
 
     /**
@@ -37,11 +55,16 @@ class WooCommerce implements Action
 
         $params = [...$params, 'orderby', 'min_price', 'max_price', 'rating_filter', 'product-page'];
 
-        // Layered-nav attribute filters: filter_<attr> + query_type_<attr>.
+        // Per global attribute taxonomy: layered-nav filters on archives
+        // (filter_<attr> + query_type_<attr>) and variation selection on single
+        // products (attribute_pa_<attr>). Custom (non-taxonomy) product
+        // attributes use attribute_<slug> and aren't enumerable here — add via
+        // the cachetags/url-allowed-params filter if used.
         if (function_exists('wc_get_attribute_taxonomies')) {
             foreach (wc_get_attribute_taxonomies() as $attribute) {
                 $params[] = 'filter_'.$attribute->attribute_name;
                 $params[] = 'query_type_'.$attribute->attribute_name;
+                $params[] = 'attribute_pa_'.$attribute->attribute_name;
             }
         }
 
@@ -49,12 +72,20 @@ class WooCommerce implements Action
     }
 
     /**
-     * Cart, checkout, account and add-to-cart requests are per-session and
-     * mutate state — they must not be publicly cached.
+     * Cart, checkout, account, add-to-cart and pages rendering an auth form are
+     * per-session / state-mutating — they must not be publicly cached.
      */
     public function isCacheable(bool $cacheable): bool
     {
-        if (! $cacheable || ! function_exists('is_cart')) {
+        if (! $cacheable) {
+            return false;
+        }
+
+        if ($this->hasAuthForm) {
+            return false;
+        }
+
+        if (! function_exists('is_cart')) {
             return $cacheable;
         }
 

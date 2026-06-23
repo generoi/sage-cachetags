@@ -255,8 +255,10 @@ REST:
 - **`FacetWP`** — FacetWP selection params (`_<facet>`, `_paged`, `_sort`),
   read from the registered facets.
 - **`WooCommerce`** — shop sorting/filtering (`orderby`, `min_price`,
-  `max_price`, `rating_filter`, `product-page`, and each `filter_<attribute>`).
-  Also marks cart/checkout/account and `add-to-cart` requests non-cacheable.
+  `max_price`, `rating_filter`, `product-page`, `filter_<attribute>`) and
+  single-product variation selection (`attribute_pa_<attribute>`). Marks
+  cart/checkout/account, `add-to-cart`/`wc-ajax`, and any page rendering a
+  login/register/lost-password form non-cacheable.
 - **`Polylang`** / **`WPML`** — contribute the `lang` query var (enable whichever
   multilingual plugin the site uses; applies to all views).
 

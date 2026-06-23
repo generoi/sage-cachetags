@@ -138,6 +138,17 @@ class TestQueryVary extends WP_UnitTestCase
         $this->assertTrue($action->isCacheable(true), 'no opinion without WooCommerce');
     }
 
+    public function test_woocommerce_marks_pages_with_an_auth_form_non_cacheable(): void
+    {
+        $action = new WooCommerce(CacheTags::getInstance());
+        $this->assertTrue($action->isCacheable(true));
+
+        // Simulate a login/register/lost-password form rendering on the page.
+        $action->markAuthForm();
+
+        $this->assertFalse($action->isCacheable(true));
+    }
+
     public function test_wpml_action_contributes_lang(): void
     {
         $params = (new WPML(CacheTags::getInstance()))->allowLanguageParam([]);
