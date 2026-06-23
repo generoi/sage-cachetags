@@ -3,18 +3,22 @@
 namespace Genero\Sage\CacheTags;
 
 use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Concerns\CreatesDatabaseTable;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use WP_REST_Request;
 use WP_REST_Response;
+use WP_Site;
 
 /**
  * Bootstrap CacheTags for standalone WordPress usage (without Acorn).
  */
 class Bootstrap
 {
+    use CreatesDatabaseTable;
+
     protected bool $debug;
 
     protected ?CacheTags $cacheTags = null;
@@ -134,6 +138,12 @@ class Bootstrap
         // Register WP-CLI commands if available
         $this->registerWpCliCommands();
 
+        // Ensure the cache tags table is created for newly added multisite subsites.
+        // The activation hook only provisions sites existing at activation time.
+        if (is_multisite()) {
+            add_action('wp_initialize_site', [$this, 'createTableForNewSite'], 100);
+        }
+
         // Set up WordPress hooks
         if (! $this->disable) {
             add_action('wp_footer', [$this, 'saveCacheTags']);
@@ -181,6 +191,20 @@ class Bootstrap
 
         foreach ($actions as $action) {
             $this->cacheTags->bindAction($action);
+        }
+    }
+
+    /**
+     * Create the cache tags table for a newly initialized multisite subsite.
+     */
+    public function createTableForNewSite(WP_Site $newSite): void
+    {
+        switch_to_blog((int) $newSite->blog_id);
+
+        try {
+            $this->createTable();
+        } finally {
+            restore_current_blog();
         }
     }
 
