@@ -189,14 +189,28 @@ class TestQueryVary extends WP_UnitTestCase
         $this->assertFalse(Util::isCacheableRequest());
     }
 
-    public function test_logged_in_front_end_request_is_not_cacheable(): void
+    public function test_admin_bar_request_is_never_cacheable(): void
     {
-        $this->assertTrue(Util::isCacheableRequest());
-
-        // The edge VCLs pass (never cache) logged-in requests, so we don't tag
-        // or emit a Cache-Tag header for them either.
-        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
+        add_filter('show_admin_bar', '__return_true');
+        add_filter('cachetags/cacheable', '__return_true'); // even if a filter says yes
 
         $this->assertFalse(Util::isCacheableRequest());
+    }
+
+    public function test_logged_in_is_not_cacheable_by_default(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        add_filter('show_admin_bar', '__return_false');
+
+        $this->assertFalse(Util::isCacheableRequest());
+    }
+
+    public function test_logged_in_can_be_opted_back_in_via_filter(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        add_filter('show_admin_bar', '__return_false');
+        add_filter('cachetags/cacheable', '__return_true');
+
+        $this->assertTrue(Util::isCacheableRequest());
     }
 }

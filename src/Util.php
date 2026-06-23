@@ -16,11 +16,16 @@ class Util
      */
     public static function isCacheableRequest(): bool
     {
-        if (is_preview() || is_user_logged_in()) {
+        // Previews render unsaved content; the admin bar bakes per-user chrome
+        // into the HTML. Never cache either — not overridable.
+        if (is_preview() || is_admin_bar_showing()) {
             return false;
         }
 
-        return (bool) apply_filters('cachetags/cacheable', true);
+        // Logged-in requests default to non-cacheable, but a site that serves
+        // identical content to e.g. subscribers or WooCommerce customers (and
+        // hides their admin bar) can opt them back in via the filter.
+        return (bool) apply_filters('cachetags/cacheable', ! is_user_logged_in());
     }
 
     /**
