@@ -182,6 +182,31 @@ add_filter('cachetags/rest-related-tags', function (array $tags, WP_Post $post) 
 add_filter('cachetags/rest-url-ignored-params', fn (array $params) => [...$params, 'preview']);
 ```
 
+### Header size limits
+
+Cache providers cap the tag header — Fastly's `Surrogate-Key` allows 1024 bytes
+per key and 16384 bytes total, and **silently drops the offending key and every
+key after it** once a limit is reached, which would leave content stale. To stay
+safe (for both front-end pages and REST responses):
+
+- Tags that aren't valid single header tokens — containing whitespace/control
+  characters, or longer than the store column (191 bytes) — are dropped.
+- When the combined header would exceed the byte budget, the per-object
+  `post:`/`term:` tags are collapsed to their coarse `archive:{type}:any` /
+  `taxonomy:{tax}:any` form, which is purged on any change to that post type or
+  taxonomy. This over-purges rather than dropping tags.
+
+```php
+// Tag header byte budget before collapsing to coarse tags (default 16384).
+add_filter('cachetags/max-header-bytes', fn () => 8192);
+
+// Maximum length of a single tag (default 191, the store column width).
+add_filter('cachetags/max-tag-length', fn () => 191);
+
+// Pattern a tag must match to be kept.
+add_filter('cachetags/tag-pattern', fn () => '/^[^\s\x00-\x1F]+$/');
+```
+
 ## Traits for use with roots/sage
 
 ### Composers

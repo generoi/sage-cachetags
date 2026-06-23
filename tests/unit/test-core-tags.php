@@ -48,4 +48,17 @@ class TestCoreTags extends WP_UnitTestCase
         $this->assertSame(['taxonomy:category'], CoreTags::taxonomy('category'));
         $this->assertSame(['taxonomy:category:any'], CoreTags::anyTerm('category'));
     }
+
+    public function test_any_archive(): void
+    {
+        $this->assertSame(['archive:post:any'], CoreTags::anyArchive('post'));
+        $this->assertSame(['archive:post:any', 'archive:page:any'], CoreTags::anyArchive(['post', 'page']));
+    }
+
+    public function test_cacheable_user_roles_are_slugs(): void
+    {
+        $roles = CoreTags::getCacheableUserRoles();
+
+        $this->assertContains('administrator', $roles, 'Roles must be slugs, not display names');
+    }
 }

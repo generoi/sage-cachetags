@@ -197,6 +197,9 @@ class Core implements Action
         $isStatusChanged = $newStatus !== $oldStatus;
         $cacheTags = [
             ...CoreTags::posts($post->ID),
+            // Coarse "any post of this type changed" tag — the fallback target
+            // when a response collapses too many individual post tags.
+            ...CoreTags::anyArchive($post->post_type),
         ];
 
         // If it's new or unpublished, clear the taxonomy pages and the archive page

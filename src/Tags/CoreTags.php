@@ -298,6 +298,40 @@ class CoreTags
     }
 
     /**
+     * Return cache tags for changes to any post in post types.
+     *
+     * Unlike archive(), which tracks listing membership (publish/unpublish),
+     * this is cleared on any change to any post of the type, and is used as the
+     * coarse fallback when a response would otherwise emit too many post tags.
+     *
+     * @param  string|WP_Post_Type|array<string|WP_Post_Type>  $postTypes
+     * @return string[]
+     */
+    public static function anyArchive($postTypes): array
+    {
+        if (is_string($postTypes) && $postTypes === 'any') {
+            $postTypes = self::getCacheablePostTypes();
+        }
+
+        if ($postTypes instanceof WP_Post_Type) {
+            $postTypes = [$postTypes];
+        }
+
+        if (is_string($postTypes)) {
+            $postTypes = [$postTypes];
+        }
+
+        if (is_array($postTypes)) {
+            return array_map(
+                fn ($postType) => sprintf('archive:%s:any', $postType instanceof WP_Post_Type ? $postType->name : $postType),
+                $postTypes
+            );
+        }
+
+        return [];
+    }
+
+    /**
      * Return cache tags for changes to any user in roles.
      *
      * @param  string|WP_Role|array<string|WP_Role>  $roles
@@ -402,6 +436,8 @@ class CoreTags
      */
     public static function getCacheableUserRoles(): array
     {
-        return \wp_roles()->get_names();
+        // Role slugs, not display names — tags must be header-safe tokens, and
+        // user mutations elsewhere clear role tags by slug.
+        return array_keys(\wp_roles()->get_names());
     }
 }
