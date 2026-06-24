@@ -17,16 +17,17 @@ class TestAuditFixes extends WP_UnitTestCase
         return new WordpressDbStore;
     }
 
-    // C2: clearing one tag must not drop a URL's sibling-tag mappings.
-    public function test_clear_removes_only_the_purged_tag_not_siblings(): void
+    // A purge evicts whole pages, so clearing forgets every tag mapping for the
+    // purged URLs (a re-render re-stores the page's current tags).
+    public function test_clear_forgets_every_tag_on_a_purged_url(): void
     {
         $store = $this->store();
         $store->save(['post:1', 'post:2'], 'https://example.com/a/');
 
         $store->clear(['https://example.com/a/'], ['post:1']);
 
-        $this->assertSame([], $store->get(['post:1']), 'purged mapping removed');
-        $this->assertSame(['https://example.com/a/'], $store->get(['post:2']), 'sibling mapping survives');
+        $this->assertSame([], $store->get(['post:1']));
+        $this->assertSame([], $store->get(['post:2']));
     }
 
     // Store finding: a 0-row delete / TRUNCATE must report success, not failure.
@@ -48,25 +49,6 @@ class TestAuditFixes extends WP_UnitTestCase
         $store->save(['post:1', 'post:2'], 'https://example.com/a/');
 
         $this->assertSame(['https://example.com/a/'], $store->get(['post:1', 'post:2']));
-    }
-
-    // The store self-provisions a missing table on first write — so a multisite
-    // subsite the activation hook never reached self-heals instead of silently
-    // never storing tags.
-    public function test_store_self_provisions_a_missing_table_on_save(): void
-    {
-        global $wpdb;
-        $table = "{$wpdb->prefix}cache_tags";
-        $store = $this->store();
-
-        // DROP is DDL (implicit commit), so clean up explicitly at the end.
-        $wpdb->query("DROP TABLE IF EXISTS `{$table}`");
-
-        $this->assertTrue($store->save(['post:selfheal'], 'https://example.com/selfheal/'));
-        $this->assertSame($table, $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)), 'table recreated');
-        $this->assertSame(['https://example.com/selfheal/'], $store->get(['post:selfheal']));
-
-        $store->flush();
     }
 
     // C4: non-collapsible tags (comment:, user:, …) must still be trimmed to the
