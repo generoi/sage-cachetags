@@ -55,8 +55,9 @@ class WordpressDbStore implements Store
     /**
      * Remove only the (url, tag) mappings being purged — not every tag on those
      * URLs. Deleting by URL alone drops sibling-tag rows (e.g. clearing `post:5`
-     * would also forget `/article/` is tagged `post:6`), so a later purge of the
-     * sibling can't find a re-cached page — a real miss under DeferredClearStore.
+     * would also forget `/article/` is tagged `post:6`); if a concurrent request
+     * re-renders and re-caches the page between the edge purge and this delete, a
+     * later purge of the sibling tag would no longer find it.
      *
      * @param  string[]  $urls
      * @param  string[]  $tags
