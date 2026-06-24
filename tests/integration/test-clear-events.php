@@ -236,4 +236,29 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("user:{$userId}", $tags);
         $this->assertContains('role:author', $tags);
     }
+
+    public function test_creating_a_term_clears_its_tags_and_the_taxonomy_listing(): void
+    {
+        $this->resetCacheTags();
+
+        $termId = self::factory()->category->create();
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("term:{$termId}", $tags);
+        $this->assertContains('taxonomy:category:any', $tags);
+        $this->assertContains('taxonomy:category', $tags, 'a new term clears the listing');
+    }
+
+    public function test_editing_a_term_clears_its_tags_but_not_the_listing(): void
+    {
+        $termId = self::factory()->category->create();
+        $this->resetCacheTags();
+
+        wp_update_term($termId, 'category', ['name' => 'Renamed']);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("term:{$termId}", $tags);
+        $this->assertContains('taxonomy:category:any', $tags);
+        $this->assertNotContains('taxonomy:category', $tags, 'an edit is not a new term');
+    }
 }
