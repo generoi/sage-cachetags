@@ -225,23 +225,41 @@ them can't cause staleness.
 
 The `RestApi` action only knows about core `wp/v2` objects. A **custom public
 route** that serves its own cacheable response (sets its own
-`Cache-Control: public, s-maxage=…`, e.g. `my-plugin/v1/search`) is **cached at
-the edge but never purged** unless it contributes the cache tags its data depends
-on — so it goes stale on content changes. Add them via `cachetags/rest-tags`:
+`Cache-Control: public, s-maxage=…`, e.g. `my-plugin/v1/people`) is **cached at
+the edge but never purged** unless it declares the cache tags its data depends on.
+
+Do it the same way the front end does — add the tags while building the response,
+from the `CacheTags` instance (`app(CacheTags::class)` with Acorn, or
+`CacheTags::getInstance()` standalone). With `RestApi`/`HttpHeader` enabled they're
+emitted and stored on `rest_post_dispatch`:
 
 ```php
-add_filter('cachetags/rest-tags', function (array $tags, WP_REST_Request $request) {
-    if (str_starts_with($request->get_route(), '/my-plugin/v1/people')) {
-        $tags[] = 'archive:person';        // the listing this endpoint reads
-    }
-    return $tags;
-}, 10, 2);
+public function handle(WP_REST_Request $request): WP_REST_Response
+{
+    $people = $this->search($request);
+
+    CacheTags::getInstance()?->add([
+        'archive:person',
+        ...array_map(fn ($p) => "post:{$p->id}", $people),
+    ]);
+
+    return rest_ensure_response($people);
+}
 ```
 
-(Or call `CacheTags::getInstance()?->add([...])` while building the response.)
-Tagging is what drives invalidation — the stored URL doesn't need to match the
-edge's per-parameter cache key, since the edge purges by tag (Fastly) or doesn't
-cache query-string URLs at all (Kinsta).
+If the endpoint manages its **own** `Cache-Control` and you want full control, set
+the header yourself (and `save()` the URL for url-based purge):
+
+```php
+$cacheTags->add($tags);
+$cacheTags->save($request->get_route());
+$response->header('Cache-Tag', implode(' ', $tags));
+```
+
+Purge them from a small custom `Action` that hooks the relevant
+`transition_post_status` / meta / term events and calls `$cacheTags->clear([...])`,
+mirroring `Core`. (For a third-party route you can't edit, the `cachetags/rest-tags`
+filter below is the fallback.)
 
 ### Filters
 
