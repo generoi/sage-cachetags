@@ -16,6 +16,31 @@ use WP_User;
 class CoreTags
 {
     /**
+     * Build "prefix:id" tags for one or many entities given as an id, an object,
+     * or an array of either. Returns [] for null/unrecognised input.
+     *
+     * @param  int|object|array<int|object>|null  $items
+     * @param  class-string  $className
+     * @param  callable(object):int  $idOf
+     * @return string[]
+     */
+    protected static function entityTags($items, string $prefix, string $className, callable $idOf): array
+    {
+        if (is_numeric($items) || $items instanceof $className) {
+            $items = [$items];
+        }
+
+        if (! is_array($items)) {
+            return [];
+        }
+
+        return array_map(
+            fn ($item) => sprintf('%s:%d', $prefix, $item instanceof $className ? $idOf($item) : $item),
+            $items
+        );
+    }
+
+    /**
      * Return cache tags for one or multiple posts.
      *
      * @param  int|WP_Post|array<int|WP_Post>|null  $posts
@@ -23,20 +48,12 @@ class CoreTags
      */
     public static function posts($posts = null): array
     {
-        if (is_numeric($posts) || $posts instanceof WP_Post) {
-            $posts = [$posts];
-        }
-
-        if (is_array($posts)) {
-            $tags = array_map(
-                fn ($post) => [sprintf('post:%d', $post instanceof WP_Post ? $post->ID : $post)],
-                $posts
-            );
-
-            return Util::flatten($tags);
-        }
-
-        return [];
+        return self::entityTags(
+            $posts,
+            prefix: 'post',
+            className: WP_Post::class,
+            idOf: fn (WP_Post $post) => $post->ID,
+        );
     }
 
     /**
@@ -47,20 +64,12 @@ class CoreTags
      */
     public static function terms($terms = null): array
     {
-        if (is_numeric($terms) || $terms instanceof WP_Term) {
-            $terms = [$terms];
-        }
-
-        if (is_array($terms)) {
-            $tags = array_map(
-                fn ($term) => [sprintf('term:%d', $term instanceof WP_Term ? $term->term_id : $term)],
-                $terms
-            );
-
-            return Util::flatten($tags);
-        }
-
-        return [];
+        return self::entityTags(
+            $terms,
+            prefix: 'term',
+            className: WP_Term::class,
+            idOf: fn (WP_Term $term) => $term->term_id,
+        );
     }
 
     /**
@@ -82,20 +91,12 @@ class CoreTags
      */
     public static function users($users = null): array
     {
-        if (is_numeric($users) || $users instanceof WP_User) {
-            $users = [$users];
-        }
-
-        if (is_array($users)) {
-            $tags = array_map(
-                fn ($user) => [sprintf('user:%d', $user instanceof WP_User ? $user->ID : $user)],
-                $users
-            );
-
-            return Util::flatten($tags);
-        }
-
-        return [];
+        return self::entityTags(
+            $users,
+            prefix: 'user',
+            className: WP_User::class,
+            idOf: fn (WP_User $user) => $user->ID,
+        );
     }
 
     /**
@@ -106,20 +107,12 @@ class CoreTags
      */
     public static function comments($comments = null): array
     {
-        if (is_numeric($comments) || $comments instanceof WP_Comment) {
-            $comments = [$comments];
-        }
-
-        if (is_array($comments)) {
-            $tags = array_map(
-                fn ($comment) => [sprintf('comment:%d', $comment instanceof WP_Comment ? $comment->comment_ID : $comment)],
-                $comments
-            );
-
-            return Util::flatten($tags);
-        }
-
-        return [];
+        return self::entityTags(
+            $comments,
+            prefix: 'comment',
+            className: WP_Comment::class,
+            idOf: fn (WP_Comment $comment) => $comment->comment_ID,
+        );
     }
 
     /**
@@ -210,6 +203,35 @@ class CoreTags
     }
 
     /**
+     * Build "prefix:name(:suffix)" tags for one or many items given as the
+     * literal 'any' (expanded via $all), a name string, a WP object with a
+     * ->name, or an array of those. Returns [] for unrecognised input.
+     *
+     * @param  string|object|array<string|object>  $items
+     * @param  callable():string[]  $all  resolver for the 'any' keyword
+     * @return string[]
+     */
+    protected static function nameTags($items, string $prefix, callable $all, string $suffix = ''): array
+    {
+        if ($items === 'any') {
+            $items = $all();
+        }
+
+        if (is_string($items) || is_object($items)) {
+            $items = [$items];
+        }
+
+        if (! is_array($items)) {
+            return [];
+        }
+
+        return array_map(
+            fn ($item) => sprintf('%s:%s%s', $prefix, is_object($item) ? $item->name : $item, $suffix),
+            $items
+        );
+    }
+
+    /**
      * Return cache tags for one or many post type archives.
      *
      * @param  string|WP_Post_Type|array<string|WP_Post_Type>  $postTypes
@@ -217,26 +239,11 @@ class CoreTags
      */
     public static function archive($postTypes): array
     {
-        if (is_string($postTypes) && $postTypes === 'any') {
-            $postTypes = self::getCacheablePostTypes();
-        }
-
-        if ($postTypes instanceof WP_Post_Type) {
-            $postTypes = [$postTypes];
-        }
-
-        if (is_string($postTypes)) {
-            $postTypes = [$postTypes];
-        }
-
-        if (is_array($postTypes)) {
-            return array_map(
-                fn ($postType) => sprintf('archive:%s', $postType instanceof WP_Post_Type ? $postType->name : $postType),
-                $postTypes
-            );
-        }
-
-        return [];
+        return self::nameTags(
+            $postTypes,
+            prefix: 'archive',
+            all: [self::class, 'getCacheablePostTypes'],
+        );
     }
 
     /**
@@ -247,26 +254,11 @@ class CoreTags
      */
     public static function taxonomy($taxonomies): array
     {
-        if (is_string($taxonomies) && $taxonomies === 'any') {
-            $taxonomies = self::getCacheableTaxonomies();
-        }
-
-        if ($taxonomies instanceof WP_Taxonomy) {
-            $taxonomies = [$taxonomies];
-        }
-
-        if (is_string($taxonomies)) {
-            $taxonomies = [$taxonomies];
-        }
-
-        if (is_array($taxonomies)) {
-            return array_map(
-                fn ($taxonomy) => sprintf('taxonomy:%s', $taxonomy instanceof WP_Taxonomy ? $taxonomy->name : $taxonomy),
-                $taxonomies
-            );
-        }
-
-        return [];
+        return self::nameTags(
+            $taxonomies,
+            prefix: 'taxonomy',
+            all: [self::class, 'getCacheableTaxonomies'],
+        );
     }
 
     /**
@@ -277,26 +269,12 @@ class CoreTags
      */
     public static function anyTerm($taxonomies): array
     {
-        if (is_string($taxonomies) && $taxonomies === 'any') {
-            $taxonomies = self::getCacheableTaxonomies();
-        }
-
-        if ($taxonomies instanceof WP_Taxonomy) {
-            $taxonomies = [$taxonomies];
-        }
-
-        if (is_string($taxonomies)) {
-            $taxonomies = [$taxonomies];
-        }
-
-        if (is_array($taxonomies)) {
-            return array_map(
-                fn ($taxonomy) => sprintf('taxonomy:%s:any', $taxonomy instanceof WP_Taxonomy ? $taxonomy->name : $taxonomy),
-                $taxonomies
-            );
-        }
-
-        return [];
+        return self::nameTags(
+            $taxonomies,
+            prefix: 'taxonomy',
+            all: [self::class, 'getCacheableTaxonomies'],
+            suffix: ':any',
+        );
     }
 
     /**
@@ -311,26 +289,12 @@ class CoreTags
      */
     public static function anyArchive($postTypes): array
     {
-        if (is_string($postTypes) && $postTypes === 'any') {
-            $postTypes = self::getCacheablePostTypes();
-        }
-
-        if ($postTypes instanceof WP_Post_Type) {
-            $postTypes = [$postTypes];
-        }
-
-        if (is_string($postTypes)) {
-            $postTypes = [$postTypes];
-        }
-
-        if (is_array($postTypes)) {
-            return array_map(
-                fn ($postType) => sprintf('archive:%s:any', $postType instanceof WP_Post_Type ? $postType->name : $postType),
-                $postTypes
-            );
-        }
-
-        return [];
+        return self::nameTags(
+            $postTypes,
+            prefix: 'archive',
+            all: [self::class, 'getCacheablePostTypes'],
+            suffix: ':any',
+        );
     }
 
     /**
@@ -341,26 +305,11 @@ class CoreTags
      */
     public static function anyUser($roles): array
     {
-        if (is_string($roles) && $roles === 'any') {
-            $roles = self::getCacheableUserRoles();
-        }
-
-        if ($roles instanceof WP_Role) {
-            $roles = [$roles];
-        }
-
-        if (is_string($roles)) {
-            $roles = [$roles];
-        }
-
-        if (is_array($roles)) {
-            return array_map(
-                fn ($role) => sprintf('role:%s', $role instanceof WP_Role ? $role->name : $role),
-                $roles
-            );
-        }
-
-        return [];
+        return self::nameTags(
+            $roles,
+            prefix: 'role',
+            all: [self::class, 'getCacheableUserRoles'],
+        );
     }
 
     public static function isCacheablePostMeta(string $metaKey, int $postId): bool
@@ -412,14 +361,25 @@ class CoreTags
      */
     public static function getCacheablePostTypes(): array
     {
-        // Public types are rendered on the front end; non-builtin types exposed
-        // to REST are content served headlessly (e.g. public=false CPTs). Core's
-        // internal REST types (wp_block, wp_template, …) are _builtin and stay
-        // excluded. Sites tune the set via the filter.
-        return \apply_filters(
-            'cachetags/post_types',
-            \get_post_types(['public' => true]) + \get_post_types(['_builtin' => false, 'show_in_rest' => true])
-        );
+        // Resolved once and re-resolved only when the set of registered post
+        // types changes, so per-row callers (AutoTag) don't repeat the work.
+        static $cache = null;
+        static $signature = null;
+        $current = array_keys($GLOBALS['wp_post_types'] ?? []);
+
+        if ($cache === null || $signature !== $current) {
+            $signature = $current;
+            // Public types are rendered on the front end; non-builtin types
+            // exposed to REST are content served headlessly (e.g. public=false
+            // CPTs). Core's internal REST types (wp_block, …) are _builtin and
+            // stay excluded. Sites tune the set via the filter.
+            $cache = \apply_filters(
+                'cachetags/post_types',
+                \get_post_types(['public' => true]) + \get_post_types(['_builtin' => false, 'show_in_rest' => true])
+            );
+        }
+
+        return $cache;
     }
 
     /**
@@ -429,10 +389,21 @@ class CoreTags
      */
     public static function getCacheableTaxonomies(): array
     {
-        return \apply_filters(
-            'cachetags/taxonomies',
-            \get_taxonomies(['public' => true]) + \get_taxonomies(['_builtin' => false, 'show_in_rest' => true])
-        );
+        // Re-resolved only when the set of registered taxonomies changes (see
+        // getCacheablePostTypes).
+        static $cache = null;
+        static $signature = null;
+        $current = array_keys($GLOBALS['wp_taxonomies'] ?? []);
+
+        if ($cache === null || $signature !== $current) {
+            $signature = $current;
+            $cache = \apply_filters(
+                'cachetags/taxonomies',
+                \get_taxonomies(['public' => true]) + \get_taxonomies(['_builtin' => false, 'show_in_rest' => true])
+            );
+        }
+
+        return $cache;
     }
 
     /**

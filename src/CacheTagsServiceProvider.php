@@ -47,6 +47,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             invalidators: $config->get('cachetags.invalidator', []),
             actions: $config->get('cachetags.action', []),
             nonceCron: $config->get('cachetags.nonce-cron', false),
+            autoDetectActions: $config->get('cachetags.auto-detect-actions', true),
         );
 
         return $bootstrap;

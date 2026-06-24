@@ -2,7 +2,6 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
-use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 
 /**
@@ -31,8 +30,6 @@ use Genero\Sage\CacheTags\Contracts\Action;
  */
 class CacheCustomers implements Action
 {
-    public function __construct(protected CacheTags $cacheTags) {}
-
     public function bind(): void
     {
         // Priority 5: raise before the response vetoes (cart/forms) at the

@@ -32,6 +32,15 @@ class CacheTags
     protected array $purgeTags = [];
 
     /**
+     * Memoized result of get() — the normalize + filter + bound pipeline is run
+     * once per request, not on each of the save() and header consumers. Reset
+     * whenever tags change.
+     *
+     * @var string[]|null
+     */
+    protected ?array $boundedTags = null;
+
+    /**
      * @var Action[]
      */
     protected array $actions = [];
@@ -77,6 +86,8 @@ class CacheTags
             ...$this->cacheTags,
             ...$tags,
         ];
+
+        $this->boundedTags = null;
     }
 
     /**
@@ -86,10 +97,18 @@ class CacheTags
      */
     public function get(): array
     {
+        if ($this->boundedTags !== null) {
+            return $this->boundedTags;
+        }
+
         $tags = Util::normalizeTags($this->cacheTags);
         $tags = apply_filters(self::FILTER_TAGS, $tags);
 
-        return $this->bound($tags);
+        // Re-validate after the filter so a custom tag (e.g. one containing a
+        // newline) can't reach the Cache-Tag header.
+        $tags = Util::normalizeTags($tags);
+
+        return $this->boundedTags = $this->bound($tags);
     }
 
     /**
@@ -116,23 +135,13 @@ class CacheTags
         $coarse = [];
 
         foreach ($tags as $tag) {
-            if (str_starts_with($tag, 'post:')) {
-                $type = get_post_type((int) substr($tag, strlen('post:')));
-                if ($type) {
-                    $coarse = [...$coarse, ...CoreTags::anyArchive($type)];
+            $collapsed = $this->collapse($tag);
 
-                    continue;
-                }
-            } elseif (str_starts_with($tag, 'term:')) {
-                $term = get_term((int) explode(':', $tag)[1]);
-                if ($term instanceof WP_Term) {
-                    $coarse = [...$coarse, ...CoreTags::anyTerm($term->taxonomy)];
-
-                    continue;
-                }
+            if ($collapsed === null) {
+                $kept[] = $tag;
+            } else {
+                $coarse = [...$coarse, ...$collapsed];
             }
-
-            $kept[] = $tag;
         }
 
         // Coarse collapse tags first so they survive the final trim — they keep
@@ -147,6 +156,47 @@ class CacheTags
         }
 
         return $bounded;
+    }
+
+    /**
+     * Collapse a high-cardinality post:/term: tag to its coarse "any" form, or
+     * return null when it can't be collapsed (so the caller keeps it as-is). A
+     * multisite "site:N:" prefix is preserved so the coarse tag still matches
+     * what was stored.
+     *
+     * @return string[]|null
+     */
+    protected function collapse(string $tag): ?array
+    {
+        [$prefix, $inner] = $this->splitSitePrefix($tag);
+
+        if (str_starts_with($inner, 'post:')) {
+            $type = get_post_type((int) substr($inner, strlen('post:')));
+
+            return $type ? $this->prefixed($prefix, CoreTags::anyArchive($type)) : null;
+        }
+
+        if (str_starts_with($inner, 'term:')) {
+            $term = get_term((int) explode(':', $inner)[1]);
+
+            return $term instanceof WP_Term ? $this->prefixed($prefix, CoreTags::anyTerm($term->taxonomy)) : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Split an optional multisite "site:N:" prefix off the front of a tag.
+     *
+     * @return array{0: string, 1: string} [prefix, remainder]
+     */
+    protected function splitSitePrefix(string $tag): array
+    {
+        if (preg_match('/^(site:\d+:)(.*)$/', $tag, $matches)) {
+            return [$matches[1], $matches[2]];
+        }
+
+        return ['', $tag];
     }
 
     /**
@@ -170,6 +220,21 @@ class CacheTags
         }
 
         return $fitted;
+    }
+
+    /**
+     * Re-apply a "site:N:" prefix to a set of (coarse) tags.
+     *
+     * @param  string[]  $tags
+     * @return string[]
+     */
+    protected function prefixed(string $prefix, array $tags): array
+    {
+        if ($prefix === '') {
+            return $tags;
+        }
+
+        return array_map(fn ($tag) => $prefix.$tag, $tags);
     }
 
     /**
@@ -207,6 +272,7 @@ class CacheTags
     {
         $tags = Util::normalizeTags($this->purgeTags);
         $tags = apply_filters(self::FILTER_TAGS, $tags);
+        $tags = Util::normalizeTags($tags);
 
         if (empty($tags)) {
             return true;
@@ -232,6 +298,14 @@ class CacheTags
             $result = $this->store->clear($urls, $tags);
         }
 
+        // Let sites attach logging/metrics, and surface a failure that would
+        // otherwise be swallowed (leaving content stale at the edge).
+        do_action('cachetags/purged', $tags, $urls, $result);
+
+        if (! $result) {
+            $this->logFailure(sprintf('purge failed for %d tag(s): %s', count($tags), implode(' ', array_slice($tags, 0, 20))));
+        }
+
         return $result;
     }
 
@@ -252,7 +326,29 @@ class CacheTags
             $result = $this->store->flush();
         }
 
+        do_action('cachetags/flushed', $result);
+
+        if (! $result) {
+            $this->logFailure('flush failed');
+        }
+
         return $result;
+    }
+
+    protected function logFailure(string $message): void
+    {
+        $message = "[cachetags] {$message}";
+
+        // Prefer a framework logger (Acorn/Laravel) so failures land in the
+        // site's normal log pipeline; surface to the operator under WP-CLI;
+        // otherwise fall back to the PHP error log.
+        if (function_exists('logger')) {
+            logger()->error($message);
+        } elseif (defined('WP_CLI') && WP_CLI && class_exists('WP_CLI')) {
+            \WP_CLI::warning($message);
+        } else {
+            error_log($message);
+        }
     }
 
     /**

@@ -14,6 +14,12 @@ return [
     'invalidator' => [
         SuperCacheInvalidator::class,
     ],
+    // Auto-enable the WooCommerce and Polylang actions when their plugin is
+    // active (WooCommerce keeps cart/checkout/account out of the shared cache;
+    // Polylang adds language-aware purging). Set false to manage the action list
+    // entirely via 'action' below.
+    'auto-detect-actions' => true,
+
     'action' => [
         Core::class,
         DebugComment::class,

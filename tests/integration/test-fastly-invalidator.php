@@ -42,6 +42,22 @@ class TestFastlyInvalidator extends WP_UnitTestCase
         $this->assertStringNotContainsString('example.com', wp_json_encode($body));
     }
 
+    public function test_clear_chunks_surrogate_keys_to_the_256_limit(): void
+    {
+        $tags = array_map(fn ($i) => "post:{$i}", range(1, 600));
+
+        $ok = (new FastlyCacheInvalidator)->clear([], $tags);
+
+        $this->assertTrue($ok);
+
+        $batchSizes = array_map(
+            fn ($request) => count(json_decode($request['args']['body'], true)['surrogate_keys']),
+            $this->requests
+        );
+        // Fastly rejects >256 keys per request, so 600 → 256 + 256 + 88.
+        $this->assertSame([256, 256, 88], $batchSizes);
+    }
+
     public function test_clear_returns_false_on_a_non_200_response(): void
     {
         remove_filter('pre_http_request', [$this, 'capture'], 10);

@@ -13,6 +13,13 @@ class FastlyCacheInvalidator implements Invalidator
 {
     const FASTLY_BASE_URL = 'https://api.fastly.com/service/';
 
+    /**
+     * Fastly's bulk surrogate-key purge accepts at most 256 keys per request;
+     * a larger payload is rejected (and the purge silently fails). Bulk edits or
+     * a multisite flush can exceed this, so keys are chunked.
+     */
+    const MAX_KEYS_PER_PURGE = 256;
+
     protected ?string $serviceId;
 
     protected ?string $apiKey;
@@ -25,11 +32,17 @@ class FastlyCacheInvalidator implements Invalidator
 
     public function clear(array $urls, array $tags): bool
     {
-        $response = $this->apiCall('/purge/', [
-            'surrogate_keys' => $tags,
-        ]);
+        $ok = true;
 
-        return ! is_wp_error($response);
+        foreach (array_chunk($tags, self::MAX_KEYS_PER_PURGE) as $chunk) {
+            $response = $this->apiCall('/purge/', [
+                'surrogate_keys' => array_values($chunk),
+            ]);
+
+            $ok = ! is_wp_error($response) && $ok;
+        }
+
+        return $ok;
     }
 
     public function flush(): bool

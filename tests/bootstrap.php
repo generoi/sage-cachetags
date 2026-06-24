@@ -37,10 +37,14 @@ tests_add_filter('muplugins_loaded', function (): void {
         }
     }
 
+    // WooCommerce/Polylang are loaded above so their own tests can run, but the
+    // global instance must stay limited to the listed actions — auto-detection
+    // would otherwise hook Polylang's archive suffixing for the whole suite.
     (new Bootstrap)
         ->store(WordpressDbStore::class)
         ->httpHeader('Cache-Tag')
         ->actions([Core::class, HttpHeader::class, RestApi::class])
+        ->autoDetectActions(false)
         ->bootstrap();
 
     // The activation hook does not run in the test environment, so create the

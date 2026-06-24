@@ -536,17 +536,21 @@ class Core implements Action
 
     public function onUserUpdate(int $userId): void
     {
+        $user = get_userdata($userId);
+
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
-            ...CoreTags::anyUser(get_userdata($userId)->roles),
+            ...($user ? CoreTags::anyUser($user->roles) : []),
         ]);
     }
 
     public function onUserCreate(int $userId): void
     {
+        $user = get_userdata($userId);
+
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
-            ...CoreTags::anyUser(get_userdata($userId)->roles),
+            ...($user ? CoreTags::anyUser($user->roles) : []),
         ]);
     }
 

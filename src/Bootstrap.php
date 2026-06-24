@@ -51,6 +51,7 @@ class Bootstrap
         /** @var Action[] */
         protected array $actions = [Core::class],
         protected bool $nonceCron = false,
+        protected bool $autoDetectActions = true,
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -123,6 +124,17 @@ class Bootstrap
     }
 
     /**
+     * Auto-enable integration actions (WooCommerce, Polylang) when their plugin
+     * is active. On by default; opt out for full manual control of the action list.
+     */
+    public function autoDetectActions(bool $enable = true): static
+    {
+        $this->autoDetectActions = $enable;
+
+        return $this;
+    }
+
+    /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
@@ -187,19 +199,61 @@ class Bootstrap
 
     protected function bindActions(): void
     {
-        // Bind all actions
         $actions = array_map(
             fn ($action) => match (true) {
                 is_string($action) => new $action($this->cacheTags),
                 $action instanceof Action => $action,
                 default => throw new \InvalidArgumentException('Action must implement '.Action::class),
             },
-            array_filter($this->actions)
+            $this->withDetectedActions(array_filter($this->actions))
         );
 
         foreach ($actions as $action) {
             $this->cacheTags->bindAction($action);
         }
+    }
+
+    /**
+     * Auto-enable integration actions whose plugin is active, so their safety
+     * vetoes (WooCommerce keeps cart/checkout/account out of the shared cache)
+     * and language-aware purging (Polylang) aren't silently missing when an
+     * operator forgets to list them. Toggle with autoDetectActions().
+     *
+     * @param  array<string|Action>  $actions
+     * @return array<string|Action>
+     */
+    protected function withDetectedActions(array $actions): array
+    {
+        if (! $this->autoDetectActions) {
+            return $actions;
+        }
+
+        $detected = array_filter([
+            Actions\WooCommerce::class => class_exists('WooCommerce'),
+            Actions\Polylang::class => defined('POLYLANG_VERSION'),
+        ]);
+
+        foreach (array_keys($detected) as $action) {
+            if (! $this->hasActionClass($actions, $action)) {
+                $actions[] = $action;
+            }
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @param  array<string|Action>  $actions
+     */
+    protected function hasActionClass(array $actions, string $class): bool
+    {
+        foreach ($actions as $action) {
+            if ($action === $class || $action instanceof $class) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
