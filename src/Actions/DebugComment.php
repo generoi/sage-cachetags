@@ -32,8 +32,6 @@ class DebugComment implements Action
                     case 'term':
                         $term = get_term($id);
 
-                        // esc_html so a post title / author / term name containing
-                        // "-->" can't break out of the HTML comment (stored XSS).
                         return $term instanceof \WP_Term
                             ? sprintf('[%s] %s (%s)', $tag, esc_html($term->name), esc_html($term->taxonomy))
                             : sprintf('[%s]', $tag);
