@@ -30,8 +30,8 @@ register_activation_hook(__FILE__, function (): void {
         // number => 0: get_sites() defaults to 100, which would leave every
         // subsite past the first 100 without a table. fields => ids keeps this
         // from loading every WP_Site object into memory on a large network.
-        // (The store also self-provisions a missing table on first write, so a
-        // timeout here no longer means permanent staleness.)
+        // On a very large network where activation can't provision everything
+        // in one request, run `wp cachetags database` to scaffold the rest.
         foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $blogId) {
             switch_to_blog($blogId);
             $activator->run();
