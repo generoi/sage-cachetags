@@ -13,9 +13,9 @@ class FastlyCacheInvalidator implements Invalidator
 {
     const FASTLY_BASE_URL = 'https://api.fastly.com/service/';
 
-    protected string $serviceId;
+    protected ?string $serviceId;
 
-    protected string $apiKey;
+    protected ?string $apiKey;
 
     public function __construct()
     {

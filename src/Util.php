@@ -162,15 +162,15 @@ class Util
     /**
      * Get environment variable, using any env() function in scope if available, otherwise getenv().
      */
-    public static function env(string $key): string|false
+    public static function env(string $key): ?string
     {
-        // Check for env() in global namespace
-        if (function_exists('env') && is_callable('env')) {
-            return env($key);
-        }
+        // Prefer a framework env() (e.g. Acorn/Illuminate, which respects .env)
+        // and fall back to getenv(). Both can return non-strings for unset/cast
+        // values (Illuminate null/bool/int, getenv false); normalize those to
+        // null so an unset key is consistently null.
+        $value = function_exists('env') && is_callable('env') ? env($key) : getenv($key);
 
-        // Fallback to getenv()
-        return getenv($key);
+        return is_string($value) ? $value : null;
     }
 
     /**
