@@ -148,21 +148,22 @@ class CoreTags
      *
      * @return string[]
      */
-    public static function menu(int|string|null $menuId = null): array
+    public static function menu($menu = null): array
     {
-        if (is_string($menuId)) {
-            $menuId = get_term_by('slug', $menuId, 'nav_menu')->term_id ?? null;
-
-            if (! $menuId) {
-                throw new Exception;
-            }
+        if ($menu === null || $menu === '') {
+            return [];
         }
 
-        if (is_numeric($menuId)) {
-            return ["menu:$menuId"];
+        // wp_get_nav_menu_object resolves an id, slug, name, or menu object — all
+        // the forms wp_nav_menu()'s `menu` arg accepts. The old code only handled
+        // slugs, so a menu selected by name or object fataled. A non-empty value
+        // that still can't resolve is a real error (typo / deleted menu).
+        $object = wp_get_nav_menu_object($menu);
+        if (! $object instanceof WP_Term) {
+            throw new Exception('CoreTags::menu received an unknown menu: '.(is_scalar($menu) ? $menu : get_debug_type($menu)));
         }
 
-        return [];
+        return ["menu:{$object->term_id}"];
     }
 
     /**
@@ -189,7 +190,8 @@ class CoreTags
         if ($object instanceof WP_Post_Type) {
             return self::archive($object->name);
         }
-        throw new Exception;
+
+        throw new Exception('CoreTags::queriedObject received an unexpected object: '.get_debug_type($object));
     }
 
     /**

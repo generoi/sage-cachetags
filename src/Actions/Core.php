@@ -193,7 +193,7 @@ class Core implements Action
                 $tags[] = CoreTags::archive('comment');
                 break;
             case 'core/navigation-link':
-                if ($attributes['kind'] === 'post-type') {
+                if (($attributes['kind'] ?? '') === 'post-type' && ! empty($attributes['id'])) {
                     $tags[] = CoreTags::posts($attributes['id']);
                 }
                 break;

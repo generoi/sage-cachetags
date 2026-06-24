@@ -167,13 +167,18 @@ class TestCoreTags extends WP_UnitTestCase
         $this->assertSame([], CoreTags::menu(null));
     }
 
-    public function test_menu_resolves_a_slug_and_throws_for_an_unknown_one(): void
+    public function test_menu_resolves_by_id_slug_and_name(): void
     {
-        wp_create_nav_menu('Primary');
-        $expectedId = get_term_by('slug', 'primary', 'nav_menu')->term_id;
+        $menuId = wp_create_nav_menu('Primary');
 
-        $this->assertSame(["menu:{$expectedId}"], CoreTags::menu('primary'));
+        // wp_nav_menu()'s `menu` arg can be an id, slug, name, or object.
+        $this->assertSame(["menu:{$menuId}"], CoreTags::menu($menuId));
+        $this->assertSame(["menu:{$menuId}"], CoreTags::menu('primary'));
+        $this->assertSame(["menu:{$menuId}"], CoreTags::menu('Primary'));
+    }
 
+    public function test_menu_throws_for_an_unknown_menu(): void
+    {
         $this->expectException(Exception::class);
         CoreTags::menu('no-such-menu');
     }

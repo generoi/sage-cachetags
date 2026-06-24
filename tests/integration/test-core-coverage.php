@@ -87,6 +87,15 @@ class TestCoreCoverage extends WP_UnitTestCase
         ];
     }
 
+    public function test_navigation_link_without_attributes_is_a_safe_noop(): void
+    {
+        // No 'kind'/'id' — must not raise an undefined-index warning (which
+        // PHPUnit turns into an exception) and must add no post tag.
+        $tags = $this->blockTags('core/navigation-link', []);
+
+        $this->assertSame([], array_filter($tags, fn ($tag) => str_starts_with($tag, 'post:')));
+    }
+
     public function test_post_author_block_uses_the_context_post_author(): void
     {
         $userId = self::factory()->user->create();
