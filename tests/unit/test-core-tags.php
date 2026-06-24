@@ -120,4 +120,19 @@ class TestCoreTags extends WP_UnitTestCase
         $this->assertTrue(CoreTags::isCacheablePostMeta('subtitle', $postId));
         $this->assertFalse(CoreTags::isCacheablePostMeta('_thumbnail_id', $postId));
     }
+
+    public function test_option_formats_option_tags(): void
+    {
+        $this->assertSame(['option:blogname'], CoreTags::option('blogname'));
+        $this->assertSame(['option:blogname', 'option:foo'], CoreTags::option(['blogname', 'foo']));
+    }
+
+    public function test_cacheable_options_default_and_filter(): void
+    {
+        $this->assertContains('blogname', CoreTags::getCacheableOptions());
+
+        add_filter('cachetags/options', fn ($options) => [...$options, 'my_option']);
+
+        $this->assertContains('my_option', CoreTags::getCacheableOptions());
+    }
 }
