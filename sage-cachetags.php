@@ -28,9 +28,12 @@ register_activation_hook(__FILE__, function (): void {
 
     if (is_multisite()) {
         // number => 0: get_sites() defaults to 100, which would leave every
-        // subsite past the first 100 without a table (silent stale forever).
-        foreach (get_sites(['number' => 0]) as $site) {
-            switch_to_blog($site->blog_id);
+        // subsite past the first 100 without a table. fields => ids keeps this
+        // from loading every WP_Site object into memory on a large network.
+        // (The store also self-provisions a missing table on first write, so a
+        // timeout here no longer means permanent staleness.)
+        foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $blogId) {
+            switch_to_blog($blogId);
             $activator->run();
             restore_current_blog();
         }

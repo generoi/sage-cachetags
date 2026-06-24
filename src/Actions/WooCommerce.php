@@ -47,24 +47,31 @@ class WooCommerce implements Action
      * Purge a product (and the listings that show it) on a price/stock/sale
      * change. Accepts a product id (most WC product actions pass one first).
      */
+    /**
+     * A general save or a stock-status flip (in↔out) changes the listing card,
+     * so purge the product page AND the listings.
+     */
     public function onProductChange($productId): void
     {
-        $this->clearProduct((int) $productId);
+        $this->clearProduct((int) $productId, true);
     }
 
     /**
-     * woocommerce_{product,variation}_set_stock pass the product object.
+     * woocommerce_{product,variation}_set_stock fires on every stock-quantity
+     * change — e.g. each order. The product page may show the exact count, but
+     * the listing card shows only in/out status (handled by the *_set_stock_status
+     * hooks), so don't purge the whole archive on every decrement.
      *
      * @param  mixed  $product  WC_Product
      */
     public function onProductObjectChange($product): void
     {
         if (is_object($product) && method_exists($product, 'get_id')) {
-            $this->clearProduct((int) $product->get_id());
+            $this->clearProduct((int) $product->get_id(), false);
         }
     }
 
-    protected function clearProduct(int $productId): void
+    protected function clearProduct(int $productId, bool $includeListings): void
     {
         if (! $productId) {
             return;
@@ -75,12 +82,18 @@ class WooCommerce implements Action
         $parentId = wp_get_post_parent_id($productId);
         $productIds = $parentId ? [$productId, $parentId] : [$productId];
 
-        $this->cacheTags->clear([
-            ...CoreTags::posts($productIds),
-            // Shop/category/related listings show the product card (price/stock).
-            ...CoreTags::archive('product'),
-            ...CoreTags::anyArchive('product'),
-        ]);
+        $tags = CoreTags::posts($productIds);
+
+        if ($includeListings) {
+            // Shop/category/related listings show the product card (price/status).
+            $tags = [
+                ...$tags,
+                ...CoreTags::archive('product'),
+                ...CoreTags::anyArchive('product'),
+            ];
+        }
+
+        $this->cacheTags->clear($tags);
     }
 
     public function markAuthForm(): void
