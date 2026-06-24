@@ -21,6 +21,13 @@ require_once dirname(__DIR__).'/vendor/autoload.php';
 require_once getenv('WP_PHPUNIT__DIR').'/includes/functions.php';
 
 tests_add_filter('muplugins_loaded', function (): void {
+    // wp-phpunit uses a fresh DB where no plugins are "activated"; require any
+    // real plugins we integration-test so they initialize during WP boot.
+    $woocommerce = dirname(__DIR__, 2).'/woocommerce/woocommerce.php';
+    if (file_exists($woocommerce)) {
+        require_once $woocommerce;
+    }
+
     (new Bootstrap)
         ->store(WordpressDbStore::class)
         ->httpHeader('Cache-Tag')
