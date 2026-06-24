@@ -20,12 +20,21 @@ require_once dirname(__DIR__).'/vendor/autoload.php';
 // Give access to tests_add_filter().
 require_once getenv('WP_PHPUNIT__DIR').'/includes/functions.php';
 
+// Polylang needs PLL_ADMIN to initialize on a fresh DB without front-end query
+// filtering (which would interfere with the rest of the suite).
+if (! defined('PLL_ADMIN')) {
+    define('PLL_ADMIN', true);
+}
+
 tests_add_filter('muplugins_loaded', function (): void {
     // wp-phpunit uses a fresh DB where no plugins are "activated"; require any
-    // real plugins we integration-test so they initialize during WP boot.
-    $woocommerce = dirname(__DIR__, 2).'/woocommerce/woocommerce.php';
-    if (file_exists($woocommerce)) {
-        require_once $woocommerce;
+    // real plugins we integration-test so they initialize during WP boot. Glob
+    // the path since wp-env names the dir after the zip (e.g. polylang vs
+    // polylang.latest-stable).
+    foreach (['woocommerce*/woocommerce.php', 'polylang*/polylang.php'] as $pattern) {
+        foreach (glob(dirname(__DIR__, 2).'/'.$pattern) as $path) {
+            require_once $path;
+        }
     }
 
     (new Bootstrap)
@@ -49,3 +58,18 @@ tests_add_filter('muplugins_loaded', function (): void {
 
 // Start up the WP testing environment.
 require getenv('WP_PHPUNIT__DIR').'/includes/bootstrap.php';
+
+// Configure Polylang languages in the fresh test DB so pll_* works.
+if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
+    $model = PLL()->model;
+    foreach ([
+        ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'rtl' => 0, 'term_group' => 0, 'flag' => 'us'],
+        ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'rtl' => 0, 'term_group' => 1, 'flag' => 'fi'],
+    ] as $language) {
+        if (! $model->get_language($language['slug'])) {
+            $model->add_language($language);
+        }
+    }
+    $model->update_default_lang('en');
+    $model->clean_languages_cache();
+}
