@@ -1,9 +1,11 @@
 <?php
 
 use Genero\Sage\CacheTags\Invalidators\FastlyCacheInvalidator;
+use Genero\Sage\CacheTags\Invalidators\FastlySoftCacheInvalidator;
 
 /**
  * @covers \Genero\Sage\CacheTags\Invalidators\FastlyCacheInvalidator
+ * @covers \Genero\Sage\CacheTags\Invalidators\FastlySoftCacheInvalidator
  */
 class TestFastlyInvalidator extends WP_UnitTestCase
 {
@@ -46,5 +48,13 @@ class TestFastlyInvalidator extends WP_UnitTestCase
         add_filter('pre_http_request', fn () => ['response' => ['code' => 403], 'body' => '{"msg":"nope"}']);
 
         $this->assertFalse((new FastlyCacheInvalidator)->clear(['/a/'], ['post:1']));
+    }
+
+    public function test_soft_invalidator_sends_the_soft_purge_header(): void
+    {
+        (new FastlySoftCacheInvalidator)->clear(['/a/'], ['post:1']);
+
+        $this->assertCount(1, $this->requests);
+        $this->assertSame('1', $this->requests[0]['args']['headers']['fastly-soft-purge'] ?? null);
     }
 }

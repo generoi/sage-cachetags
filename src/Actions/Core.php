@@ -299,7 +299,7 @@ class Core implements Action
         if ($isStatusChanged && ($newStatus === 'publish' || $oldStatus === 'publish')) {
             $taxonomies = array_intersect(
                 CoreTags::getCacheableTaxonomies(),
-                get_post_taxonomies()
+                get_post_taxonomies($post)
             );
 
             // @TODO: Could potentially compare new to old terms and only clear those.
