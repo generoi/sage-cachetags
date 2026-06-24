@@ -210,6 +210,35 @@ class TestCacheTagsCore extends WP_UnitTestCase
         $this->assertEmpty($store->saved, 'admin urls are not stored');
     }
 
+    // Regression for the herrfors alert-banner bug: unpublishing several posts
+    // in one language in sequence. The first purge clears the banner page's
+    // stored row for archive:{type}:{lang}; the next purge then finds no URL,
+    // but the tag-based (Fastly) invalidator MUST still purge by Surrogate-Key —
+    // otherwise that one language's banner stays permanently stuck.
+    public function test_repeated_purges_of_a_tag_keep_reaching_the_tag_invalidator(): void
+    {
+        $store = new RecordingStore;
+        $store->urlsFor = ['https://example.com/'];
+        $invalidator = new RecordingInvalidator;
+        $cacheTags = $this->make($store, [$invalidator]);
+
+        // First unpublish: the banner URL is found, purged, and its row removed.
+        $cacheTags->clear(['archive:alert:fi']);
+        $this->assertTrue($cacheTags->purgeQueued());
+
+        // Second unpublish in the same language: the store no longer has the URL.
+        $store->urlsFor = [];
+        $invalidator->clearedWith = [];
+        $cacheTags->clear(['archive:alert:fi']);
+        $this->assertTrue($cacheTags->purgeQueued());
+
+        $this->assertSame(
+            [[[], ['archive:alert:fi']]],
+            $invalidator->clearedWith,
+            'Fastly still purges by tag when the store has no URL for it'
+        );
+    }
+
     public function test_bind_action_tracks_it_for_has_action(): void
     {
         $cacheTags = $this->make(new RecordingStore, []);
