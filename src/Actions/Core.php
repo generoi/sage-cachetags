@@ -284,9 +284,13 @@ class Core implements Action
      */
     public function onPostStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
     {
-        if (! CoreTags::isCacheablePostType($post->post_type)) {
-            $this->clearEmbeddedPost($post);
+        if ($this->isEmbeddedPostType($post->post_type)) {
+            $this->cacheTags->clear(CoreTags::posts($post->ID));
 
+            return;
+        }
+
+        if (! CoreTags::isCacheablePostType($post->post_type)) {
             return;
         }
 
@@ -326,9 +330,14 @@ class Core implements Action
         if (! $post) {
             return;
         }
-        if (! CoreTags::isCacheablePostType($post->post_type)) {
-            $this->clearEmbeddedPost($post);
 
+        if ($this->isEmbeddedPostType($post->post_type)) {
+            $this->cacheTags->clear(CoreTags::posts($post->ID));
+
+            return;
+        }
+
+        if (! CoreTags::isCacheablePostType($post->post_type)) {
             return;
         }
 
@@ -347,16 +356,14 @@ class Core implements Action
 
     /**
      * Reusable blocks (`wp_block`) and block-theme navigation menus
-     * (`wp_navigation`) aren't cacheable post types, but the pages that embed
-     * them are tagged `post:{id}` via the block `ref` attribute — so editing or
-     * deleting one must still purge that id. (The normal transition/delete
-     * handlers skip them because they aren't a public post type.)
+     * (`wp_navigation`) are embedded into other pages by reference (tagged
+     * `post:{id}` there via the block `ref` attribute) rather than rendered as
+     * their own page. They aren't a cacheable post type, but a change to one
+     * must still purge that `post:{id}`.
      */
-    protected function clearEmbeddedPost(WP_Post $post): void
+    protected function isEmbeddedPostType(string $postType): bool
     {
-        if (in_array($post->post_type, ['wp_block', 'wp_navigation'], true)) {
-            $this->cacheTags->clear(CoreTags::posts($post->ID));
-        }
+        return in_array($postType, ['wp_block', 'wp_navigation'], true);
     }
 
     /**
@@ -368,14 +375,20 @@ class Core implements Action
             return;
         }
 
-        // Resolve via term_taxonomy_id, not $terms: $terms can be slugs/names
-        // (which CoreTags would mis-format as term:0), and the REMOVED terms
-        // ($oldTaxonomyIds) must be purged too so a reassigned post's old term
-        // archive isn't left stale.
-        $termIds = array_filter(array_map(
-            fn ($taxonomyId) => $this->termIdFromTaxonomyId((int) $taxonomyId),
-            array_unique([...$taxonomyIds, ...$oldTaxonomyIds])
-        ));
+        // Resolve term_taxonomy_ids → term_ids in a single query: $terms can be
+        // slugs/names (which CoreTags would mis-format as term:0), and the
+        // REMOVED terms ($oldTaxonomyIds) must be purged too so a reassigned
+        // post's old term archive isn't left stale.
+        $taxonomyIds = array_unique(array_map('intval', [...$taxonomyIds, ...$oldTaxonomyIds]));
+        $termIds = $taxonomyIds ? get_terms([
+            'taxonomy' => $taxonomy,
+            'term_taxonomy_id' => $taxonomyIds,
+            'hide_empty' => false,
+            'fields' => 'ids',
+        ]) : [];
+        if (! is_array($termIds)) {
+            $termIds = [];
+        }
 
         // Clear the term pages but not the regular term tags since values
         // haven't changed.
@@ -392,13 +405,6 @@ class Core implements Action
         }
 
         $this->cacheTags->clear($cacheTags);
-    }
-
-    protected function termIdFromTaxonomyId(int $taxonomyId): ?int
-    {
-        $term = get_term_by('term_taxonomy_id', $taxonomyId);
-
-        return $term instanceof WP_Term ? (int) $term->term_id : null;
     }
 
     /**

@@ -57,11 +57,14 @@ class HttpHeader implements Action
      */
     public function restPostDispatch($response, $server = null, ?WP_REST_Request $request = null)
     {
+        // Gate exactly as Bootstrap::saveCacheTagsRest does, so a Cache-Tag
+        // header is never emitted for a response whose URL we don't also store —
+        // that desync would cache a page at the edge that no purge could clear.
         if (! $response instanceof WP_REST_Response) {
             return $response;
         }
 
-        if ($request && ! Util::isCacheableRestRequest($request)) {
+        if (! $request instanceof WP_REST_Request || ! Util::isCacheableRestRequest($request)) {
             return $response;
         }
 
