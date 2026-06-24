@@ -19,6 +19,11 @@ return [
         DebugComment::class,
         Gravityform::class,
 
+        // WooCommerce and Polylang are auto-enabled when their plugin is active
+        // (WooCommerce keeps cart/checkout/account out of the shared cache;
+        // Polylang adds language-aware purging). List them here to force them on,
+        // or disable detection with the cachetags/auto-detect-actions filter.
+
         // Tag REST API read responses for headless/decoupled setups. Keep Core
         // enabled alongside it so block-derived tags are collected too.
         // \Genero\Sage\CacheTags\Actions\RestApi::class,

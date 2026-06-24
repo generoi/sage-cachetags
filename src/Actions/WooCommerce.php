@@ -2,21 +2,17 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
-use Genero\Sage\CacheTags\CacheTags;
-use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\WooCommerceTags;
 use WP_Block;
 
-class WooCommerce implements Action
+class WooCommerce extends AbstractAction
 {
     /**
      * Set when a login/register/lost-password form renders on the page (these
      * carry per-session nonces, so the page must not be publicly cached).
      */
     protected bool $hasAuthForm = false;
-
-    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {

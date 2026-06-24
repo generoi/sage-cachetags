@@ -28,15 +28,13 @@ use WP_User;
  * It is complementary to Core, not a replacement: block-derived tags are still
  * collected via Core's render_block hook when content.rendered is generated.
  */
-class RestApi implements Action
+class RestApi extends AbstractAction
 {
     const FILTER_RELATED_TAGS = 'cachetags/rest-related-tags';
 
     const FILTER_CUSTOM_ROUTE_TAGS = 'cachetags/rest-tags';
 
     const SEARCH_ROUTE = '/wp/v2/search';
-
-    public function __construct(protected CacheTags $cacheTags) {}
 
     /**
      * Memoized cacheable taxonomies per post type, for the current request.

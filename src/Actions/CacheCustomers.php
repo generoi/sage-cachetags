@@ -2,7 +2,6 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
-use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 
 /**
@@ -29,10 +28,8 @@ use Genero\Sage\CacheTags\Contracts\Action;
  * Enable it alongside Core (and WooCommerce, which keeps cart/checkout/account
  * out of the cache).
  */
-class CacheCustomers implements Action
+class CacheCustomers extends AbstractAction
 {
-    public function __construct(protected CacheTags $cacheTags) {}
-
     public function bind(): void
     {
         // Priority 5: raise before the response vetoes (cart/forms) at the

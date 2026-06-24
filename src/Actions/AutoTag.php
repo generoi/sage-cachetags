@@ -3,7 +3,6 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
-use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Post;
 use WP_Query;
@@ -24,14 +23,12 @@ use WP_Term;
  * run the query once ourselves (guarded against re-entry) and return its rows to
  * short-circuit, so the query still executes exactly once.
  */
-class AutoTag implements Action
+class AutoTag extends AbstractAction
 {
     const FILTER_EXCLUDED_ARCHIVE_TYPES = 'cachetags/autotag-excluded-archive-types';
 
     /** Guards against re-entry while we run the query inside its own pre-query filter. */
     protected bool $running = false;
-
-    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {

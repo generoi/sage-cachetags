@@ -2,14 +2,10 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
-use Genero\Sage\CacheTags\CacheTags;
-use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Util;
 
-class DebugComment implements Action
+class DebugComment extends AbstractAction
 {
-    public function __construct(protected CacheTags $cacheTags) {}
-
     public function bind(): void
     {
         if ($this->cacheTags->debug) {

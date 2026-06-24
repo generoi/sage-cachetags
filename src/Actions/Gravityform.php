@@ -2,11 +2,9 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
-use Genero\Sage\CacheTags\CacheTags;
-use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\GravityformTags;
 
-class Gravityform implements Action
+class Gravityform extends AbstractAction
 {
     /**
      * Field parameter names that prepopulate dynamically from the query string,
@@ -15,8 +13,6 @@ class Gravityform implements Action
      * @var string[]
      */
     protected array $prepopulateParams = [];
-
-    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {

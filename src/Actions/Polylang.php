@@ -3,15 +3,12 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
-use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\PolylangTags;
 use WP_Post;
 
-class Polylang implements Action
+class Polylang extends AbstractAction
 {
-    public function __construct(protected CacheTags $cacheTags) {}
-
     public function bind(): void
     {
         if (did_action('pll_init')) {

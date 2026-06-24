@@ -2,8 +2,6 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
-use Genero\Sage\CacheTags\CacheTags;
-use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Block;
 use WP_Comment;
@@ -11,10 +9,8 @@ use WP_Post;
 use WP_Term;
 use WP_User;
 
-class Core implements Action
+class Core extends AbstractAction
 {
-    public function __construct(protected CacheTags $cacheTags) {}
-
     public function bind(): void
     {
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
@@ -207,6 +203,10 @@ class Core implements Action
                 }
                 break;
         }
+
+        // Let sites map their own blocks to tags (a custom block wrapping a
+        // WP_Query, an ACF block referencing a post, …) without enabling AutoTag.
+        $tags = apply_filters('cachetags/block-tags', $tags, $block, $instance);
 
         $this->cacheTags->add($tags);
 
@@ -536,17 +536,21 @@ class Core implements Action
 
     public function onUserUpdate(int $userId): void
     {
+        $user = get_userdata($userId);
+
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
-            ...CoreTags::anyUser(get_userdata($userId)->roles),
+            ...($user ? CoreTags::anyUser($user->roles) : []),
         ]);
     }
 
     public function onUserCreate(int $userId): void
     {
+        $user = get_userdata($userId);
+
         $this->cacheTags->clear([
             ...CoreTags::users($userId),
-            ...CoreTags::anyUser(get_userdata($userId)->roles),
+            ...($user ? CoreTags::anyUser($user->roles) : []),
         ]);
     }
 

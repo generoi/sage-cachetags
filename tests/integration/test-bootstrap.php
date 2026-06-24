@@ -1,5 +1,8 @@
 <?php
 
+use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Actions\Polylang;
+use Genero\Sage\CacheTags\Actions\WooCommerce;
 use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Store;
@@ -183,5 +186,41 @@ class TestBootstrap extends WP_UnitTestCase
 
         $this->assertTrue($cacheTags->debug);
         $this->assertSame('Surrogate-Key', $cacheTags->httpHeader);
+    }
+
+    // WooCommerce + Polylang are loaded in the test env, so with detection on
+    // they are auto-appended (the safety footgun fix). Priority 99 overrides the
+    // suite-wide __return_false set in tests/bootstrap.php.
+    public function test_auto_enables_active_integration_plugins(): void
+    {
+        add_filter('cachetags/auto-detect-actions', '__return_true', 99);
+
+        $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
+        $withDetected->setAccessible(true);
+        $result = $withDetected->invoke(new Bootstrap, [Core::class]);
+
+        $this->assertContains(WooCommerce::class, $result);
+        $this->assertContains(Polylang::class, $result);
+    }
+
+    public function test_auto_detect_actions_is_disabled_by_filter(): void
+    {
+        add_filter('cachetags/auto-detect-actions', '__return_false', 99);
+
+        $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
+        $withDetected->setAccessible(true);
+
+        $this->assertSame([Core::class], $withDetected->invoke(new Bootstrap, [Core::class]));
+    }
+
+    public function test_a_detected_action_is_not_duplicated_when_already_listed(): void
+    {
+        add_filter('cachetags/auto-detect-actions', '__return_true', 99);
+
+        $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
+        $withDetected->setAccessible(true);
+        $result = $withDetected->invoke(new Bootstrap, [WooCommerce::class]);
+
+        $this->assertSame(1, count(array_filter($result, fn ($action) => $action === WooCommerce::class)));
     }
 }

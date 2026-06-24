@@ -104,6 +104,10 @@ class CacheTags
         $tags = Util::normalizeTags($this->cacheTags);
         $tags = apply_filters(self::FILTER_TAGS, $tags);
 
+        // Re-validate after the filter so a custom tag (e.g. one containing a
+        // newline) can't reach the Cache-Tag header.
+        $tags = Util::normalizeTags($tags);
+
         return $this->boundedTags = $this->bound($tags);
     }
 
@@ -247,6 +251,7 @@ class CacheTags
     {
         $tags = Util::normalizeTags($this->purgeTags);
         $tags = apply_filters(self::FILTER_TAGS, $tags);
+        $tags = Util::normalizeTags($tags);
 
         if (empty($tags)) {
             return true;

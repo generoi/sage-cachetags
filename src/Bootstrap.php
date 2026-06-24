@@ -187,19 +187,61 @@ class Bootstrap
 
     protected function bindActions(): void
     {
-        // Bind all actions
         $actions = array_map(
             fn ($action) => match (true) {
                 is_string($action) => new $action($this->cacheTags),
                 $action instanceof Action => $action,
                 default => throw new \InvalidArgumentException('Action must implement '.Action::class),
             },
-            array_filter($this->actions)
+            $this->withDetectedActions(array_filter($this->actions))
         );
 
         foreach ($actions as $action) {
             $this->cacheTags->bindAction($action);
         }
+    }
+
+    /**
+     * Auto-enable integration actions whose plugin is active, so their safety
+     * vetoes (WooCommerce keeps cart/checkout/account out of the shared cache)
+     * and language-aware purging (Polylang) aren't silently missing when an
+     * operator forgets to list them. Disable via the filter for manual control.
+     *
+     * @param  array<string|Action>  $actions
+     * @return array<string|Action>
+     */
+    protected function withDetectedActions(array $actions): array
+    {
+        if (! apply_filters('cachetags/auto-detect-actions', true)) {
+            return $actions;
+        }
+
+        $detected = array_filter([
+            Actions\WooCommerce::class => class_exists('WooCommerce'),
+            Actions\Polylang::class => defined('POLYLANG_VERSION'),
+        ]);
+
+        foreach (array_keys($detected) as $action) {
+            if (! $this->hasActionClass($actions, $action)) {
+                $actions[] = $action;
+            }
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @param  array<string|Action>  $actions
+     */
+    protected function hasActionClass(array $actions, string $class): bool
+    {
+        foreach ($actions as $action) {
+            if ($action === $class || $action instanceof $class) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -59,6 +59,20 @@ class TestCacheTags extends WP_UnitTestCase
         $this->assertContains('taxonomy:category:any', $cacheTags->get());
     }
 
+    // A custom FILTER_TAGS filter must not be able to push a header-unsafe tag
+    // (control chars) through to the Cache-Tag header.
+    public function test_get_revalidates_filtered_tags_for_header_safety(): void
+    {
+        $cacheTags = $this->resetTags();
+        $cacheTags->add(['post:1']);
+        add_filter('cachetags/filter-tags', fn ($tags) => [...$tags, "evil\r\nX-Injected: 1"]);
+
+        $tags = $cacheTags->get();
+
+        $this->assertContains('post:1', $tags);
+        $this->assertNotContains("evil\r\nX-Injected: 1", $tags);
+    }
+
     // The Site action prefixes every tag with "site:N:"; the collapse must see
     // through the prefix and re-apply it, or the prefixed post:/term: tags would
     // be dropped instead of collapsed → stale.

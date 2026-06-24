@@ -37,6 +37,12 @@ tests_add_filter('muplugins_loaded', function (): void {
         }
     }
 
+    // WooCommerce/Polylang are loaded above so their own tests can run, but the
+    // global instance must stay limited to the listed actions — auto-detection
+    // would otherwise hook Polylang's archive suffixing for the whole suite.
+    // Tests that exercise detection re-enable it at a higher priority.
+    add_filter('cachetags/auto-detect-actions', '__return_false');
+
     (new Bootstrap)
         ->store(WordpressDbStore::class)
         ->httpHeader('Cache-Tag')
