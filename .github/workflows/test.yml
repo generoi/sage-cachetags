@@ -35,5 +35,10 @@ jobs:
       - name: Start wp-env
         run: npx @wordpress/env@latest start
 
-      - name: Run tests
-        run: npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags ./vendor/bin/phpunit
+      # The tests run inside the wp-env container, so the coverage driver has to
+      # live there (setup-php's driver is on the runner, not the container).
+      - name: Enable coverage driver (pcov)
+        run: docker exec -u root "$(docker ps -qf name=tests-cli)" sh -c "pecl install pcov && docker-php-ext-enable pcov"
+
+      - name: Run tests with coverage
+        run: npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags ./vendor/bin/phpunit --coverage-text
