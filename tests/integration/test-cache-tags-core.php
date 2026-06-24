@@ -148,19 +148,30 @@ class TestCacheTagsCore extends WP_UnitTestCase
         $this->assertEmpty($store->cleared, 'store left intact when a purge fails');
     }
 
-    public function test_purge_queued_is_a_noop_without_tags_or_urls(): void
+    public function test_purge_queued_is_a_noop_without_queued_tags(): void
     {
         $store = new RecordingStore;
         $invalidator = new RecordingInvalidator;
         $cacheTags = $this->make($store, [$invalidator]);
 
-        $this->assertTrue($cacheTags->purgeQueued(), 'no queued tags');
-        $this->assertEmpty($invalidator->clearedWith);
+        $this->assertTrue($cacheTags->purgeQueued());
+        $this->assertEmpty($invalidator->clearedWith, 'nothing queued → nothing purged');
+    }
+
+    public function test_purge_queued_runs_tag_invalidators_even_without_stored_urls(): void
+    {
+        // Fastly purges by Surrogate-Key and ignores URLs, so it must still run
+        // when the store has no URL rows for the tag (store flushed, query-string
+        // storage disabled, a deferred clear already removed the row).
+        $store = new RecordingStore;
+        $store->urlsFor = [];
+        $invalidator = new RecordingInvalidator;
+        $cacheTags = $this->make($store, [$invalidator]);
 
         $cacheTags->clear(['post:1']);
-        $store->urlsFor = [];
-        $this->assertTrue($cacheTags->purgeQueued(), 'no matching urls');
-        $this->assertEmpty($invalidator->clearedWith);
+
+        $this->assertTrue($cacheTags->purgeQueued());
+        $this->assertSame([[[], ['post:1']]], $invalidator->clearedWith, 'invalidator ran with the tag set');
     }
 
     public function test_flush_runs_invalidators_then_the_store(): void

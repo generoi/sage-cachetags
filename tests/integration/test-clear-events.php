@@ -261,4 +261,32 @@ class TestClearEvents extends RestTestCase
         $this->assertContains('taxonomy:category:any', $tags);
         $this->assertNotContains('taxonomy:category', $tags, 'an edit is not a new term');
     }
+
+    // H5: reusable blocks / block-theme menus are tagged post:{id} on the pages
+    // that embed them, but aren't a cacheable post type — they must still purge.
+    public function test_saving_a_reusable_block_purges_its_reference(): void
+    {
+        $this->resetCacheTags();
+
+        $blockId = self::factory()->post->create(['post_type' => 'wp_block', 'post_status' => 'publish']);
+
+        $this->assertContains("post:{$blockId}", $this->queuedPurgeTags());
+    }
+
+    // onTermSet fix: reassigning a post to a new term must purge the OLD term's
+    // archive too (and resolve via term_taxonomy_id, not the raw slug/id input).
+    public function test_reassigning_a_post_purges_the_old_terms_archive(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $oldTerm = self::factory()->category->create();
+        $newTerm = self::factory()->category->create();
+        wp_set_object_terms($postId, [$oldTerm], 'category');
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [$newTerm], 'category');
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("term:{$newTerm}:full", $tags, 'new term archive');
+        $this->assertContains("term:{$oldTerm}:full", $tags, 'old term archive purged on reassignment');
+    }
 }

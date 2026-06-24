@@ -25,8 +25,15 @@ class Polylang implements Action
     {
         \add_filter(CacheTags::FILTER_TAGS, [$this, 'filterArchiveTags'], 5);
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 9, 3);
+        // before_delete_post: a permanent delete never passes through
+        // transition_post_status, so the language archive would otherwise be
+        // left stale.
+        \add_action('before_delete_post', [$this, 'onPostDelete'], 9);
         \add_action('template_redirect', [$this, 'addLanguageTag']);
-        \add_filter('rest_post_dispatch', [$this, 'addLanguageTagRest']);
+        // Priority 9 (not the default 10) so the lang: tag is added before
+        // Bootstrap::saveCacheTagsRest and HttpHeader::restPostDispatch consume
+        // the tag set at priority 10 — matching RestApi::tagResponse.
+        \add_filter('rest_post_dispatch', [$this, 'addLanguageTagRest'], 9);
     }
 
     /**
@@ -85,13 +92,37 @@ class Polylang implements Action
             return;
         }
 
+        $this->clearLanguageArchives($post);
+    }
+
+    /**
+     * A permanently deleted translated post must purge its language archive too.
+     */
+    public function onPostDelete(int $postId): void
+    {
+        $post = get_post($postId);
+        if ($post instanceof WP_Post) {
+            $this->clearLanguageArchives($post);
+        }
+    }
+
+    /**
+     * Purge the language-specific archive(s) for a translated post. When the
+     * post's language isn't assigned yet (a new post can transition to publish
+     * before save_post sets its language), clear every language's archive so the
+     * eventual language isn't missed.
+     */
+    protected function clearLanguageArchives(WP_Post $post): void
+    {
         if (! CoreTags::isCacheablePostType($post->post_type) || ! pll_is_translated_post_type($post->post_type)) {
             return;
         }
 
         $lang = pll_get_post_language($post->ID);
-        if ($lang) {
-            $this->cacheTags->clear(["archive:{$post->post_type}:{$lang}"]);
+        $languages = $lang ? [$lang] : (function_exists('pll_languages_list') ? pll_languages_list() : []);
+
+        foreach ($languages as $language) {
+            $this->cacheTags->clear(["archive:{$post->post_type}:{$language}"]);
         }
     }
 }

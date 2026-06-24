@@ -248,7 +248,7 @@ class Bootstrap
 
     public function saveCacheTagsRest($response, $server, WP_REST_Request $request)
     {
-        if (Util::isCacheableRestRequest($request)) {
+        if (Util::isCacheableRestRequest($request) && Util::isCacheableRestResponse($response)) {
             $this->cacheTags->save($this->restUrl($request));
         }
 

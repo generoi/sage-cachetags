@@ -152,4 +152,58 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
 
         $this->assertContains('post:20', $cacheTags->get());
     }
+
+    private function purgeTags(): array
+    {
+        $cacheTags = CacheTags::getInstance();
+        $ref = new ReflectionProperty($cacheTags, 'purgeTags');
+        $ref->setAccessible(true);
+
+        return $ref->getValue($cacheTags);
+    }
+
+    private function resetPurge(): void
+    {
+        $cacheTags = CacheTags::getInstance();
+        $ref = new ReflectionProperty($cacheTags, 'purgeTags');
+        $ref->setAccessible(true);
+        $ref->setValue($cacheTags, []);
+    }
+
+    // H3: WC writes price/stock as meta via direct $wpdb (no transition_post_status),
+    // so the action hooks WC's own product-change actions to purge.
+    public function test_bind_registers_the_product_change_purge_hooks(): void
+    {
+        $action = $this->action();
+        $action->bind();
+
+        $this->assertNotFalse(has_action('woocommerce_update_product', [$action, 'onProductChange']));
+        $this->assertNotFalse(has_action('woocommerce_product_set_stock', [$action, 'onProductObjectChange']));
+        $this->assertNotFalse(has_action('woocommerce_variation_set_stock', [$action, 'onProductObjectChange']));
+    }
+
+    public function test_a_product_change_purges_the_product_and_its_listings(): void
+    {
+        $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
+        $this->resetPurge();
+
+        $this->action()->onProductChange($productId);
+
+        $tags = $this->purgeTags();
+        $this->assertContains("post:{$productId}", $tags, 'the product page');
+        $this->assertContains('archive:product', $tags, 'shop/category listings');
+    }
+
+    public function test_a_variation_change_purges_its_parent_product(): void
+    {
+        $parentId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
+        $variationId = self::factory()->post->create(['post_type' => 'product_variation', 'post_parent' => $parentId]);
+        $this->resetPurge();
+
+        $this->action()->onProductChange($variationId);
+
+        $tags = $this->purgeTags();
+        $this->assertContains("post:{$variationId}", $tags);
+        $this->assertContains("post:{$parentId}", $tags, 'parent product page shows the variation price/stock');
+    }
 }

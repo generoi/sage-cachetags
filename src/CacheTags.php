@@ -123,7 +123,7 @@ class CacheTags
 
                     continue;
                 }
-            } elseif (str_starts_with($tag, 'term:') && ! str_ends_with($tag, ':full')) {
+            } elseif (str_starts_with($tag, 'term:')) {
                 $term = get_term((int) explode(':', $tag)[1]);
                 if ($term instanceof WP_Term) {
                     $coarse = [...$coarse, ...CoreTags::anyTerm($term->taxonomy)];
@@ -135,7 +135,41 @@ class CacheTags
             $kept[] = $tag;
         }
 
-        return Util::normalizeTags([...$kept, ...$coarse]);
+        // Coarse collapse tags first so they survive the final trim — they keep
+        // the page purgeable on any change to that post type / taxonomy.
+        $bounded = Util::normalizeTags([...$coarse, ...$kept]);
+
+        // Tags that can't be collapsed (user:, comment:, option:, …) can still
+        // exceed the budget. Rather than let the provider silently drop the
+        // overflow (and every key after it), trim deterministically to fit.
+        if (strlen(implode(' ', $bounded)) > $limit) {
+            $bounded = $this->fitToBudget($bounded, $limit);
+        }
+
+        return $bounded;
+    }
+
+    /**
+     * Trim a tag list so the space-joined header stays within $limit bytes,
+     * preserving order (callers place the must-keep coarse tags first).
+     *
+     * @param  string[]  $tags
+     * @return string[]
+     */
+    protected function fitToBudget(array $tags, int $limit): array
+    {
+        $fitted = [];
+        $length = 0;
+
+        foreach ($tags as $tag) {
+            $length += ($fitted ? 1 : 0) + strlen($tag); // +1 for the separator
+            if ($length > $limit) {
+                break;
+            }
+            $fitted[] = $tag;
+        }
+
+        return $fitted;
     }
 
     /**
@@ -180,9 +214,11 @@ class CacheTags
 
         $urls = $this->store->get($tags);
 
-        if (empty($urls)) {
-            return true;
-        }
+        // Note: we do NOT bail when $urls is empty. Tag-based invalidators
+        // (Fastly purges by Surrogate-Key) must still run — the edge can hold an
+        // object whose URL the store no longer has (store flushed, query-string
+        // storage disabled, a deferred clear ran). URL-based invalidators given
+        // an empty URL list simply no-op.
 
         // Run all invalidators but keep track if something failed.
         $result = array_reduce(
