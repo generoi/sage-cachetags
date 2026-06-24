@@ -9,6 +9,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-site, multisite]
+
+    name: test (${{ matrix.mode }})
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,15 +37,32 @@ jobs:
         run: composer update --prefer-dist --no-progress --no-interaction
 
       - name: Lint
+        if: ${{ matrix.mode == 'single-site' }}
         run: composer lint
 
       - name: Start wp-env
         run: npx @wordpress/env@latest start
 
+      # wp-env installs single-site; convert the test install so the network
+      # tables and constants exist for the multisite-only tests (@group multisite).
+      - name: Convert the test install to multisite
+        if: ${{ matrix.mode == 'multisite' }}
+        run: npx @wordpress/env@latest run tests-cli wp core multisite-convert
+
       # The tests run inside the wp-env container, so the coverage driver has to
       # live there (setup-php's driver is on the runner, not the container).
       - name: Enable coverage driver (pcov)
+        if: ${{ matrix.mode == 'single-site' }}
         run: docker exec -u root "$(docker ps -qf name=tests-cli)" sh -c "pecl install pcov && docker-php-ext-enable pcov"
 
-      - name: Run tests with coverage
-        run: npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags ./vendor/bin/phpunit --coverage-text
+      # Single-site runs the full suite with coverage; multisite runs only the
+      # @group multisite tests under a real network (WP_MULTISITE=1). Under
+      # multisite the HttpHeader action's output buffering swallows phpunit's
+      # stdout summary, so the job is gated by phpunit's exit code.
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.mode }}" = "multisite" ]; then
+            npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags bash -c "WP_MULTISITE=1 ./vendor/bin/phpunit --group multisite"
+          else
+            npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags ./vendor/bin/phpunit --coverage-text
+          fi
