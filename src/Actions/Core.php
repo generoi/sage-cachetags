@@ -285,7 +285,7 @@ class Core implements Action
     public function onPostStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
     {
         if (! CoreTags::isCacheablePostType($post->post_type)) {
-            $this->clearReferencePost($post);
+            $this->clearEmbeddedPost($post);
 
             return;
         }
@@ -327,7 +327,7 @@ class Core implements Action
             return;
         }
         if (! CoreTags::isCacheablePostType($post->post_type)) {
-            $this->clearReferencePost($post);
+            $this->clearEmbeddedPost($post);
 
             return;
         }
@@ -346,17 +346,15 @@ class Core implements Action
     }
 
     /**
-     * Purge a post that is embedded by reference rather than rendered as its own
-     * page: reusable blocks (`wp_block`) and block-theme menus (`wp_navigation`).
-     * These are tagged `post:{id}` on every page that embeds them (via the block
-     * `ref` attribute) but aren't a cacheable post type, so the normal
-     * transition/delete handlers skip them.
+     * Reusable blocks (`wp_block`) and block-theme navigation menus
+     * (`wp_navigation`) aren't cacheable post types, but the pages that embed
+     * them are tagged `post:{id}` via the block `ref` attribute — so editing or
+     * deleting one must still purge that id. (The normal transition/delete
+     * handlers skip them because they aren't a public post type.)
      */
-    protected function clearReferencePost(WP_Post $post): void
+    protected function clearEmbeddedPost(WP_Post $post): void
     {
-        $referenceTypes = apply_filters('cachetags/reference-post-types', ['wp_block', 'wp_navigation']);
-
-        if (in_array($post->post_type, $referenceTypes, true)) {
+        if (in_array($post->post_type, ['wp_block', 'wp_navigation'], true)) {
             $this->cacheTags->clear(CoreTags::posts($post->ID));
         }
     }
