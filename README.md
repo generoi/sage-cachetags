@@ -221,6 +221,28 @@ key. Only the random per-request params `_wpnonce` and `_` are stripped
 unconditionally — any cache entry keyed on them is never reused, so collapsing
 them can't cause staleness.
 
+### Custom routes
+
+The `RestApi` action only knows about core `wp/v2` objects. A **custom public
+route** that serves its own cacheable response (sets its own
+`Cache-Control: public, s-maxage=…`, e.g. `my-plugin/v1/search`) is **cached at
+the edge but never purged** unless it contributes the cache tags its data depends
+on — so it goes stale on content changes. Add them via `cachetags/rest-tags`:
+
+```php
+add_filter('cachetags/rest-tags', function (array $tags, WP_REST_Request $request) {
+    if (str_starts_with($request->get_route(), '/my-plugin/v1/people')) {
+        $tags[] = 'archive:person';        // the listing this endpoint reads
+    }
+    return $tags;
+}, 10, 2);
+```
+
+(Or call `CacheTags::getInstance()?->add([...])` while building the response.)
+Tagging is what drives invalidation — the stored URL doesn't need to match the
+edge's per-parameter cache key, since the edge purges by tag (Fastly) or doesn't
+cache query-string URLs at all (Kinsta).
+
 ### Filters
 
 ```php
