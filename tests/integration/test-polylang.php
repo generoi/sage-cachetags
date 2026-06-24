@@ -90,4 +90,43 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains('archive:post:en', $tags);
         $this->assertContains('archive:post:fi', $tags);
     }
+
+    public function test_init_registers_the_polylang_hooks(): void
+    {
+        $action = $this->action();
+        $action->init();
+
+        $this->assertNotFalse(has_filter(CacheTags::FILTER_TAGS, [$action, 'filterArchiveTags']));
+        $this->assertNotFalse(has_action('transition_post_status', [$action, 'onPostStatusTransition']));
+        $this->assertNotFalse(has_action('template_redirect', [$action, 'addLanguageTag']));
+    }
+
+    public function test_add_language_tag_rest_tags_the_response_with_the_language(): void
+    {
+        $cacheTags = CacheTags::getInstance();
+        $ref = new ReflectionProperty($cacheTags, 'cacheTags');
+        $ref->setAccessible(true);
+        $ref->setValue($cacheTags, []);
+
+        $response = new WP_REST_Response(['ok' => true]);
+        $result = $this->action()->addLanguageTagRest($response);
+
+        $this->assertSame($response, $result);
+        $this->assertContains('lang:en', $cacheTags->get());
+    }
+
+    public function test_on_post_status_transition_purges_the_language_specific_archive(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'draft']);
+        pll_set_post_language($postId, 'en');
+
+        $cacheTags = CacheTags::getInstance();
+        $purge = new ReflectionProperty($cacheTags, 'purgeTags');
+        $purge->setAccessible(true);
+        $purge->setValue($cacheTags, []);
+
+        $this->action()->onPostStatusTransition('publish', 'draft', get_post($postId));
+
+        $this->assertContains('archive:post:en', $purge->getValue($cacheTags));
+    }
 }
