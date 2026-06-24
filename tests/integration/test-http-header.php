@@ -59,4 +59,48 @@ class TestHttpHeader extends WP_UnitTestCase
     {
         $this->assertSame('passthrough', $this->action()->restPostDispatch('passthrough'));
     }
+
+    private function capturingAction(): HttpHeader
+    {
+        return new class(CacheTags::getInstance()) extends HttpHeader
+        {
+            public array $emitted = [];
+
+            protected function emit(string $header, string $value): void
+            {
+                $this->emitted[] = "{$header}: {$value}";
+            }
+        };
+    }
+
+    public function test_front_end_emits_the_header_on_a_cacheable_request(): void
+    {
+        $this->resetTags()->add(['post:1']);
+        $action = $this->capturingAction();
+
+        $action->addHttpHeader();
+
+        $this->assertSame(['Cache-Tag: post:1'], $action->emitted);
+    }
+
+    public function test_front_end_skips_a_non_cacheable_request(): void
+    {
+        $this->resetTags()->add(['post:1']);
+        add_filter('cachetags/cacheable', '__return_false');
+        $action = $this->capturingAction();
+
+        $action->addHttpHeader();
+
+        $this->assertSame([], $action->emitted);
+    }
+
+    public function test_front_end_skips_when_there_are_no_tags(): void
+    {
+        $this->resetTags();
+        $action = $this->capturingAction();
+
+        $action->addHttpHeader();
+
+        $this->assertSame([], $action->emitted);
+    }
 }
