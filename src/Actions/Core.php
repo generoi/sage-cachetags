@@ -8,6 +8,7 @@ use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Block;
 use WP_Comment;
 use WP_Post;
+use WP_Term;
 use WP_User;
 
 class Core implements Action
@@ -29,7 +30,7 @@ class Core implements Action
         \add_action('deleted_comment', [$this, 'onCommentDelete'], 10, 2);
         \add_action('saved_term', [$this, 'onTermSave'], 10, 4);
         \add_action('delete_term', [$this, 'onTermDelete'], 10, 3);
-        \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
+        \add_action('set_object_terms', [$this, 'onTermSet'], 10, 6);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
         \add_action('added_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
         \add_action('deleted_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
@@ -284,6 +285,8 @@ class Core implements Action
     public function onPostStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
     {
         if (! CoreTags::isCacheablePostType($post->post_type)) {
+            $this->clearReferencePost($post);
+
             return;
         }
 
@@ -320,7 +323,12 @@ class Core implements Action
     public function onPostDelete(int $postId): void
     {
         $post = get_post($postId);
-        if (! $post || ! CoreTags::isCacheablePostType($post->post_type)) {
+        if (! $post) {
+            return;
+        }
+        if (! CoreTags::isCacheablePostType($post->post_type)) {
+            $this->clearReferencePost($post);
+
             return;
         }
 
@@ -338,23 +346,47 @@ class Core implements Action
     }
 
     /**
+     * Purge a post that is embedded by reference rather than rendered as its own
+     * page: reusable blocks (`wp_block`) and block-theme menus (`wp_navigation`).
+     * These are tagged `post:{id}` on every page that embeds them (via the block
+     * `ref` attribute) but aren't a cacheable post type, so the normal
+     * transition/delete handlers skip them.
+     */
+    protected function clearReferencePost(WP_Post $post): void
+    {
+        $referenceTypes = apply_filters('cachetags/reference-post-types', ['wp_block', 'wp_navigation']);
+
+        if (in_array($post->post_type, $referenceTypes, true)) {
+            $this->cacheTags->clear(CoreTags::posts($post->ID));
+        }
+    }
+
+    /**
      * When a term is added to an object, clear caches.
      */
-    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy): void
+    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append = false, array $oldTaxonomyIds = []): void
     {
         if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
             return;
         }
 
-        $object = get_post($objectId);
+        // Resolve via term_taxonomy_id, not $terms: $terms can be slugs/names
+        // (which CoreTags would mis-format as term:0), and the REMOVED terms
+        // ($oldTaxonomyIds) must be purged too so a reassigned post's old term
+        // archive isn't left stale.
+        $termIds = array_filter(array_map(
+            fn ($taxonomyId) => $this->termIdFromTaxonomyId((int) $taxonomyId),
+            array_unique([...$taxonomyIds, ...$oldTaxonomyIds])
+        ));
+
         // Clear the term pages but not the regular term tags since values
         // haven't changed.
         $cacheTags = [
-            ...CoreTags::termPages($terms),
+            ...CoreTags::termPages($termIds),
         ];
 
         // If it was set on a post, clear the post as well.
-        if ($object) {
+        if (get_post($objectId)) {
             $cacheTags = [
                 ...$cacheTags,
                 ...CoreTags::posts($objectId),
@@ -362,6 +394,13 @@ class Core implements Action
         }
 
         $this->cacheTags->clear($cacheTags);
+    }
+
+    protected function termIdFromTaxonomyId(int $taxonomyId): ?int
+    {
+        $term = get_term_by('term_taxonomy_id', $taxonomyId);
+
+        return $term instanceof WP_Term ? (int) $term->term_id : null;
     }
 
     /**
@@ -449,7 +488,7 @@ class Core implements Action
     public function onTermMetaUpdate($metaId, int $termId, string $metaKey): void
     {
         $term = get_term($termId);
-        if (! $term instanceof \WP_Term || ! CoreTags::isCacheableTaxonomy($term->taxonomy)) {
+        if (! $term instanceof WP_Term || ! CoreTags::isCacheableTaxonomy($term->taxonomy)) {
             return;
         }
 

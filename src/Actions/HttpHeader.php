@@ -65,6 +65,10 @@ class HttpHeader implements Action
             return $response;
         }
 
+        if (! Util::isCacheableRestResponse($response)) {
+            return $response;
+        }
+
         $tags = $this->cacheTags->get();
         $header = $this->cacheTags->httpHeader;
 

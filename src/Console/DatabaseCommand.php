@@ -26,11 +26,14 @@ class DatabaseCommand extends Command
     public function handle(): void
     {
         if (\is_multisite()) {
-            foreach (\get_sites() as $site) {
+            foreach (\get_sites(['number' => 0]) as $site) {
                 \switch_to_blog($site->blog_id);
-                $this->createTable();
-                $this->line("Created table on site {$site->blog_id}");
-                \restore_current_blog();
+                try {
+                    $this->createTable();
+                    $this->line("Created table on site {$site->blog_id}");
+                } finally {
+                    \restore_current_blog();
+                }
             }
         } else {
             $this->createTable();

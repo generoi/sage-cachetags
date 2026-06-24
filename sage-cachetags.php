@@ -27,7 +27,9 @@ register_activation_hook(__FILE__, function (): void {
     };
 
     if (is_multisite()) {
-        foreach (get_sites() as $site) {
+        // number => 0: get_sites() defaults to 100, which would leave every
+        // subsite past the first 100 without a table (silent stale forever).
+        foreach (get_sites(['number' => 0]) as $site) {
             switch_to_blog($site->blog_id);
             $activator->run();
             restore_current_blog();

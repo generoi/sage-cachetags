@@ -45,7 +45,7 @@ class WordpressDbStore implements Store
         $placeholders = implode(',', array_fill(0, count($tags), '%s'));
 
         $urls = $wpdb->get_col($wpdb->prepare("
-            SELECT url FROM `{$wpdb->prefix}cache_tags`
+            SELECT DISTINCT url FROM `{$wpdb->prefix}cache_tags`
             WHERE tag IN ({$placeholders})
         ", ...$tags));
 
@@ -53,6 +53,11 @@ class WordpressDbStore implements Store
     }
 
     /**
+     * Remove only the (url, tag) mappings being purged — not every tag on those
+     * URLs. Deleting by URL alone drops sibling-tag rows (e.g. clearing `post:5`
+     * would also forget `/article/` is tagged `post:6`), so a later purge of the
+     * sibling can't find a re-cached page — a real miss under DeferredClearStore.
+     *
      * @param  string[]  $urls
      * @param  string[]  $tags
      */
@@ -60,26 +65,30 @@ class WordpressDbStore implements Store
     {
         global $wpdb;
 
-        if (empty($urls)) {
+        if (empty($urls) || empty($tags)) {
             return true;
         }
 
-        $placeholders = implode(',', array_fill(0, count($urls), '%s'));
+        $urlPlaceholders = implode(',', array_fill(0, count($urls), '%s'));
+        $tagPlaceholders = implode(',', array_fill(0, count($tags), '%s'));
 
-        $count = $wpdb->query($wpdb->prepare("
+        $result = $wpdb->query($wpdb->prepare("
             DELETE FROM `{$wpdb->prefix}cache_tags`
-            WHERE `url` IN ({$placeholders})
-        ", ...$urls));
+            WHERE `url` IN ({$urlPlaceholders}) AND `tag` IN ({$tagPlaceholders})
+        ", ...$urls, ...$tags));
 
-        return $count ? true : false;
+        // A 0-row delete (already cleared) is success, not failure.
+        return $result !== false;
     }
 
     public function flush(): bool
     {
         global $wpdb;
 
+        // TRUNCATE reports 0 affected rows on success, so test for an explicit
+        // failure rather than truthiness.
         return $wpdb->query("
             TRUNCATE `{$wpdb->prefix}cache_tags`
-        ");
+        ") !== false;
     }
 }

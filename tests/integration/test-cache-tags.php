@@ -35,7 +35,8 @@ class TestCacheTags extends WP_UnitTestCase
         $cacheTags = $this->resetTags();
         $ids = self::factory()->post->create_many(5, ['post_status' => 'publish']);
         $cacheTags->add(array_map(fn ($id) => "post:{$id}", $ids));
-        add_filter('cachetags/max-header-bytes', fn () => 10);
+        // Big enough to hold the coarse collapse tag, smaller than the per-object set.
+        add_filter('cachetags/max-header-bytes', fn () => 30);
 
         $tags = $cacheTags->get();
 
@@ -50,7 +51,8 @@ class TestCacheTags extends WP_UnitTestCase
         $cacheTags = $this->resetTags();
         $termIds = self::factory()->category->create_many(5);
         $cacheTags->add(array_map(fn ($id) => "term:{$id}", $termIds));
-        add_filter('cachetags/max-header-bytes', fn () => 10);
+        // Big enough to hold the coarse collapse tag, smaller than the per-object set.
+        add_filter('cachetags/max-header-bytes', fn () => 30);
 
         $this->assertContains('taxonomy:category:any', $cacheTags->get());
     }

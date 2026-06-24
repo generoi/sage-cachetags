@@ -32,6 +32,22 @@ class Util
     }
 
     /**
+     * Only successful (2xx) REST responses may be cached. Tagging/storing/header
+     * emission for a 400/404/500 would let the edge cache an error response and
+     * serve it to everyone until an unrelated purge.
+     */
+    public static function isCacheableRestResponse($response): bool
+    {
+        if (! $response instanceof \WP_REST_Response) {
+            return false;
+        }
+
+        $status = $response->get_status();
+
+        return $status >= 200 && $status < 300;
+    }
+
+    /**
      * Whether the current front-end request may be stored in a shared cache.
      */
     public static function isCacheableRequest(): bool

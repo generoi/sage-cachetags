@@ -20,6 +20,12 @@ use Genero\Sage\CacheTags\Contracts\Action;
  *    greeting hydrated client-side), and
  *  - the edge no longer passes (bypasses) these users' login cookie.
  *
+ * This guard recognises only WooCommerce cart/checkout/account; it does NOT
+ * detect every per-user surface. Most notably, WordPress core's comment form
+ * pre-fills the logged-in commenter's name/email server-side, so a cached page
+ * with open comments would leak those across users — disable the comment-form
+ * prefill (or comments) on can-be-cached pages before enabling this.
+ *
  * Enable it alongside Core (and WooCommerce, which keeps cart/checkout/account
  * out of the cache).
  */

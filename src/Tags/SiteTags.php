@@ -14,7 +14,7 @@ class SiteTags
     public static function sites($sites = null): array
     {
         if (is_string($sites) && $sites === 'any') {
-            $sites = is_multisite() ? get_sites(['fields' => 'ids']) : [get_current_blog_id()];
+            $sites = is_multisite() ? get_sites(['fields' => 'ids', 'number' => 0]) : [get_current_blog_id()];
         } elseif (is_numeric($sites)) {
             $sites = [$sites];
         } elseif (is_null($sites)) {

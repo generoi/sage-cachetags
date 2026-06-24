@@ -129,4 +129,31 @@ class TestPolylang extends WP_UnitTestCase
 
         $this->assertContains('archive:post:en', $purge->getValue($cacheTags));
     }
+
+    // H2: a permanent delete never passes through transition_post_status, so the
+    // language archive would otherwise be left stale.
+    public function test_deleting_a_translated_post_purges_its_language_archive(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        pll_set_post_language($postId, 'en');
+
+        $cacheTags = CacheTags::getInstance();
+        $purge = new ReflectionProperty($cacheTags, 'purgeTags');
+        $purge->setAccessible(true);
+        $purge->setValue($cacheTags, []);
+
+        $this->action()->onPostDelete($postId);
+
+        $this->assertContains('archive:post:en', $purge->getValue($cacheTags));
+    }
+
+    // H2: the lang: tag must be registered before the priority-10 save/header
+    // consumers (RestApi uses 9 for the same reason).
+    public function test_rest_language_tag_is_registered_before_the_save_consumers(): void
+    {
+        $action = $this->action();
+        $action->init();
+
+        $this->assertSame(9, has_filter('rest_post_dispatch', [$action, 'addLanguageTagRest']));
+    }
 }

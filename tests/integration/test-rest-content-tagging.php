@@ -309,4 +309,16 @@ class TestRestContentTagging extends RestTestCase
         $this->assertContains("post:{$childId}", $tags);
         $this->assertContains("post:{$parentId}", $tags, 'breadcrumbs/ancestry depend on the parent');
     }
+
+    // H4: a non-2xx REST response must not be tagged, stored, or emit a header —
+    // otherwise the edge caches the error and serves it to everyone.
+    public function test_error_responses_are_not_cached(): void
+    {
+        // per_page=200 exceeds the maximum (100) → 400 rest_invalid_param.
+        $response = $this->dispatch($this->collection(['per_page' => '200']));
+
+        $this->assertSame(400, $response->get_status());
+        $this->assertEmpty($this->cacheTagHeader($response), 'no Cache-Tag header on an error response');
+        $this->assertEmpty($this->storedUrls('archive:post'), 'error URL not stored');
+    }
 }

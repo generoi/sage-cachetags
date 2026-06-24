@@ -30,6 +30,57 @@ class WooCommerce implements Action
         foreach (['woocommerce_login_form_start', 'woocommerce_register_form_start', 'woocommerce_lostpassword_form'] as $hook) {
             \add_action($hook, [$this, 'markAuthForm']);
         }
+
+        // WooCommerce writes price/stock/sale as post meta via a direct $wpdb
+        // update (no transition_post_status), so Core never purges product pages
+        // on stock reductions from orders, scheduled sales, REST/CRUD price
+        // edits, or variation changes. Hook WC's own product-change actions.
+        \add_action('woocommerce_update_product', [$this, 'onProductChange']);
+        \add_action('woocommerce_update_product_variation', [$this, 'onProductChange']);
+        \add_action('woocommerce_product_set_stock_status', [$this, 'onProductChange']);
+        \add_action('woocommerce_variation_set_stock_status', [$this, 'onProductChange']);
+        \add_action('woocommerce_product_set_stock', [$this, 'onProductObjectChange']);
+        \add_action('woocommerce_variation_set_stock', [$this, 'onProductObjectChange']);
+    }
+
+    /**
+     * Purge a product (and the listings that show it) on a price/stock/sale
+     * change. Accepts a product id (most WC product actions pass one first).
+     */
+    public function onProductChange($productId): void
+    {
+        $this->clearProduct((int) $productId);
+    }
+
+    /**
+     * woocommerce_{product,variation}_set_stock pass the product object.
+     *
+     * @param  mixed  $product  WC_Product
+     */
+    public function onProductObjectChange($product): void
+    {
+        if (is_object($product) && method_exists($product, 'get_id')) {
+            $this->clearProduct((int) $product->get_id());
+        }
+    }
+
+    protected function clearProduct(int $productId): void
+    {
+        if (! $productId) {
+            return;
+        }
+
+        // A variation's price/stock surfaces on its parent product page and in
+        // listings, so purge the parent too.
+        $parentId = wp_get_post_parent_id($productId);
+        $productIds = $parentId ? [$productId, $parentId] : [$productId];
+
+        $this->cacheTags->clear([
+            ...CoreTags::posts($productIds),
+            // Shop/category/related listings show the product card (price/stock).
+            ...CoreTags::archive('product'),
+            ...CoreTags::anyArchive('product'),
+        ]);
     }
 
     public function markAuthForm(): void
