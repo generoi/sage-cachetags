@@ -55,11 +55,16 @@ class Polylang implements Action
     }
 
     /**
-     * Replace generic archive tags for translated post types with
-     * language-specific variants when a language context is available.
-     * On the purge side (no language context), tags pass through
-     * unchanged — any bare archive tags are harmless no-ops since
-     * the store only has language-suffixed entries.
+     * Make archive tags for translated post types language-specific, so a purge
+     * matches the per-language listing that was actually stored.
+     *
+     * Render/store side: a language context is set, so `archive:{type}` becomes
+     * `archive:{type}:{currentLang}` — the single variant this page is stored
+     * under. Purge side: there is usually NO language context (admin, cron,
+     * WooCommerce stock/price hooks, REST), so a bare `archive:{type}` is
+     * expanded to EVERY language's variant. Without this, a bare purge tag would
+     * match none of the stored `archive:{type}:{lang}` entries and the
+     * translated listings would never clear (the herrfors alert-banner bug).
      *
      * @param  string[]  $tags
      * @return string[]
@@ -67,19 +72,25 @@ class Polylang implements Action
     public function filterArchiveTags(array $tags): array
     {
         $lang = pll_current_language();
-        if (! $lang) {
-            return $tags;
-        }
+        $languages = $lang ? [$lang] : (function_exists('pll_languages_list') ? pll_languages_list() : []);
 
-        return array_map(function (string $tag) use ($lang) {
+        $result = [];
+        foreach ($tags as $tag) {
             $parts = explode(':', $tag);
+            $isTranslatedArchive = count($parts) === 2 && $parts[0] === 'archive' && pll_is_translated_post_type($parts[1]);
 
-            if (count($parts) === 2 && $parts[0] === 'archive' && pll_is_translated_post_type($parts[1])) {
-                return "{$tag}:{$lang}";
+            if ($isTranslatedArchive && $languages) {
+                foreach ($languages as $language) {
+                    $result[] = "{$tag}:{$language}";
+                }
+
+                continue;
             }
 
-            return $tag;
-        }, $tags);
+            $result[] = $tag;
+        }
+
+        return $result;
     }
 
     /**

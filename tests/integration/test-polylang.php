@@ -64,11 +64,23 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertSame(['archive:post:en', 'post:5'], $tags);
     }
 
-    public function test_passes_tags_through_without_a_language_context(): void
+    public function test_expands_archive_tags_to_all_languages_without_a_context(): void
     {
+        $model = PLL()->model;
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'rtl' => 0, 'term_group' => 1, 'flag' => 'fi']);
+            $model->clean_languages_cache();
+        }
+        // No current language (admin/cron/WC/REST purge context).
         PLL()->curlang = null;
 
-        $this->assertSame(['archive:post'], $this->action()->filterArchiveTags(['archive:post']));
+        $tags = $this->action()->filterArchiveTags(['archive:post', 'post:5']);
+
+        // A bare archive tag must reach every language's stored listing.
+        $this->assertContains('archive:post:en', $tags);
+        $this->assertContains('archive:post:fi', $tags);
+        $this->assertNotContains('archive:post', $tags, 'the bare tag is expanded, not kept');
+        $this->assertContains('post:5', $tags, 'non-archive tags pass through');
     }
 
     public function test_tags_helper_returns_the_current_language(): void

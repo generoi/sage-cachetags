@@ -206,4 +206,28 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         $this->assertContains("post:{$variationId}", $tags);
         $this->assertContains("post:{$parentId}", $tags, 'parent product page shows the variation price/stock');
     }
+
+    // A stock-quantity decrement (every order) must not purge the whole listing —
+    // only the product page. The listing card changes on stock-STATUS flips,
+    // which come via the *_set_stock_status hooks (onProductChange).
+    public function test_a_stock_quantity_change_purges_only_the_product_page(): void
+    {
+        $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
+        $this->resetPurge();
+
+        $product = new class((int) $productId)
+        {
+            public function __construct(private int $id) {}
+
+            public function get_id(): int
+            {
+                return $this->id;
+            }
+        };
+        $this->action()->onProductObjectChange($product);
+
+        $tags = $this->purgeTags();
+        $this->assertContains("post:{$productId}", $tags);
+        $this->assertNotContains('archive:product', $tags, 'a qty decrement should not flush the listing');
+    }
 }

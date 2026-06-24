@@ -50,6 +50,25 @@ class TestAuditFixes extends WP_UnitTestCase
         $this->assertSame(['https://example.com/a/'], $store->get(['post:1', 'post:2']));
     }
 
+    // The store self-provisions a missing table on first write — so a multisite
+    // subsite the activation hook never reached self-heals instead of silently
+    // never storing tags.
+    public function test_store_self_provisions_a_missing_table_on_save(): void
+    {
+        global $wpdb;
+        $table = "{$wpdb->prefix}cache_tags";
+        $store = $this->store();
+
+        // DROP is DDL (implicit commit), so clean up explicitly at the end.
+        $wpdb->query("DROP TABLE IF EXISTS `{$table}`");
+
+        $this->assertTrue($store->save(['post:selfheal'], 'https://example.com/selfheal/'));
+        $this->assertSame($table, $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)), 'table recreated');
+        $this->assertSame(['https://example.com/selfheal/'], $store->get(['post:selfheal']));
+
+        $store->flush();
+    }
+
     // C4: non-collapsible tags (comment:, user:, …) must still be trimmed to the
     // header budget so the provider never silently drops keys.
     public function test_header_budget_trims_non_collapsible_overflow(): void

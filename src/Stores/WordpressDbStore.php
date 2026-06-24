@@ -2,10 +2,13 @@
 
 namespace Genero\Sage\CacheTags\Stores;
 
+use Genero\Sage\CacheTags\Concerns\CreatesDatabaseTable;
 use Genero\Sage\CacheTags\Contracts\Store;
 
 class WordpressDbStore implements Store
 {
+    use CreatesDatabaseTable;
+
     /**
      * @param  string[]  $tags
      */
@@ -23,12 +26,30 @@ class WordpressDbStore implements Store
             $values[] = $url;
         }
 
-        $result = $wpdb->query($wpdb->prepare("
+        $sql = $wpdb->prepare("
             INSERT IGNORE INTO `{$wpdb->prefix}cache_tags` (`tag`, `url`)
             VALUES {$placeholders}
-        ", ...$values));
+        ", ...$values);
+
+        $result = $wpdb->query($sql);
+
+        // Self-provision a missing table (e.g. a multisite subsite the activation
+        // hook never reached) on first write, then retry — so a provisioning gap
+        // self-heals on the next render instead of silently never storing tags.
+        if ($result === false && $this->tableIsMissing()) {
+            $this->createTable();
+            $result = $wpdb->query($sql);
+        }
 
         return $result !== false;
+    }
+
+    protected function tableIsMissing(): bool
+    {
+        global $wpdb;
+        $table = "{$wpdb->prefix}cache_tags";
+
+        return $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table;
     }
 
     /**
