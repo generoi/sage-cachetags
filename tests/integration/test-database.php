@@ -39,6 +39,23 @@ class TestDatabase extends WP_UnitTestCase
         $this->assertSame(2, (int) get_option('cachetags_db_version'));
     }
 
+    public function test_creates_the_table_for_a_new_multisite_subsite(): void
+    {
+        if (! is_multisite()) {
+            $this->markTestSkipped('Requires multisite (run with the multisite config).');
+        }
+
+        global $wpdb;
+        $blogId = self::factory()->blog->create();
+
+        switch_to_blog($blogId);
+        $table = "{$wpdb->prefix}cache_tags";
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        restore_current_blog();
+
+        $this->assertSame($table, $exists, 'wp_initialize_site provisions the new site table');
+    }
+
     private function migrator(): object
     {
         return new class
