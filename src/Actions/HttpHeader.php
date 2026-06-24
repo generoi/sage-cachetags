@@ -35,8 +35,18 @@ class HttpHeader implements Action
         $header = $this->cacheTags->httpHeader;
 
         if ($header && ! empty($tags)) {
-            header(sprintf('%s: %s', $header, implode(' ', $tags)));
+            $this->emit($header, implode(' ', $tags));
         }
+    }
+
+    /**
+     * Send the response header. Runs late (wp_footer, after tags are collected,
+     * with output buffered in bind()), so it uses header() directly; isolated
+     * here so the surrounding gating/building can be tested without it.
+     */
+    protected function emit(string $header, string $value): void
+    {
+        header(sprintf('%s: %s', $header, $value));
     }
 
     /**

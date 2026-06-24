@@ -46,6 +46,7 @@
     "lint:fix": "vendor/bin/pint",
     "test:unit": "vendor/bin/phpunit --testsuite unit",
     "test:integration": "vendor/bin/phpunit --testsuite integration",
+    "test:coverage": "vendor/bin/phpunit --coverage-text",
     "test": "vendor/bin/phpunit"
   },
   "archive": {

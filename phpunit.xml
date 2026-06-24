@@ -16,6 +16,12 @@
     </testsuite>
   </testsuites>
 
+  <coverage>
+    <include>
+      <directory suffix=".php">./src/</directory>
+    </include>
+  </coverage>
+
   <php>
     <env name="WP_PHPUNIT__TESTS_CONFIG" value="/var/www/html/wp-config.php" />
   </php>
