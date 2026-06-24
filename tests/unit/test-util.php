@@ -50,4 +50,21 @@ class TestUtil extends WP_UnitTestCase
 
         $this->assertSame(['a=1&b=2'], $chunks);
     }
+
+    public function test_is_cacheable_rest_request_only_for_anonymous_read_requests(): void
+    {
+        $this->assertTrue(Util::isCacheableRestRequest(new WP_REST_Request('GET', '/wp/v2/posts')));
+        $this->assertFalse(Util::isCacheableRestRequest(new WP_REST_Request('POST', '/wp/v2/posts')), 'writes');
+
+        $edit = new WP_REST_Request('GET', '/wp/v2/posts');
+        $edit->set_param('context', 'edit');
+        $this->assertFalse(Util::isCacheableRestRequest($edit), 'edit context');
+
+        $password = new WP_REST_Request('GET', '/wp/v2/posts/1');
+        $password->set_param('password', 'secret');
+        $this->assertFalse(Util::isCacheableRestRequest($password), 'password-protected');
+
+        wp_set_current_user(self::factory()->user->create());
+        $this->assertFalse(Util::isCacheableRestRequest(new WP_REST_Request('GET', '/wp/v2/posts')), 'authenticated');
+    }
 }

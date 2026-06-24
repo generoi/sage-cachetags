@@ -1,0 +1,57 @@
+<?php
+
+use Genero\Sage\CacheTags\CacheTags;
+
+/**
+ * The header-byte-budget collapse in CacheTags::get()/bound(): when the combined
+ * tag header would exceed the limit, per-object post:/term: tags collapse to
+ * their coarse archive:/taxonomy: "any" form rather than overflow.
+ *
+ * @covers \Genero\Sage\CacheTags\CacheTags
+ */
+class TestCacheTags extends WP_UnitTestCase
+{
+    private function resetTags(): CacheTags
+    {
+        $cacheTags = CacheTags::getInstance();
+        $ref = new ReflectionProperty($cacheTags, 'cacheTags');
+        $ref->setAccessible(true);
+        $ref->setValue($cacheTags, []);
+
+        return $cacheTags;
+    }
+
+    public function test_keeps_per_object_tags_within_the_budget(): void
+    {
+        $cacheTags = $this->resetTags();
+        $id = self::factory()->post->create(['post_status' => 'publish']);
+        $cacheTags->add(["post:{$id}"]);
+
+        $this->assertContains("post:{$id}", $cacheTags->get());
+    }
+
+    public function test_collapses_post_tags_over_the_budget_to_the_archive(): void
+    {
+        $cacheTags = $this->resetTags();
+        $ids = self::factory()->post->create_many(5, ['post_status' => 'publish']);
+        $cacheTags->add(array_map(fn ($id) => "post:{$id}", $ids));
+        add_filter('cachetags/max-header-bytes', fn () => 10);
+
+        $tags = $cacheTags->get();
+
+        $this->assertContains('archive:post:any', $tags);
+        foreach ($ids as $id) {
+            $this->assertNotContains("post:{$id}", $tags);
+        }
+    }
+
+    public function test_collapses_term_tags_over_the_budget_to_the_taxonomy(): void
+    {
+        $cacheTags = $this->resetTags();
+        $termIds = self::factory()->category->create_many(5);
+        $cacheTags->add(array_map(fn ($id) => "term:{$id}", $termIds));
+        add_filter('cachetags/max-header-bytes', fn () => 10);
+
+        $this->assertContains('taxonomy:category:any', $cacheTags->get());
+    }
+}
