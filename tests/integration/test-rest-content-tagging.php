@@ -285,4 +285,28 @@ class TestRestContentTagging extends RestTestCase
 
         return $request;
     }
+
+    public function test_user_endpoint_is_tagged_with_the_user(): void
+    {
+        // The author is exposed at /users because they have a published post.
+        $response = $this->dispatch(new WP_REST_Request('GET', "/wp/v2/users/{$this->authorId}"));
+
+        $this->assertContains("user:{$this->authorId}", $this->cacheTagHeader($response));
+    }
+
+    public function test_hierarchical_post_is_tagged_with_its_parent(): void
+    {
+        $parentId = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        $childId = self::factory()->post->create([
+            'post_type' => 'page',
+            'post_status' => 'publish',
+            'post_parent' => $parentId,
+        ]);
+
+        $response = $this->dispatch(new WP_REST_Request('GET', "/wp/v2/pages/{$childId}"));
+        $tags = $this->cacheTagHeader($response);
+
+        $this->assertContains("post:{$childId}", $tags);
+        $this->assertContains("post:{$parentId}", $tags, 'breadcrumbs/ancestry depend on the parent');
+    }
 }

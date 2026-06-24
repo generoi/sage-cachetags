@@ -135,4 +135,66 @@ class TestCoreTags extends WP_UnitTestCase
 
         $this->assertContains('my_option', CoreTags::getCacheableOptions());
     }
+
+    public function test_any_keyword_expands_to_the_cacheable_sets(): void
+    {
+        $this->assertContains('archive:post', CoreTags::archive('any'));
+        $this->assertContains('taxonomy:category', CoreTags::taxonomy('any'));
+        $this->assertContains('taxonomy:category:any', CoreTags::anyTerm('any'));
+        $this->assertContains('archive:post:any', CoreTags::anyArchive('any'));
+        $this->assertContains('role:administrator', CoreTags::anyUser('any'));
+    }
+
+    public function test_set_builders_accept_wp_objects(): void
+    {
+        $this->assertSame(['archive:post'], CoreTags::archive(get_post_type_object('post')));
+        $this->assertSame(['archive:post:any'], CoreTags::anyArchive(get_post_type_object('post')));
+        $this->assertSame(['taxonomy:category'], CoreTags::taxonomy(get_taxonomy('category')));
+        $this->assertSame(['taxonomy:category:any'], CoreTags::anyTerm(get_taxonomy('category')));
+        $this->assertSame(['role:administrator'], CoreTags::anyUser(get_role('administrator')));
+    }
+
+    public function test_builders_return_empty_for_unusable_input(): void
+    {
+        $this->assertSame([], CoreTags::terms(null));
+        $this->assertSame([], CoreTags::users(null));
+        $this->assertSame([], CoreTags::comments(null));
+        $this->assertSame([], CoreTags::archive(123));
+        $this->assertSame([], CoreTags::taxonomy(123));
+        $this->assertSame([], CoreTags::anyTerm(123));
+        $this->assertSame([], CoreTags::anyArchive(123));
+        $this->assertSame([], CoreTags::anyUser(123));
+        $this->assertSame([], CoreTags::menu(null));
+    }
+
+    public function test_menu_resolves_a_slug_and_throws_for_an_unknown_one(): void
+    {
+        wp_create_nav_menu('Primary');
+        $expectedId = get_term_by('slug', 'primary', 'nav_menu')->term_id;
+
+        $this->assertSame(["menu:{$expectedId}"], CoreTags::menu('primary'));
+
+        $this->expectException(Exception::class);
+        CoreTags::menu('no-such-menu');
+    }
+
+    public function test_queried_object_throws_for_an_unsupported_object(): void
+    {
+        $this->expectException(Exception::class);
+        CoreTags::queriedObject(self::factory()->user->create_and_get());
+    }
+
+    public function test_is_cacheable_predicates_accept_objects_ids_and_terms(): void
+    {
+        $postId = self::factory()->post->create();
+        $termId = self::factory()->category->create();
+
+        $this->assertTrue(CoreTags::isCacheablePostType(get_post_type_object('post')));
+        $this->assertTrue(CoreTags::isCacheablePostType($postId));
+        $this->assertTrue(CoreTags::isCacheablePostType(get_post($postId)));
+
+        $this->assertTrue(CoreTags::isCacheableTaxonomy(get_taxonomy('category')));
+        $this->assertTrue(CoreTags::isCacheableTaxonomy($termId));
+        $this->assertTrue(CoreTags::isCacheableTaxonomy(get_term($termId)));
+    }
 }

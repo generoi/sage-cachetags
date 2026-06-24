@@ -30,6 +30,61 @@ class TestGravityform extends WP_UnitTestCase
         return $action;
     }
 
+    private function resetTags(): CacheTags
+    {
+        $cacheTags = CacheTags::getInstance();
+        $ref = new ReflectionProperty($cacheTags, 'cacheTags');
+        $ref->setAccessible(true);
+        $ref->setValue($cacheTags, []);
+
+        return $cacheTags;
+    }
+
+    public function test_bind_registers_the_gravity_forms_hooks(): void
+    {
+        $action = new Gravityform(CacheTags::getInstance());
+        $action->bind();
+
+        $this->assertNotFalse(has_filter('gform_pre_render', [$action, 'addGravityformCacheTags']));
+        $this->assertNotFalse(has_action('gform_after_save_form', [$action, 'onSaveForm']));
+        $this->assertNotFalse(has_filter('cachetags/cacheable', [$action, 'isCacheable']));
+    }
+
+    public function test_a_non_array_form_is_passed_through_untouched(): void
+    {
+        // gform_pre_render can receive false (e.g. form not found).
+        $this->assertFalse((new Gravityform(CacheTags::getInstance()))->addGravityformCacheTags(false));
+    }
+
+    public function test_rendering_tags_the_form_and_a_fileupload_adds_the_nonce_tag(): void
+    {
+        $cacheTags = $this->resetTags();
+
+        $this->render([
+            ['type' => 'fileupload', 'allowsPrepopulate' => false],
+        ]);
+
+        $tags = $cacheTags->get();
+        $this->assertContains('gform:1', $tags);
+        $this->assertContains('nonce', $tags, 'file uploads use a per-session nonce');
+    }
+
+    public function test_on_save_clears_an_existing_form_but_not_a_brand_new_one(): void
+    {
+        $cacheTags = CacheTags::getInstance();
+        $purge = new ReflectionProperty($cacheTags, 'purgeTags');
+        $purge->setAccessible(true);
+        $action = new Gravityform($cacheTags);
+
+        $purge->setValue($cacheTags, []);
+        $action->onSaveForm(['id' => 7], false);
+        $this->assertContains('gform:7', $purge->getValue($cacheTags));
+
+        $purge->setValue($cacheTags, []);
+        $action->onSaveForm(['id' => 7], true);
+        $this->assertNotContains('gform:7', $purge->getValue($cacheTags), 'a new form has nothing cached yet');
+    }
+
     public function test_prepopulated_form_request_is_non_cacheable(): void
     {
         $action = $this->render([
