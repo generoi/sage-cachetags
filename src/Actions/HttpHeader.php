@@ -2,13 +2,16 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
+use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Util;
 use WP_REST_Request;
 use WP_REST_Response;
 
-class HttpHeader extends AbstractAction
+class HttpHeader implements Action
 {
+    public function __construct(protected CacheTags $cacheTags) {}
+
     public function bind(): void
     {
         if (! $this->cacheTags->httpHeader) {

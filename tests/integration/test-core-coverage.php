@@ -87,14 +87,6 @@ class TestCoreCoverage extends WP_UnitTestCase
         ];
     }
 
-    public function test_block_tags_filter_lets_sites_tag_custom_blocks(): void
-    {
-        $callback = fn ($tags, $block) => $block['blockName'] === 'core/paragraph' ? [...$tags, 'custom:1'] : $tags;
-        add_filter('cachetags/block-tags', $callback, 10, 2);
-
-        $this->assertContains('custom:1', $this->blockTags('core/paragraph', []));
-    }
-
     public function test_navigation_link_without_attributes_is_a_safe_noop(): void
     {
         // No 'kind'/'id' — must not raise an undefined-index warning (which

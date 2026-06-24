@@ -51,6 +51,7 @@ class Bootstrap
         /** @var Action[] */
         protected array $actions = [Core::class],
         protected bool $nonceCron = false,
+        protected bool $autoDetectActions = true,
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -118,6 +119,17 @@ class Bootstrap
     public function nonceCron(bool $enable = true): static
     {
         $this->nonceCron = $enable;
+
+        return $this;
+    }
+
+    /**
+     * Auto-enable integration actions (WooCommerce, Polylang) when their plugin
+     * is active. On by default; opt out for full manual control of the action list.
+     */
+    public function autoDetectActions(bool $enable = true): static
+    {
+        $this->autoDetectActions = $enable;
 
         return $this;
     }
@@ -205,14 +217,14 @@ class Bootstrap
      * Auto-enable integration actions whose plugin is active, so their safety
      * vetoes (WooCommerce keeps cart/checkout/account out of the shared cache)
      * and language-aware purging (Polylang) aren't silently missing when an
-     * operator forgets to list them. Disable via the filter for manual control.
+     * operator forgets to list them. Toggle with autoDetectActions().
      *
      * @param  array<string|Action>  $actions
      * @return array<string|Action>
      */
     protected function withDetectedActions(array $actions): array
     {
-        if (! apply_filters('cachetags/auto-detect-actions', true)) {
+        if (! $this->autoDetectActions) {
             return $actions;
         }
 

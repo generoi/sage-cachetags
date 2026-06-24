@@ -3,10 +3,13 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 
-class Site extends AbstractAction
+class Site implements Action
 {
+    public function __construct(protected CacheTags $cacheTags) {}
+
     public function bind(): void
     {
         \add_filter(CacheTags::FILTER_TAGS, [$this, 'addSitePrefix']);

@@ -189,37 +189,33 @@ class TestBootstrap extends WP_UnitTestCase
     }
 
     // WooCommerce + Polylang are loaded in the test env, so with detection on
-    // they are auto-appended (the safety footgun fix). Priority 99 overrides the
-    // suite-wide __return_false set in tests/bootstrap.php.
+    // they are auto-appended (the safety footgun fix).
     public function test_auto_enables_active_integration_plugins(): void
     {
-        add_filter('cachetags/auto-detect-actions', '__return_true', 99);
-
+        $bootstrap = (new Bootstrap)->autoDetectActions(true);
         $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
         $withDetected->setAccessible(true);
-        $result = $withDetected->invoke(new Bootstrap, [Core::class]);
+        $result = $withDetected->invoke($bootstrap, [Core::class]);
 
         $this->assertContains(WooCommerce::class, $result);
         $this->assertContains(Polylang::class, $result);
     }
 
-    public function test_auto_detect_actions_is_disabled_by_filter(): void
+    public function test_auto_detect_actions_can_be_disabled(): void
     {
-        add_filter('cachetags/auto-detect-actions', '__return_false', 99);
-
+        $bootstrap = (new Bootstrap)->autoDetectActions(false);
         $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
         $withDetected->setAccessible(true);
 
-        $this->assertSame([Core::class], $withDetected->invoke(new Bootstrap, [Core::class]));
+        $this->assertSame([Core::class], $withDetected->invoke($bootstrap, [Core::class]));
     }
 
     public function test_a_detected_action_is_not_duplicated_when_already_listed(): void
     {
-        add_filter('cachetags/auto-detect-actions', '__return_true', 99);
-
+        $bootstrap = (new Bootstrap)->autoDetectActions(true);
         $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
         $withDetected->setAccessible(true);
-        $result = $withDetected->invoke(new Bootstrap, [WooCommerce::class]);
+        $result = $withDetected->invoke($bootstrap, [WooCommerce::class]);
 
         $this->assertSame(1, count(array_filter($result, fn ($action) => $action === WooCommerce::class)));
     }

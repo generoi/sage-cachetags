@@ -2,6 +2,8 @@
 
 namespace Genero\Sage\CacheTags\Actions;
 
+use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Block;
 use WP_Comment;
@@ -9,8 +11,10 @@ use WP_Post;
 use WP_Term;
 use WP_User;
 
-class Core extends AbstractAction
+class Core implements Action
 {
+    public function __construct(protected CacheTags $cacheTags) {}
+
     public function bind(): void
     {
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
@@ -203,10 +207,6 @@ class Core extends AbstractAction
                 }
                 break;
         }
-
-        // Let sites map their own blocks to tags (a custom block wrapping a
-        // WP_Query, an ACF block referencing a post, …) without enabling AutoTag.
-        $tags = apply_filters('cachetags/block-tags', $tags, $block, $instance);
 
         $this->cacheTags->add($tags);
 

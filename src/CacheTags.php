@@ -135,33 +135,13 @@ class CacheTags
         $coarse = [];
 
         foreach ($tags as $tag) {
-            // Tags may carry a multisite "site:N:" prefix (Site action). Collapse
-            // the inner post:/term: but re-apply the prefix so the coarse tag
-            // still matches what was stored.
-            $prefix = '';
-            $inner = $tag;
-            if (preg_match('/^(site:\d+:)(.*)$/', $tag, $matches)) {
-                $prefix = $matches[1];
-                $inner = $matches[2];
+            $collapsed = $this->collapse($tag);
+
+            if ($collapsed === null) {
+                $kept[] = $tag;
+            } else {
+                $coarse = [...$coarse, ...$collapsed];
             }
-
-            if (str_starts_with($inner, 'post:')) {
-                $type = get_post_type((int) substr($inner, strlen('post:')));
-                if ($type) {
-                    $coarse = [...$coarse, ...$this->prefixed($prefix, CoreTags::anyArchive($type))];
-
-                    continue;
-                }
-            } elseif (str_starts_with($inner, 'term:')) {
-                $term = get_term((int) explode(':', $inner)[1]);
-                if ($term instanceof WP_Term) {
-                    $coarse = [...$coarse, ...$this->prefixed($prefix, CoreTags::anyTerm($term->taxonomy))];
-
-                    continue;
-                }
-            }
-
-            $kept[] = $tag;
         }
 
         // Coarse collapse tags first so they survive the final trim — they keep
@@ -176,6 +156,47 @@ class CacheTags
         }
 
         return $bounded;
+    }
+
+    /**
+     * Collapse a high-cardinality post:/term: tag to its coarse "any" form, or
+     * return null when it can't be collapsed (so the caller keeps it as-is). A
+     * multisite "site:N:" prefix is preserved so the coarse tag still matches
+     * what was stored.
+     *
+     * @return string[]|null
+     */
+    protected function collapse(string $tag): ?array
+    {
+        [$prefix, $inner] = $this->splitSitePrefix($tag);
+
+        if (str_starts_with($inner, 'post:')) {
+            $type = get_post_type((int) substr($inner, strlen('post:')));
+
+            return $type ? $this->prefixed($prefix, CoreTags::anyArchive($type)) : null;
+        }
+
+        if (str_starts_with($inner, 'term:')) {
+            $term = get_term((int) explode(':', $inner)[1]);
+
+            return $term instanceof WP_Term ? $this->prefixed($prefix, CoreTags::anyTerm($term->taxonomy)) : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Split an optional multisite "site:N:" prefix off the front of a tag.
+     *
+     * @return array{0: string, 1: string} [prefix, remainder]
+     */
+    protected function splitSitePrefix(string $tag): array
+    {
+        if (preg_match('/^(site:\d+:)(.*)$/', $tag, $matches)) {
+            return [$matches[1], $matches[2]];
+        }
+
+        return ['', $tag];
     }
 
     /**
@@ -316,8 +337,17 @@ class CacheTags
 
     protected function logFailure(string $message): void
     {
-        if (function_exists('error_log')) {
-            error_log("[cachetags] {$message}");
+        $message = "[cachetags] {$message}";
+
+        // Prefer a framework logger (Acorn/Laravel) so failures land in the
+        // site's normal log pipeline; surface to the operator under WP-CLI;
+        // otherwise fall back to the PHP error log.
+        if (function_exists('logger')) {
+            logger()->error($message);
+        } elseif (defined('WP_CLI') && WP_CLI && class_exists('WP_CLI')) {
+            \WP_CLI::warning($message);
+        } else {
+            error_log($message);
         }
     }
 

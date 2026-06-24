@@ -28,7 +28,7 @@ use Genero\Sage\CacheTags\Contracts\Action;
  * Enable it alongside Core (and WooCommerce, which keeps cart/checkout/account
  * out of the cache).
  */
-class CacheCustomers extends AbstractAction
+class CacheCustomers implements Action
 {
     public function bind(): void
     {

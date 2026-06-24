@@ -3,6 +3,7 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Post;
 use WP_Query;
@@ -23,12 +24,14 @@ use WP_Term;
  * run the query once ourselves (guarded against re-entry) and return its rows to
  * short-circuit, so the query still executes exactly once.
  */
-class AutoTag extends AbstractAction
+class AutoTag implements Action
 {
     const FILTER_EXCLUDED_ARCHIVE_TYPES = 'cachetags/autotag-excluded-archive-types';
 
     /** Guards against re-entry while we run the query inside its own pre-query filter. */
     protected bool $running = false;
+
+    public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
     {
@@ -64,11 +67,8 @@ class AutoTag extends AbstractAction
             }
         }
 
-        // Resolve the cacheable set once per query instead of per post — the
-        // membership test below runs for every row in the listing.
-        $cacheableTypes = CoreTags::getCacheablePostTypes();
         foreach ($query->posts as $post) {
-            $tags[] = $this->postTag($post, $cacheableTypes);
+            $tags[] = $this->postTag($post);
         }
 
         $this->cacheTags->add($tags);
@@ -89,10 +89,9 @@ class AutoTag extends AbstractAction
             return $terms;
         }
 
-        $cacheableTaxonomies = CoreTags::getCacheableTaxonomies();
         $tags = [];
         foreach ($terms as $term) {
-            if ($term instanceof WP_Term && in_array($term->taxonomy, $cacheableTaxonomies, true)) {
+            if ($term instanceof WP_Term && CoreTags::isCacheableTaxonomy($term->taxonomy)) {
                 $tags[] = CoreTags::terms($term->term_id);
             }
         }
@@ -106,13 +105,12 @@ class AutoTag extends AbstractAction
      * Tag for a single queried post row in whatever shape `fields` produced.
      *
      * @param  mixed  $post
-     * @param  string[]  $cacheableTypes
      * @return string[]
      */
-    protected function postTag($post, array $cacheableTypes): array
+    protected function postTag($post): array
     {
         if ($post instanceof WP_Post) {
-            return in_array($post->post_type, $cacheableTypes, true)
+            return CoreTags::isCacheablePostType($post->post_type)
                 ? CoreTags::posts($post->ID)
                 : [];
         }
