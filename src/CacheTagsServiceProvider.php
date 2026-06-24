@@ -47,7 +47,6 @@ class CacheTagsServiceProvider extends ServiceProvider
             invalidators: $config->get('cachetags.invalidator', []),
             actions: $config->get('cachetags.action', []),
             nonceCron: $config->get('cachetags.nonce-cron', false),
-            storeClearDelay: $config->get('cachetags.store-clear-delay', 0),
         );
 
         return $bootstrap;

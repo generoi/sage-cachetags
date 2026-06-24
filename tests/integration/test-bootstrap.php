@@ -5,7 +5,6 @@ use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
 use Genero\Sage\CacheTags\NonceCron;
-use Genero\Sage\CacheTags\Stores\DeferredClearStore;
 use Genero\Sage\CacheTags\Stores\TransientStore;
 
 /**
@@ -64,18 +63,6 @@ class TestBootstrap extends WP_UnitTestCase
             ->bootstrap();
 
         $this->assertSame($store, $cacheTags->store);
-    }
-
-    public function test_wraps_the_store_in_a_deferred_clear_store_when_a_delay_is_set(): void
-    {
-        $cacheTags = (new Bootstrap)
-            ->store(TransientStore::class)
-            ->storeClearDelay(60)
-            ->actions([])
-            ->disable()
-            ->bootstrap();
-
-        $this->assertInstanceOf(DeferredClearStore::class, $cacheTags->store);
     }
 
     public function test_rejects_a_dependency_not_implementing_its_contract(): void
