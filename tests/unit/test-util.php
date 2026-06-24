@@ -28,7 +28,7 @@ class TestUtil extends WP_UnitTestCase
         putenv('CACHETAGS_TEST_ENV=present');
 
         $this->assertSame('present', Util::env('CACHETAGS_TEST_ENV'));
-        $this->assertFalse(Util::env('CACHETAGS_TEST_MISSING'));
+        $this->assertNull(Util::env('CACHETAGS_TEST_MISSING'));
 
         putenv('CACHETAGS_TEST_ENV');
     }
