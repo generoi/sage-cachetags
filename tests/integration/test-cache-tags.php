@@ -14,9 +14,11 @@ class TestCacheTags extends WP_UnitTestCase
     private function resetTags(): CacheTags
     {
         $cacheTags = CacheTags::getInstance();
-        $ref = new ReflectionProperty($cacheTags, 'cacheTags');
-        $ref->setAccessible(true);
-        $ref->setValue($cacheTags, []);
+        foreach (['cacheTags', 'boundedTags'] as $property) {
+            $ref = new ReflectionProperty($cacheTags, $property);
+            $ref->setAccessible(true);
+            $ref->setValue($cacheTags, $property === 'boundedTags' ? null : []);
+        }
 
         return $cacheTags;
     }
@@ -55,5 +57,23 @@ class TestCacheTags extends WP_UnitTestCase
         add_filter('cachetags/max-header-bytes', fn () => 30);
 
         $this->assertContains('taxonomy:category:any', $cacheTags->get());
+    }
+
+    // The Site action prefixes every tag with "site:N:"; the collapse must see
+    // through the prefix and re-apply it, or the prefixed post:/term: tags would
+    // be dropped instead of collapsed → stale.
+    public function test_collapses_site_prefixed_tags_preserving_the_prefix(): void
+    {
+        $cacheTags = $this->resetTags();
+        $ids = self::factory()->post->create_many(5, ['post_status' => 'publish']);
+        $cacheTags->add(array_map(fn ($id) => "site:1:post:{$id}", $ids));
+        add_filter('cachetags/max-header-bytes', fn () => 40);
+
+        $tags = $cacheTags->get();
+
+        $this->assertContains('site:1:archive:post:any', $tags);
+        foreach ($ids as $id) {
+            $this->assertNotContains("site:1:post:{$id}", $tags);
+        }
     }
 }

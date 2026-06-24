@@ -239,6 +239,25 @@ class TestCacheTagsCore extends WP_UnitTestCase
         );
     }
 
+    public function test_purge_queued_fires_the_purged_action_with_the_result(): void
+    {
+        $captured = [];
+        add_action('cachetags/purged', function ($tags, $urls, $result) use (&$captured) {
+            $captured = ['tags' => $tags, 'urls' => $urls, 'result' => $result];
+        }, 10, 3);
+
+        $store = new RecordingStore;
+        $store->urlsFor = ['https://example.com/a/'];
+        $cacheTags = $this->make($store, [new RecordingInvalidator]);
+
+        $cacheTags->clear(['post:1']);
+        $cacheTags->purgeQueued();
+
+        $this->assertSame(['post:1'], $captured['tags'] ?? null);
+        $this->assertSame(['https://example.com/a/'], $captured['urls'] ?? null);
+        $this->assertTrue($captured['result'] ?? null);
+    }
+
     public function test_bind_action_tracks_it_for_has_action(): void
     {
         $cacheTags = $this->make(new RecordingStore, []);

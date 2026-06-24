@@ -32,6 +32,15 @@ class CacheTags
     protected array $purgeTags = [];
 
     /**
+     * Memoized result of get() — the normalize + filter + bound pipeline is run
+     * once per request, not on each of the save() and header consumers. Reset
+     * whenever tags change.
+     *
+     * @var string[]|null
+     */
+    protected ?array $boundedTags = null;
+
+    /**
      * @var Action[]
      */
     protected array $actions = [];
@@ -77,6 +86,8 @@ class CacheTags
             ...$this->cacheTags,
             ...$tags,
         ];
+
+        $this->boundedTags = null;
     }
 
     /**
@@ -86,10 +97,14 @@ class CacheTags
      */
     public function get(): array
     {
+        if ($this->boundedTags !== null) {
+            return $this->boundedTags;
+        }
+
         $tags = Util::normalizeTags($this->cacheTags);
         $tags = apply_filters(self::FILTER_TAGS, $tags);
 
-        return $this->bound($tags);
+        return $this->boundedTags = $this->bound($tags);
     }
 
     /**
@@ -116,17 +131,27 @@ class CacheTags
         $coarse = [];
 
         foreach ($tags as $tag) {
-            if (str_starts_with($tag, 'post:')) {
-                $type = get_post_type((int) substr($tag, strlen('post:')));
+            // Tags may carry a multisite "site:N:" prefix (Site action). Collapse
+            // the inner post:/term: but re-apply the prefix so the coarse tag
+            // still matches what was stored.
+            $prefix = '';
+            $inner = $tag;
+            if (preg_match('/^(site:\d+:)(.*)$/', $tag, $matches)) {
+                $prefix = $matches[1];
+                $inner = $matches[2];
+            }
+
+            if (str_starts_with($inner, 'post:')) {
+                $type = get_post_type((int) substr($inner, strlen('post:')));
                 if ($type) {
-                    $coarse = [...$coarse, ...CoreTags::anyArchive($type)];
+                    $coarse = [...$coarse, ...$this->prefixed($prefix, CoreTags::anyArchive($type))];
 
                     continue;
                 }
-            } elseif (str_starts_with($tag, 'term:')) {
-                $term = get_term((int) explode(':', $tag)[1]);
+            } elseif (str_starts_with($inner, 'term:')) {
+                $term = get_term((int) explode(':', $inner)[1]);
                 if ($term instanceof WP_Term) {
-                    $coarse = [...$coarse, ...CoreTags::anyTerm($term->taxonomy)];
+                    $coarse = [...$coarse, ...$this->prefixed($prefix, CoreTags::anyTerm($term->taxonomy))];
 
                     continue;
                 }
@@ -170,6 +195,21 @@ class CacheTags
         }
 
         return $fitted;
+    }
+
+    /**
+     * Re-apply a "site:N:" prefix to a set of (coarse) tags.
+     *
+     * @param  string[]  $tags
+     * @return string[]
+     */
+    protected function prefixed(string $prefix, array $tags): array
+    {
+        if ($prefix === '') {
+            return $tags;
+        }
+
+        return array_map(fn ($tag) => $prefix.$tag, $tags);
     }
 
     /**
@@ -232,6 +272,14 @@ class CacheTags
             $result = $this->store->clear($urls, $tags);
         }
 
+        // Let sites attach logging/metrics, and surface a failure that would
+        // otherwise be swallowed (leaving content stale at the edge).
+        do_action('cachetags/purged', $tags, $urls, $result);
+
+        if (! $result) {
+            $this->logFailure(sprintf('purge failed for %d tag(s): %s', count($tags), implode(' ', array_slice($tags, 0, 20))));
+        }
+
         return $result;
     }
 
@@ -252,7 +300,20 @@ class CacheTags
             $result = $this->store->flush();
         }
 
+        do_action('cachetags/flushed', $result);
+
+        if (! $result) {
+            $this->logFailure('flush failed');
+        }
+
         return $result;
+    }
+
+    protected function logFailure(string $message): void
+    {
+        if (function_exists('error_log')) {
+            error_log("[cachetags] {$message}");
+        }
     }
 
     /**

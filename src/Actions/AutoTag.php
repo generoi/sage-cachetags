@@ -67,8 +67,11 @@ class AutoTag implements Action
             }
         }
 
+        // Resolve the cacheable set once per query instead of per post — the
+        // membership test below runs for every row in the listing.
+        $cacheableTypes = CoreTags::getCacheablePostTypes();
         foreach ($query->posts as $post) {
-            $tags[] = $this->postTag($post);
+            $tags[] = $this->postTag($post, $cacheableTypes);
         }
 
         $this->cacheTags->add($tags);
@@ -89,9 +92,10 @@ class AutoTag implements Action
             return $terms;
         }
 
+        $cacheableTaxonomies = CoreTags::getCacheableTaxonomies();
         $tags = [];
         foreach ($terms as $term) {
-            if ($term instanceof WP_Term && CoreTags::isCacheableTaxonomy($term->taxonomy)) {
+            if ($term instanceof WP_Term && in_array($term->taxonomy, $cacheableTaxonomies, true)) {
                 $tags[] = CoreTags::terms($term->term_id);
             }
         }
@@ -105,12 +109,13 @@ class AutoTag implements Action
      * Tag for a single queried post row in whatever shape `fields` produced.
      *
      * @param  mixed  $post
+     * @param  string[]  $cacheableTypes
      * @return string[]
      */
-    protected function postTag($post): array
+    protected function postTag($post, array $cacheableTypes): array
     {
         if ($post instanceof WP_Post) {
-            return CoreTags::isCacheablePostType($post->post_type)
+            return in_array($post->post_type, $cacheableTypes, true)
                 ? CoreTags::posts($post->ID)
                 : [];
         }
