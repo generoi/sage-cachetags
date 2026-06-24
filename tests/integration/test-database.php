@@ -39,10 +39,13 @@ class TestDatabase extends WP_UnitTestCase
         $this->assertSame(2, (int) get_option('cachetags_db_version'));
     }
 
+    /**
+     * @group multisite
+     */
     public function test_creates_the_table_for_a_new_multisite_subsite(): void
     {
         if (! is_multisite()) {
-            $this->markTestSkipped('Requires multisite (run with the multisite config).');
+            $this->markTestSkipped('Requires multisite (run via the multisite CI job).');
         }
 
         global $wpdb;

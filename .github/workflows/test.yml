@@ -42,3 +42,39 @@ jobs:
 
       - name: Run tests with coverage
         run: npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags ./vendor/bin/phpunit --coverage-text
+
+  multisite:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, mysql, xml, zip
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install
+        run: composer update --prefer-dist --no-progress --no-interaction
+
+      - name: Start wp-env
+        run: npx @wordpress/env@latest start
+
+      # wp-env installs single-site; convert the test install so the network
+      # tables and constants exist for the multisite-only tests (@group multisite).
+      - name: Convert the test install to multisite
+        run: npx @wordpress/env@latest run tests-cli wp core multisite-convert
+
+      # No stdout summary here (the HttpHeader action's output buffering swallows
+      # it under multisite) — phpunit's exit code gates the job.
+      - name: Run multisite tests
+        run: npx @wordpress/env@latest run tests-cli --env-cwd=wp-content/plugins/sage-cachetags bash -c "WP_MULTISITE=1 ./vendor/bin/phpunit --group multisite"
