@@ -113,4 +113,43 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
 
         $this->assertContains('archive:product', $cacheTags->get());
     }
+
+    public function test_an_auth_form_makes_the_page_non_cacheable(): void
+    {
+        $action = $this->action();
+        $action->markAuthForm();
+
+        $this->assertFalse($action->isCacheable(true), 'a rendered login/register form bails caching');
+    }
+
+    public function test_a_cart_block_on_any_page_is_not_cacheable(): void
+    {
+        $pageId = self::factory()->post->create([
+            'post_status' => 'publish',
+            'post_content' => '<!-- wp:woocommerce/cart /-->',
+        ]);
+        $this->go_to(get_permalink($pageId));
+
+        $this->assertFalse($this->action()->isCacheable(true), 'block-based cart preloads per-user state');
+    }
+
+    public function test_featured_category_block_tags_its_category(): void
+    {
+        $cacheTags = $this->resetTags();
+        $block = ['blockName' => 'woocommerce/featured-category', 'attrs' => ['categoryId' => 15]];
+
+        $this->action()->addBlockCacheTags('', $block, new WP_Block($block));
+
+        $this->assertContains('term:15', $cacheTags->get());
+    }
+
+    public function test_a_block_with_a_product_id_tags_that_product(): void
+    {
+        $cacheTags = $this->resetTags();
+        $block = ['blockName' => 'woocommerce/single-product', 'attrs' => ['productId' => 20]];
+
+        $this->action()->addBlockCacheTags('', $block, new WP_Block($block));
+
+        $this->assertContains('post:20', $cacheTags->get());
+    }
 }

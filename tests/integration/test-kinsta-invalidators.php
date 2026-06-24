@@ -102,4 +102,15 @@ class TestKinstaInvalidators extends WP_UnitTestCase
 
         $this->assertTrue((new KinstaCacheInvalidator)->flush());
     }
+
+    public function test_clear_runs_the_real_curl_request_and_reports_failure_when_unreachable(): void
+    {
+        // The Kinsta MU endpoint (https://localhost/kinsta-clear-cache/...) isn't
+        // reachable from the test runner, so the real cURL in post() executes and
+        // returns a connection failure — exercising the actual request code path
+        // rather than a subclass override.
+        $result = (new KinstaCacheInvalidator)->clear(['https://example.com/a/'], ['post:1']);
+
+        $this->assertFalse($result);
+    }
 }
