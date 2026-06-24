@@ -1,7 +1,8 @@
 {
   "phpVersion": "8.2",
   "plugins": [
-    "."
+    ".",
+    "https://downloads.wordpress.org/plugin/woocommerce.10.4.3.zip"
   ],
   "config": {
     "WP_TESTS_DOMAIN": "localhost",
