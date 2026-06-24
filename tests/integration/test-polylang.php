@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tags\PolylangTags;
 
 /**
  * Real integration against an installed Polylang: the action's language tagging
@@ -68,5 +69,25 @@ class TestPolylang extends WP_UnitTestCase
         PLL()->curlang = null;
 
         $this->assertSame(['archive:post'], $this->action()->filterArchiveTags(['archive:post']));
+    }
+
+    public function test_tags_helper_returns_the_current_language(): void
+    {
+        $this->assertSame(['lang:en'], PolylangTags::language());
+    }
+
+    public function test_tags_helper_builds_a_per_language_archive(): void
+    {
+        $model = PLL()->model;
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'rtl' => 0, 'term_group' => 1, 'flag' => 'fi']);
+            $model->clean_languages_cache();
+        }
+
+        $tags = PolylangTags::archiveAllLanguages('post');
+
+        // 'post' is translated, so it expands to one archive tag per language.
+        $this->assertContains('archive:post:en', $tags);
+        $this->assertContains('archive:post:fi', $tags);
     }
 }
