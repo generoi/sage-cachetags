@@ -21,7 +21,8 @@ class ClearCommand extends Command
      */
     protected $description = 'Clear cache tags';
 
-    protected $signature = 'cachetags:clear {tags}';
+    // {tags*} is variadic — `wp acorn cachetags:clear post:1 term:5` clears both.
+    protected $signature = 'cachetags:clear {tags*}';
 
     public function handle(): int
     {

@@ -151,6 +151,26 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertStringNotContainsString('?', $url);
     }
 
+    // A query string that would overflow the url column (varchar 191) must fall
+    // back to the bare route, not get silently truncated (which would never
+    // match what the edge cached).
+    public function test_rest_url_falls_back_to_the_route_when_over_the_length_limit(): void
+    {
+        $bootstrap = new Bootstrap;
+        $bootstrap->store(TransientStore::class)->actions([])->disable()->bootstrap();
+        $restUrl = new ReflectionMethod($bootstrap, 'restUrl');
+        $restUrl->setAccessible(true);
+
+        $request = new WP_REST_Request('GET', '/wp/v2/posts');
+        $request->set_query_params(['search' => str_repeat('x', 250)]);
+        $request->set_attributes(['args' => ['search' => []]]);
+
+        $url = $restUrl->invoke($bootstrap, $request);
+
+        $this->assertStringNotContainsString('search=', $url, 'overflowing query string dropped');
+        $this->assertStringNotContainsString('?', $url, 'falls back to the bare route');
+    }
+
     public function test_fluent_setters_propagate_to_the_instance(): void
     {
         $cacheTags = (new Bootstrap)

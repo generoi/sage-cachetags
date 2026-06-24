@@ -39,7 +39,7 @@ class TransientStore implements Store
         );
         $urls = array_values($urls);
 
-        return Util::flatten($urls);
+        return array_values(array_unique(Util::flatten($urls)));
     }
 
     /**
@@ -62,7 +62,11 @@ class TransientStore implements Store
 
     public function flush(): bool
     {
-        return delete_option('sage_cache_tags');
+        // delete_option returns false when the option is already absent — an
+        // empty store is success, not failure.
+        delete_option('sage_cache_tags');
+
+        return true;
     }
 
     /**
@@ -78,6 +82,12 @@ class TransientStore implements Store
      */
     protected function saveCache(array $value): bool
     {
+        // update_option returns false when the value is unchanged — a no-op
+        // write is success, not failure.
+        if ($value === $this->getCache()) {
+            return true;
+        }
+
         return update_option('sage_cache_tags', $value);
     }
 }

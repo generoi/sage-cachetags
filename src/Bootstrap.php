@@ -271,8 +271,12 @@ class Bootstrap
         }
 
         ksort($params);
+        $full = $url.'?'.http_build_query($params);
 
-        return $url.'?'.http_build_query($params);
+        // Fall back to the bare route if the query string overflows the url
+        // column (varchar 191), matching Util::currentUrl — a silently truncated
+        // URL would never match what the edge cached.
+        return strlen($full) <= apply_filters('cachetags/max-url-length', 191) ? $full : $url;
     }
 
     public function purgeCacheTags(): void

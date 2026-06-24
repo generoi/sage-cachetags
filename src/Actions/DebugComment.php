@@ -32,17 +32,19 @@ class DebugComment implements Action
                     case 'term':
                         $term = get_term($id);
 
+                        // esc_html so a post title / author / term name containing
+                        // "-->" can't break out of the HTML comment (stored XSS).
                         return $term instanceof \WP_Term
-                            ? sprintf('[%s] %s (%s)', $tag, $term->name, $term->taxonomy)
+                            ? sprintf('[%s] %s (%s)', $tag, esc_html($term->name), esc_html($term->taxonomy))
                             : sprintf('[%s]', $tag);
                     case 'comment':
                         $comment = get_comment($id);
 
                         return $comment instanceof \WP_Comment
-                            ? sprintf('[%s] %s', $tag, $comment->comment_author)
+                            ? sprintf('[%s] %s', $tag, esc_html($comment->comment_author))
                             : sprintf('[%s]', $tag);
                     case 'post':
-                        return sprintf('[%s] %s (%s)', $tag, get_post($id)?->post_title ?: $id, get_post_type($id));
+                        return sprintf('[%s] %s (%s)', $tag, esc_html(get_post($id)?->post_title ?: $id), esc_html(get_post_type($id) ?: ''));
                     default:
                         return sprintf('[%s]', $tag);
                 }
@@ -55,7 +57,7 @@ class DebugComment implements Action
             Url: %s
             Tags: %s
             -->
-        ', $this->currentUrl(), implode(PHP_EOL.str_repeat(' ', 18), $cacheTags));
+        ', esc_html($this->currentUrl()), implode(PHP_EOL.str_repeat(' ', 18), $cacheTags));
     }
 
     protected function currentUrl(): string
