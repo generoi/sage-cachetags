@@ -45,7 +45,7 @@ class CoreTags
      * Return cache tags for one or multiple posts.
      *
      * @param  int|WP_Post|array<int|WP_Post>|null  $posts
-     * @return string[]
+     * @return Tag[]
      */
     public static function posts($posts = null): array
     {
@@ -61,7 +61,7 @@ class CoreTags
      * Return cache tags for one or multiple terms.
      *
      * @param  int|WP_Term|array<int|WP_Term>|null  $terms
-     * @return string[]
+     * @return Tag[]
      */
     public static function terms($terms = null): array
     {
@@ -77,7 +77,7 @@ class CoreTags
      * Return cache tags for one or multiple term pages.
      *
      * @param  int|WP_Term|array<int|WP_Term>|null  $terms
-     * @return string[]
+     * @return Tag[]
      */
     public static function termPages($terms = null): array
     {
@@ -88,7 +88,7 @@ class CoreTags
      * Return cache tags for one or multiple users.
      *
      * @param  int|WP_User|array<int|WP_User>|null  $users
-     * @return string[]
+     * @return Tag[]
      */
     public static function users($users = null): array
     {
@@ -104,7 +104,7 @@ class CoreTags
      * Return cache tags for one or multiple comments.
      *
      * @param  int|WP_Comment|array<int|WP_Comment>|null  $comments
-     * @return string[]
+     * @return Tag[]
      */
     public static function comments($comments = null): array
     {
@@ -119,7 +119,7 @@ class CoreTags
     /**
      * Return cache tags for the menu in a navigation location.
      *
-     * @return string[]
+     * @return Tag[]
      */
     public static function navigation(?string $location = null): array
     {
@@ -140,7 +140,7 @@ class CoreTags
     /**
      * Return cache tags for a menu.
      *
-     * @return string[]
+     * @return Tag[]
      */
     public static function menu($menu = null): array
     {
@@ -164,7 +164,7 @@ class CoreTags
      * Return cache tags for the current queried object.
      *
      * @param  WP_Post|WP_Term|WP_Post_Type|null  $object
-     * @return string[]
+     * @return Tag[]
      */
     public static function queriedObject($object = null): array
     {
@@ -191,7 +191,7 @@ class CoreTags
     /**
      * Return cache tags for a WP_Query.
      *
-     * @return string[]
+     * @return Tag[]
      */
     public static function query(WP_Query $query): array
     {
@@ -210,7 +210,7 @@ class CoreTags
      *
      * @param  string|object|array<string|object>  $items
      * @param  callable():string[]  $all  resolver for the 'any' keyword
-     * @return string[]
+     * @return Tag[]
      */
     protected static function nameTags($items, string $type, callable $all, ?string $qualifier = null): array
     {
@@ -237,7 +237,7 @@ class CoreTags
      * Return cache tags for one or many post type archives.
      *
      * @param  string|WP_Post_Type|array<string|WP_Post_Type>  $postTypes
-     * @return string[]
+     * @return Tag[]
      */
     public static function archive($postTypes): array
     {
@@ -252,7 +252,7 @@ class CoreTags
      * Return cache tags for one or many taxonomy pages.
      *
      * @param  string|WP_Taxonomy|array<string|WP_Taxonomy>  $taxonomies
-     * @return string[]
+     * @return Tag[]
      */
     public static function taxonomy($taxonomies): array
     {
@@ -267,7 +267,7 @@ class CoreTags
      * Return cache tags for changes to any term in taxonomies.
      *
      * @param  string|WP_Taxonomy|array<string|WP_Taxonomy>  $taxonomies
-     * @return string[]
+     * @return Tag[]
      */
     public static function anyTerm($taxonomies): array
     {
@@ -287,7 +287,7 @@ class CoreTags
      * coarse fallback when a response would otherwise emit too many post tags.
      *
      * @param  string|WP_Post_Type|array<string|WP_Post_Type>  $postTypes
-     * @return string[]
+     * @return Tag[]
      */
     public static function anyArchive($postTypes): array
     {
@@ -303,7 +303,7 @@ class CoreTags
      * Return cache tags for changes to any user in roles.
      *
      * @param  string|WP_Role|array<string|WP_Role>  $roles
-     * @return string[]
+     * @return Tag[]
      */
     public static function anyUser($roles): array
     {
@@ -424,7 +424,7 @@ class CoreTags
      * Return cache tags for one or multiple site options.
      *
      * @param  string|string[]  $options
-     * @return string[]
+     * @return Tag[]
      */
     public static function option($options): array
     {
