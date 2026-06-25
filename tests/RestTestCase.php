@@ -3,6 +3,7 @@
 namespace Genero\Sage\CacheTags\Tests;
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 use ReflectionObject;
 use WP_UnitTestCase;
 
@@ -64,7 +65,8 @@ abstract class RestTestCase extends WP_UnitTestCase
         $prop = (new ReflectionObject($this->cacheTags))->getProperty('purgeTags');
         $prop->setAccessible(true);
 
-        return $prop->getValue($this->cacheTags);
+        // purgeTags holds Tag objects; assertions compare string form.
+        return Tag::toStrings($prop->getValue($this->cacheTags));
     }
 
     /**

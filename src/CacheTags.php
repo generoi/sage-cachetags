@@ -5,7 +5,6 @@ namespace Genero\Sage\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
-use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Term;
 
 class CacheTags
@@ -22,12 +21,12 @@ class CacheTags
     protected static ?CacheTags $instance = null;
 
     /**
-     * @var string[]
+     * @var Tag[]
      */
     protected array $cacheTags = [];
 
     /**
-     * @var string[]
+     * @var Tag[]
      */
     protected array $purgeTags = [];
 
@@ -78,8 +77,9 @@ class CacheTags
     /**
      * Add a set of cache tags to this page load.
      *
-     * Accepts plain strings (a site's custom tags, the CoreTags builders) and/or
-     * Tag value objects; both are stored as their string form.
+     * Accepts Tag objects and/or plain strings (a site's custom tags, anything
+     * built elsewhere); strings are parsed to Tags so the rest of the pipeline
+     * works with structure.
      *
      * @param  array<string|Tag|array>  $tags
      */
@@ -87,14 +87,15 @@ class CacheTags
     {
         $this->cacheTags = [
             ...$this->cacheTags,
-            ...Tag::toStrings(Util::flatten($tags)),
+            ...Tag::fromMany(Util::flatten($tags)),
         ];
 
         $this->boundedTags = null;
     }
 
     /**
-     * Return all cache tags for this page load.
+     * Return the cache tags for this page load, as strings ready for the header
+     * and store.
      *
      * @return string[]
      */
@@ -104,14 +105,15 @@ class CacheTags
             return $this->boundedTags;
         }
 
-        $tags = Util::normalizeTags($this->cacheTags);
-        $tags = apply_filters(self::FILTER_TAGS, $tags);
+        // Validate + dedupe in string form (the canonical comparison) and run the
+        // string filter for backwards compatibility, then collapse to budget as
+        // Tags. Util::normalizeTags also re-validates the filter output so a
+        // custom tag can't smuggle a newline into the header.
+        $strings = Util::normalizeTags(Tag::toStrings($this->cacheTags));
+        $strings = apply_filters(self::FILTER_TAGS, $strings);
+        $strings = Util::normalizeTags($strings);
 
-        // Re-validate after the filter so a custom tag (e.g. one containing a
-        // newline) can't reach the Cache-Tag header.
-        $tags = Util::normalizeTags($tags);
-
-        return $this->boundedTags = $this->bound($tags);
+        return $this->boundedTags = Tag::toStrings($this->bound(Tag::fromMany($strings)));
     }
 
     /**
@@ -123,14 +125,14 @@ class CacheTags
      * taxonomy. The result over-purges rather than silently dropping tags
      * (which a provider would do on overflow, leaving stale content).
      *
-     * @param  string[]  $tags
-     * @return string[]
+     * @param  Tag[]  $tags
+     * @return Tag[]
      */
     protected function bound(array $tags): array
     {
         $limit = (int) apply_filters(self::FILTER_MAX_HEADER_BYTES, 16384);
 
-        if ($limit <= 0 || strlen(implode(' ', $tags)) <= $limit) {
+        if ($limit <= 0 || $this->headerLength($tags) <= $limit) {
             return $tags;
         }
 
@@ -138,23 +140,23 @@ class CacheTags
         $coarse = [];
 
         foreach ($tags as $tag) {
-            $collapsed = $this->collapse(Tag::parse($tag));
+            $collapsed = $this->collapse($tag);
 
             if ($collapsed === null) {
                 $kept[] = $tag;
             } else {
-                $coarse[] = (string) $collapsed;
+                $coarse[] = $collapsed;
             }
         }
 
         // Coarse collapse tags first so they survive the final trim — they keep
         // the page purgeable on any change to that post type / taxonomy.
-        $bounded = Util::normalizeTags([...$coarse, ...$kept]);
+        $bounded = $this->dedupe([...$coarse, ...$kept]);
 
         // Tags that can't be collapsed (user:, comment:, option:, …) can still
         // exceed the budget. Rather than let the provider silently drop the
         // overflow (and every key after it), trim deterministically to fit.
-        if (strlen(implode(' ', $bounded)) > $limit) {
+        if ($this->headerLength($bounded) > $limit) {
             $bounded = $this->fitToBudget($bounded, $limit);
         }
 
@@ -162,35 +164,73 @@ class CacheTags
     }
 
     /**
-     * Collapse a high-cardinality post:/term: tag to its coarse "any" form, or
+     * Collapse a high-cardinality post/term tag to its coarse "any" form, or
      * return null when it can't be collapsed (so the caller keeps it as-is).
      *
-     * Operates on the structured Tag — a multisite scope is a field carried onto
-     * the coarse tag, so there's no string parsing or prefix juggling here.
+     * Works on the structured Tag and carries its scopes onto the coarse tag, so
+     * there's no string parsing or prefix juggling here.
      */
     protected function collapse(Tag $tag): ?Tag
     {
-        if ($tag->type === 'post' && is_int($tag->identifier)) {
-            $type = get_post_type($tag->identifier);
+        $coarse = null;
 
-            return $type ? Tag::archive($type)->any()->withScope($tag->scope) : null;
+        if ($tag->type === 'post' && is_int($tag->id)) {
+            $type = get_post_type($tag->id);
+            $coarse = $type ? Tag::archive($type)->any() : null;
+        } elseif ($tag->type === 'term' && is_int($tag->id)) {
+            $term = get_term($tag->id);
+            $coarse = $term instanceof WP_Term ? Tag::taxonomy($term->taxonomy)->any() : null;
         }
 
-        if ($tag->type === 'term' && is_int($tag->identifier)) {
-            $term = get_term($tag->identifier);
-
-            return $term instanceof WP_Term ? Tag::taxonomy($term->taxonomy)->any()->withScope($tag->scope) : null;
+        if ($coarse === null) {
+            return null;
         }
 
-        return null;
+        foreach ($tag->scopes as [$dimension, $value]) {
+            $coarse = $coarse->scope($dimension, $value);
+        }
+
+        return $coarse;
+    }
+
+    /**
+     * Byte length of the space-joined header for a set of tags.
+     *
+     * @param  Tag[]  $tags
+     */
+    protected function headerLength(array $tags): int
+    {
+        return strlen(implode(' ', Tag::toStrings($tags)));
+    }
+
+    /**
+     * Remove duplicate tags (compared by their string form), preserving order.
+     *
+     * @param  Tag[]  $tags
+     * @return Tag[]
+     */
+    protected function dedupe(array $tags): array
+    {
+        $seen = [];
+        $unique = [];
+
+        foreach ($tags as $tag) {
+            $string = (string) $tag;
+            if (! isset($seen[$string])) {
+                $seen[$string] = true;
+                $unique[] = $tag;
+            }
+        }
+
+        return $unique;
     }
 
     /**
      * Trim a tag list so the space-joined header stays within $limit bytes,
      * preserving order (callers place the must-keep coarse tags first).
      *
-     * @param  string[]  $tags
-     * @return string[]
+     * @param  Tag[]  $tags
+     * @return Tag[]
      */
     protected function fitToBudget(array $tags, int $limit): array
     {
@@ -198,7 +238,7 @@ class CacheTags
         $length = 0;
 
         foreach ($tags as $tag) {
-            $length += ($fitted ? 1 : 0) + strlen($tag); // +1 for the separator
+            $length += ($fitted ? 1 : 0) + strlen((string) $tag); // +1 for the separator
             if ($length > $limit) {
                 break;
             }
@@ -235,13 +275,15 @@ class CacheTags
     {
         $this->purgeTags = [
             ...$this->purgeTags,
-            ...Tag::toStrings(Util::flatten($tags)),
+            ...Tag::fromMany(Util::flatten($tags)),
         ];
     }
 
     public function purgeQueued(): bool
     {
-        $tags = Util::normalizeTags($this->purgeTags);
+        // The store and invalidators work in strings; serialize the queued Tags,
+        // run the (string) filter, and re-validate.
+        $tags = Util::normalizeTags(Tag::toStrings($this->purgeTags));
         $tags = apply_filters(self::FILTER_TAGS, $tags);
         $tags = Util::normalizeTags($tags);
 

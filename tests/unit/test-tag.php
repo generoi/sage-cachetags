@@ -35,6 +35,7 @@ class TestTag extends WP_UnitTestCase
         // A site's own custom tags must survive verbatim.
         yield 'custom' => ['my:custom:tag'];
         yield 'custom single' => ['banner'];
+        yield 'custom deep' => ['a:b:c:d:e'];
         yield 'scoped custom' => ['site:3:my:custom:tag'];
     }
 
@@ -52,47 +53,57 @@ class TestTag extends WP_UnitTestCase
         $this->assertSame('term:9:full', (string) Tag::term(9)->full());
         $this->assertSame('archive:post', (string) Tag::archive('post'));
         $this->assertSame('archive:post:any', (string) Tag::archive('post')->any());
-        $this->assertSame('archive:post:fi', (string) Tag::archive('post')->inLanguage('fi'));
         $this->assertSame('taxonomy:category:any', (string) Tag::taxonomy('category')->any());
         $this->assertSame('role:editor', (string) Tag::role('editor'));
         $this->assertSame('option:blogname', (string) Tag::option('blogname'));
         $this->assertSame('lang:fi', (string) Tag::language('fi'));
         $this->assertSame('nonce', (string) Tag::nonce());
         $this->assertSame('site:1', (string) Tag::site(1));
+        $this->assertSame('gform:5', (string) Tag::form(5));
+        $this->assertSame('custom:9', (string) Tag::of('custom', 9));
     }
 
-    public function test_parse_extracts_structured_fields(): void
+    public function test_qualify_is_the_general_trailing_variant(): void
+    {
+        // Replaces the i18n-specific inLanguage() — language is just a qualifier.
+        $this->assertSame('archive:post:fi', (string) Tag::archive('post')->qualify('fi'));
+        $this->assertSame('archive:post:any', (string) Tag::archive('post')->qualify('any'));
+    }
+
+    public function test_scope_is_general_and_composes_for_nested_dimensions(): void
+    {
+        // Replaces the site-only withScope(int): any dimension, any depth.
+        $this->assertSame('site:7:post:123', (string) Tag::post(123)->scope('site', 7));
+        $this->assertSame(
+            'network:2:site:5:post:123',
+            (string) Tag::post(123)->scope('network', 2)->scope('site', 5),
+            'scopes nest outer→inner in call order'
+        );
+        $this->assertSame('site:7:custom:thing', (string) Tag::of('custom', 'thing')->scope('site', 7));
+    }
+
+    public function test_parse_extracts_structured_fields_and_scope(): void
     {
         $tag = Tag::parse('site:5:post:123');
         $this->assertSame('post', $tag->type);
-        $this->assertSame(123, $tag->identifier);
-        $this->assertSame(5, $tag->scope);
+        $this->assertSame(123, $tag->id);
+        $this->assertSame([['site', 5]], $tag->scopes);
         $this->assertNull($tag->qualifier);
-        $this->assertFalse($tag->isRaw());
 
-        $archive = Tag::parse('archive:product:any');
-        $this->assertSame('archive', $archive->type);
-        $this->assertSame('product', $archive->identifier);
-        $this->assertSame('any', $archive->qualifier);
+        $nested = Tag::parse('network:2:site:5:archive:post:any');
+        $this->assertSame('archive', $nested->type);
+        $this->assertSame('post', $nested->id);
+        $this->assertSame('any', $nested->qualifier);
+        $this->assertSame([['network', 2], ['site', 5]], $nested->scopes);
     }
 
-    public function test_unknown_strings_are_raw_and_round_trip(): void
+    public function test_a_bare_scope_dimension_tag_is_not_mistaken_for_a_prefix(): void
     {
-        $tag = Tag::parse('my:custom:tag');
-        $this->assertTrue($tag->isRaw());
-        $this->assertSame('my:custom:tag', $tag->raw);
-        $this->assertSame('my:custom:tag', (string) $tag);
-
-        // A malformed known type is treated as raw, not silently coerced.
-        $this->assertTrue(Tag::parse('post:not-a-number')->isRaw());
-    }
-
-    public function test_scope_applies_to_structured_and_raw_tags(): void
-    {
-        $this->assertSame('site:7:post:123', (string) Tag::post(123)->withScope(7));
-        $this->assertSame('site:7:my:custom', (string) Tag::raw('my:custom')->withScope(7));
-        // withScope(null) removes a scope.
-        $this->assertSame('post:123', (string) Tag::parse('site:7:post:123')->withScope(null));
+        // "site:5" is the site tag itself, not an empty-bodied scope.
+        $tag = Tag::parse('site:5');
+        $this->assertSame('site', $tag->type);
+        $this->assertSame(5, $tag->id);
+        $this->assertSame([], $tag->scopes);
     }
 
     public function test_from_accepts_strings_and_tags(): void

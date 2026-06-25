@@ -82,12 +82,12 @@ class Polylang implements Action
             // scope) — matching the previous count===2 string check exactly.
             $isBareTranslatedArchive = $parsed->type === 'archive'
                 && $parsed->qualifier === null
-                && $parsed->scope === null
-                && pll_is_translated_post_type($parsed->identifier);
+                && $parsed->scopes === []
+                && pll_is_translated_post_type($parsed->id);
 
             if ($isBareTranslatedArchive && $languages) {
                 foreach ($languages as $language) {
-                    $result[] = (string) $parsed->inLanguage($language);
+                    $result[] = (string) $parsed->qualify($language);
                 }
 
                 continue;

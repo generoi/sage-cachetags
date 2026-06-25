@@ -3,35 +3,43 @@
 namespace Genero\Sage\CacheTags;
 
 /**
- * A cache tag as structured data.
+ * A cache tag as structured, immutable data with a fluent builder.
  *
- * Tags are strings at every boundary (the Cache-Tag header, the store, the
- * invalidators, the cachetags/filter-tags filter, custom code calling add()),
- * but reasoning about them — applying a multisite scope or a language, or
- * collapsing a high-cardinality tag to its coarse form — is cleaner on fields
- * than on strings. This object is that structured form; parse() and __toString()
- * are the single place a tag string is read or written, so the rest of the
- * codebase never parses tags.
+ * The codebase passes Tags around, not strings; a tag is only turned into a
+ * string at a true boundary (the Cache-Tag header, the store, an HTTP purge),
+ * and a string only becomes a Tag when one comes in (a site's custom tag, the
+ * cachetags/filter-tags filter). parse() and __toString() are the single place
+ * that conversion happens.
  *
- * Unrecognised strings (a site's own custom tags) round-trip exactly via the
- * `raw` field, so the structured model is fully backwards compatible.
+ * Context is expressed with two general operations rather than purpose-built
+ * methods, so new dimensions (a multisite network, a tenant, …) need no new API:
+ *
+ *   Tag::post(5)                         // post:5
+ *   Tag::archive('post')->any()          // archive:post:any
+ *   Tag::term(9)->full()                 // term:9:full
+ *   Tag::post(5)->scope('site', 5)       // site:5:post:5
+ *   Tag::post(5)->scope('network', 2)->scope('site', 5)  // network:2:site:5:post:5
+ *   Tag::archive('post')->qualify($lang) // archive:post:fi
+ *   Tag::of('gform', 5)                  // an arbitrary type
+ *
+ * Unrecognised strings round-trip verbatim, so custom tags are fully supported.
  */
 final class Tag implements \Stringable
 {
-    /** Tag types whose identifier is a numeric id. */
-    const NUMERIC_TYPES = ['post', 'term', 'user', 'comment', 'menu', 'gform', 'site'];
+    /**
+     * Leading "dimension:value" pairs treated as scope when reading a string,
+     * outermost first. Extend this as new scoping dimensions appear.
+     */
+    const SCOPE_DIMENSIONS = ['network', 'site'];
 
-    /** Tag types whose identifier is a name/slug. */
-    const NAMED_TYPES = ['archive', 'taxonomy', 'role', 'option', 'lang'];
-
-    /** Tag types with no identifier. */
-    const BARE_TYPES = ['nonce'];
-
+    /**
+     * @param  list<array{0: string, 1: int|string}>  $scopes  outer → inner
+     */
     private function __construct(
         public readonly string $type,
-        public readonly int|string|null $identifier = null,
+        public readonly int|string|null $id = null,
         public readonly ?string $qualifier = null,
-        public readonly ?int $scope = null,
+        public readonly array $scopes = [],
         public readonly ?string $raw = null,
     ) {}
 
@@ -60,7 +68,7 @@ final class Tag implements \Stringable
         return new self('menu', $id);
     }
 
-    public static function gform(int $id): self
+    public static function form(int $id): self
     {
         return new self('gform', $id);
     }
@@ -70,19 +78,19 @@ final class Tag implements \Stringable
         return new self('site', $id);
     }
 
-    public static function archive(string $name): self
+    public static function archive(string $postType): self
     {
-        return new self('archive', $name);
+        return new self('archive', $postType);
     }
 
-    public static function taxonomy(string $name): self
+    public static function taxonomy(string $taxonomy): self
     {
-        return new self('taxonomy', $name);
+        return new self('taxonomy', $taxonomy);
     }
 
-    public static function role(string $name): self
+    public static function role(string $role): self
     {
-        return new self('role', $name);
+        return new self('role', $role);
     }
 
     public static function option(string $name): self
@@ -101,12 +109,12 @@ final class Tag implements \Stringable
     }
 
     /**
-     * A tag whose string form isn't part of the known grammar (a site's custom
-     * tag). Carried verbatim so it round-trips exactly.
+     * Build a tag of an arbitrary type — the escape hatch for tags outside the
+     * named vocabulary (a custom integration's tags).
      */
-    public static function raw(string $literal): self
+    public static function of(string $type, int|string|null $id = null): self
     {
-        return new self('', null, null, null, $literal);
+        return new self($type, $id);
     }
 
     /**
@@ -119,29 +127,33 @@ final class Tag implements \Stringable
         return $tag instanceof self ? $tag : self::parse((string) $tag);
     }
 
+    /** Coarse "any of this type" form, e.g. archive:post:any. */
     public function any(): self
     {
-        return $this->withQualifier('any');
+        return $this->qualify('any');
     }
 
+    /** The "full"/pages qualifier, e.g. term:9:full. */
     public function full(): self
     {
-        return $this->withQualifier('full');
+        return $this->qualify('full');
     }
 
-    public function inLanguage(string $lang): self
+    /**
+     * Set the qualifier — the general trailing variant (any, full, a language, …).
+     */
+    public function qualify(string $qualifier): self
     {
-        return $this->withQualifier($lang);
+        return new self($this->type, $this->id, $qualifier, $this->scopes, $this->raw);
     }
 
-    public function withQualifier(?string $qualifier): self
+    /**
+     * Nest the tag under a scope dimension. Composable for any number of
+     * dimensions; the first scope() is the outermost.
+     */
+    public function scope(string $dimension, int|string $value): self
     {
-        return new self($this->type, $this->identifier, $qualifier, $this->scope, $this->raw);
-    }
-
-    public function withScope(?int $scope): self
-    {
-        return new self($this->type, $this->identifier, $this->qualifier, $scope, $this->raw);
+        return new self($this->type, $this->id, $this->qualifier, [...$this->scopes, [$dimension, $value]], $this->raw);
     }
 
     public function isRaw(): bool
@@ -151,49 +163,53 @@ final class Tag implements \Stringable
 
     public function __toString(): string
     {
+        $prefix = '';
+        foreach ($this->scopes as [$dimension, $value]) {
+            $prefix .= "{$dimension}:{$value}:";
+        }
+
         $body = $this->isRaw()
             ? $this->raw
             : $this->type
-                .($this->identifier !== null ? ":{$this->identifier}" : '')
+                .($this->id !== null ? ":{$this->id}" : '')
                 .($this->qualifier !== null ? ":{$this->qualifier}" : '');
 
-        return $this->scope !== null ? "site:{$this->scope}:{$body}" : $body;
+        return $prefix.$body;
     }
 
     /**
-     * Read a tag string into structure. The one place a tag string is parsed —
-     * including peeling off an optional multisite "site:N:" scope prefix.
+     * Read a tag string into structure — the one place a tag string is parsed,
+     * including peeling off leading scope dimensions.
      */
     public static function parse(string $tag): self
     {
-        $scope = null;
-        if (preg_match('/^site:(\d+):(.+)$/', $tag, $matches)) {
-            $scope = (int) $matches[1];
-            $tag = $matches[2];
+        $scopes = [];
+        $segments = explode(':', $tag);
+
+        // Peel leading "dimension:value" scope pairs while a body remains after
+        // them, so a bare "site:5" stays a tag but "site:5:post:3" is scoped.
+        while (count($segments) > 2 && in_array($segments[0], self::SCOPE_DIMENSIONS, true)) {
+            $dimension = array_shift($segments);
+            $value = array_shift($segments);
+            $scopes[] = [$dimension, ctype_digit($value) ? (int) $value : $value];
         }
 
-        $parts = explode(':', $tag);
-        $type = $parts[0];
+        $type = $segments[0];
+        $id = $segments[1] ?? null;
+        $qualifier = $segments[2] ?? null;
 
-        // A bare "site:N" tag (the scope tag itself, not a prefix).
-        if ($type === 'site' && $scope === null && count($parts) === 2 && ctype_digit($parts[1])) {
-            return new self('site', (int) $parts[1]);
+        // A clean type:id(:qualifier) shape (≤ 3 segments) maps to fields; numeric
+        // ids become ints. Anything else is kept verbatim as a raw tag.
+        if ($type !== '' && count($segments) <= 3) {
+            return new self(
+                $type,
+                $id !== null && ctype_digit($id) ? (int) $id : $id,
+                $qualifier,
+                $scopes,
+            );
         }
 
-        if (in_array($type, self::NUMERIC_TYPES, true) && isset($parts[1]) && ctype_digit($parts[1])) {
-            return new self($type, (int) $parts[1], $parts[2] ?? null, $scope);
-        }
-
-        if (in_array($type, self::NAMED_TYPES, true) && isset($parts[1]) && $parts[1] !== '') {
-            return new self($type, $parts[1], $parts[2] ?? null, $scope);
-        }
-
-        if (in_array($type, self::BARE_TYPES, true) && count($parts) === 1) {
-            return new self($type, null, null, $scope);
-        }
-
-        // Unknown shape — keep the literal so custom tags round-trip exactly.
-        return new self('', null, null, $scope, $tag);
+        return new self('', null, null, $scopes, implode(':', $segments));
     }
 
     /**

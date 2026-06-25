@@ -31,9 +31,9 @@ class Site implements Action
                 $parsed = Tag::from($tag);
 
                 // Leave the bare site tag itself unscoped; scope everything else.
-                return $parsed->type === 'site' && $parsed->scope === null
+                return $parsed->type === 'site' && $parsed->scopes === []
                     ? $tag
-                    : (string) $parsed->withScope($siteId);
+                    : (string) $parsed->scope('site', $siteId);
             },
             $tags
         );
