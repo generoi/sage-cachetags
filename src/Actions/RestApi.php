@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Util;
 use WP_Comment;
@@ -48,7 +49,7 @@ class RestApi implements Action
     /**
      * Map of collection route → listing tag, rebuilt each request.
      *
-     * @var array<string, string[]>
+     * @var array<string, Tag[]>
      */
     protected array $listingRoutes = [];
 
@@ -190,7 +191,7 @@ class RestApi implements Action
      * Cache tags for the objects a post response references (terms, author,
      * featured media), which are exposed as fields regardless of _embed.
      *
-     * @return string[]
+     * @return array<string|Tag>
      */
     protected function relatedTags(WP_Post $post, WP_REST_Request $request): array
     {
@@ -235,7 +236,7 @@ class RestApi implements Action
     /**
      * Map each REST collection route to the listing tag it should carry.
      *
-     * @return array<string, string[]>
+     * @return array<string, Tag[]>
      */
     protected function mapListingRoutes(): array
     {

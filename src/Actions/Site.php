@@ -42,8 +42,6 @@ class Site implements Action
 
     public function addSiteTag(): void
     {
-        $this->cacheTags->add([
-            ...SiteTags::sites(),
-        ]);
+        $this->cacheTags->add(SiteTags::sites());
     }
 }

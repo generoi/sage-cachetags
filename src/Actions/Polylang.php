@@ -139,7 +139,7 @@ class Polylang implements Action
         $languages = $lang ? [$lang] : (function_exists('pll_languages_list') ? pll_languages_list() : []);
 
         foreach ($languages as $language) {
-            $this->cacheTags->clear(["archive:{$post->post_type}:{$language}"]);
+            $this->cacheTags->clear(Tag::archive($post->post_type)->qualify($language));
         }
     }
 }

@@ -150,9 +150,7 @@ class WooCommerce implements Action
     {
         switch (true) {
             case function_exists('is_shop') && is_shop():
-                $this->cacheTags->add([
-                    ...WooCommerceTags::shop(),
-                ]);
+                $this->cacheTags->add(WooCommerceTags::shop());
                 break;
         }
     }
