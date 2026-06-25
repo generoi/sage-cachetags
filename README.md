@@ -77,15 +77,21 @@ across all sites.
 
 Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer, WP Rocket and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
 
-**Coarse tags and full flushes.** A coarse tag like `archive:post` can resolve to
-many stored URLs (every page that lists posts). The URL-based invalidators
-(Kinsta, SiteGround, …) escalate to a **full cache flush** past a threshold rather
-than firing thousands of individual purges — so on a busy editorial site a single
-publish can flush the whole cache. This is intentional: those providers
-effectively rate-limit purges, and over-purging is safe when we can't know the
-exact set of URLs. The thresholds are tunable per provider (below). **Fastly is
-unaffected** — it purges by `Surrogate-Key`, so the URL count is irrelevant, which
-makes it the best fit for high-frequency editorial sites.
+**Coarse tags and bulk purges.** A coarse tag like `archive:post` can resolve to
+many stored URLs (every page that lists posts), which URL-based invalidators must
+handle without firing thousands of individual purges, since those providers
+effectively rate-limit purges. They differ in how:
+
+- **SiteGround** (and similar) escalate to a **full cache flush** past a tunable
+  threshold (`cachetags/siteground-bulk-purge-threshold`) — over-purging is safe
+  when we can't know the exact URL set, though on a busy editorial site a single
+  publish can flush the whole cache.
+- **Kinsta** instead routes bulk purges to its throttled endpoint, which coalesces
+  them server-side — no full flush. The `KinstaGroupCacheInvalidator` (prefix
+  purges) cuts the request count further; it's the recommended Kinsta setup.
+
+**Fastly is unaffected** — it purges by `Surrogate-Key`, so URL count is
+irrelevant, which makes it the best fit for high-frequency editorial sites.
 
 ### Stored URL and query strings
 
