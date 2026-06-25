@@ -20,7 +20,11 @@ namespace Genero\Sage\CacheTags\Fastly;
  */
 class QueryAllowlist
 {
+    /** Add/remove cache-significant params the built-ins didn't catch. */
     const FILTER = 'cachetags/fastly-allowed-query-params';
+
+    /** Last word over the exact list synced to Fastly (edit/add/remove). */
+    const SYNC_FILTER = 'cachetags/fastly-allowlist';
 
     /**
      * @return string[] sorted, de-duplicated param names
@@ -29,15 +33,27 @@ class QueryAllowlist
     {
         $params = array_merge(self::core(), self::wooCommerce(), self::facetwp(), self::polylang());
 
-        /**
-         * Final say over the allowlist — add a site's bespoke params, or remove
-         * one the built-ins got wrong. Receives and returns string[].
-         */
+        // Add a site's bespoke params, or drop one the built-ins got wrong.
         $params = (array) apply_filters(self::FILTER, $params);
 
-        // Reject names that aren't header/cache-key safe: a comma would corrupt the
-        // comma-joined dictionary value (and the VCL's filtersep split), whitespace
-        // or control chars would break the edge filter. Mirrors Util::isValidTag.
+        $params = self::sanitize($params);
+
+        // Last word over the exact list about to be synced — re-sanitised so an
+        // edit can't push a name that would corrupt the dictionary value.
+        return self::sanitize((array) apply_filters(self::SYNC_FILTER, $params));
+    }
+
+    /**
+     * Drop names that aren't header/cache-key safe (a comma would corrupt the
+     * comma-joined dictionary value and the VCL's filtersep split, whitespace or
+     * control chars would break the filter), then de-dupe and sort. Mirrors the
+     * discipline of Util::isValidTag.
+     *
+     * @param  mixed[]  $params
+     * @return string[]
+     */
+    protected static function sanitize(array $params): array
+    {
         $params = array_filter(
             array_map('strval', $params),
             fn ($param) => (bool) preg_match('/^[A-Za-z0-9_\-]+$/', $param)
@@ -49,13 +65,6 @@ class QueryAllowlist
         return $params;
     }
 
-    /**
-     * WooCommerce archive/shop filtering params, including the layered-nav widget
-     * params for each registered product attribute (`filter_{slug}` +
-     * `query_type_{slug}`).
-     *
-     * @return string[]
-     */
     /**
      * WordPress's content-determining query vars — the built-ins plus anything a
      * theme/plugin registers via the `query_vars` filter, so custom routable params

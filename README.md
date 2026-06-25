@@ -194,12 +194,21 @@ return [
 
 ### Fastly query-param allowlist (edge cache-key normalisation)
 
-Query-string variants fragment the edge cache: `/shop/?orderby=price&fbclid=x`,
-`/shop/?orderby=price&utm_source=…` and `/shop/?orderby=price` are three cached
-objects when they should be one. The fix is an **allowlist** — only
-*cache-significant* params (a WooCommerce attribute filter, a FacetWP facet,
-`orderby`, `s`, …) belong in the cache key; everything else is stripped at the
-edge. But that list is **site-specific and dynamic**, which only WordPress knows.
+**Shrinks the query-string DDoS / cache-busting surface.** An attacker (or a
+runaway bot) can append unbounded unique query params — `?x=1`, `?x=2`, … — to
+force a cache miss on *every* request and hammer the origin. A deny-list of known
+trackers can't stop that (the attacker just uses names that aren't on it); an
+**allowlist** can — only known *cache-significant* params (a WooCommerce attribute
+filter, a FacetWP facet, `orderby`, `s`, …) survive into the cache key, so anything
+unrecognised collapses to the canonical cached object and never reaches origin. It
+de-fragments ordinary tracker/bot noise (`utm_*`, `gclid`) as a bonus. The list is
+**site-specific and dynamic**, which only WordPress knows.
+
+It allowlists param *names* (keeping values) — which covers the main vector
+(random names) and stays within Fastly's dictionary size budget. A high-cardinality
+*allowlisted* key can still be value-busted (notably `s` search — unbounded
+values); cache-bypass or rate-limit those at the edge separately rather than
+enumerating values here.
 
 So the plugin computes the allowlist and syncs it to a Fastly **Edge Dictionary**
 (versionless — updates hit the live edge in ~30s, no deploy), and a small static
@@ -264,9 +273,17 @@ separate allowlist per site.
 > `cachetags/fastly-allowed-query-params` filter:
 
 ```php
+// Add a param the built-ins missed (or drop one they got wrong):
 add_filter('cachetags/fastly-allowed-query-params', function (array $params) {
     $params[] = 'my_custom_facet';
     return $params;
+});
+
+// …or take the last word over the exact list synced to Fastly (edit/add/remove).
+// Runs after the built-ins + the filter above; the result is re-sanitised, so a
+// name with a comma/space/control char can't reach the dictionary.
+add_filter('cachetags/fastly-allowlist', function (array $params) {
+    return array_values(array_diff($params, ['feed', 'author']));
 });
 ```
 

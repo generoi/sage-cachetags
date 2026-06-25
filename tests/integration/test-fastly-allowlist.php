@@ -50,6 +50,17 @@ class TestFastlyAllowlist extends WP_UnitTestCase
         }
     }
 
+    public function test_sync_filter_takes_the_last_word_and_is_resanitised(): void
+    {
+        add_filter('cachetags/fastly-allowlist', fn ($p) => array_merge(array_diff($p, ['s']), ['extra', 'bad,name']));
+
+        $params = QueryAllowlist::collect();
+
+        $this->assertContains('extra', $params, 'added via the sync filter');
+        $this->assertNotContains('s', $params, 'removed via the sync filter');
+        $this->assertNotContains('bad,name', $params, 're-sanitised — a comma cannot reach the dictionary');
+    }
+
     public function test_woocommerce_params_use_unprefixed_attribute_slug(): void
     {
         $params = QueryAllowlist::wooCommerceParams([
