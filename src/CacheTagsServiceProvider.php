@@ -50,6 +50,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             actions: $config->get('cachetags.action', []),
             nonceCron: $config->get('cachetags.nonce-cron', false),
             autoDetectActions: $config->get('cachetags.auto-detect-actions', true),
+            baseTag: $config->get('cachetags.base-tag', 'page'),
         );
 
         return $bootstrap;

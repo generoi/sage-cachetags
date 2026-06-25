@@ -527,23 +527,34 @@ To manage the action list entirely yourself, turn detection off:
 (new Bootstrap)->autoDetectActions(false)->/* … */->bootstrap();
 ```
 
+### Flushing all pages, or a whole language
+
+Every cacheable page and REST response carries a base `page` tag, so a single
+purge clears all WordPress-served pages at once — static assets (images/CSS/JS),
+which never carry it, stay cached:
+
+```sh
+wp cachetags clear page
+```
+
+Rename it or turn it off with `'base-tag' => null` (config) / `->baseTag(null)`
+(bootstrap).
+
+When Polylang is active, every page is also tagged with its language, so you can
+clear all content in one language:
+
+```sh
+wp cachetags clear lang:fi
+```
+
 ### The `Site` action
 
-Enable the `Site` action to tag every WordPress-served page with a `site:{id}` key
-and prefix all other tags with it (`site:1:post:123`). Two uses, both common:
-
-- **Flush all dynamic pages in one purge — even on a single site.** Every
-  WP-rendered page carries `site:1`, but static assets (images/CSS/JS) don't, so
-  purging that one tag clears the whole site's pages at the edge while leaving
-  assets cached:
-
-  ```sh
-  wp cachetags clear site:1
-  ```
-
-- **Multisite scoping.** When one edge (e.g. a single Fastly service) fronts the
-  whole network, the `site:{id}:` prefix keeps a purge on one site from clearing
-  same-id content (`post:123`) on another.
+On multisite where one edge (e.g. a single Fastly service) fronts the whole
+network, enable the `Site` action. It prefixes every tag with the site id
+(`site:5:post:123`) so a purge on one site never clears same-id content on
+another, and tags each page with `site:{id}` for a per-site flush-all
+(`wp cachetags clear site:5`). On a single site you don't need it — the base
+`page` tag above already gives flush-all without the per-tag prefixing.
 
 ### Multisite tables
 

@@ -1,5 +1,6 @@
 <?php
 
+use Genero\Sage\CacheTags\Actions\BaseTag;
 use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\Actions\WooCommerce;
@@ -186,6 +187,30 @@ class TestBootstrap extends WP_UnitTestCase
 
         $this->assertTrue($cacheTags->debug);
         $this->assertSame('Surrogate-Key', $cacheTags->httpHeader);
+    }
+
+    public function test_base_tag_action_is_bound_by_default_and_disabled_with_null(): void
+    {
+        $withBase = (new Bootstrap)->store(TransientStore::class)->actions([])->disable()->bootstrap();
+        $this->assertTrue($withBase->hasAction(BaseTag::class), 'base tag bound by default');
+
+        $this->instanceProp()->setValue(null, null);
+
+        $without = (new Bootstrap)->store(TransientStore::class)->actions([])->baseTag(null)->disable()->bootstrap();
+        $this->assertFalse($without->hasAction(BaseTag::class), 'baseTag(null) binds nothing');
+    }
+
+    public function test_base_tag_action_tags_every_page(): void
+    {
+        $cacheTags = (new Bootstrap)->store(TransientStore::class)->actions([])->disable()->bootstrap();
+
+        $action = new BaseTag($cacheTags, 'page');
+        $action->bind();
+        $this->assertNotFalse(has_action('template_redirect', [$action, 'addBaseTag']));
+        $this->assertNotFalse(has_action('rest_api_init', [$action, 'addBaseTag']));
+
+        $action->addBaseTag();
+        $this->assertContains('page', $cacheTags->get());
     }
 
     // WooCommerce + Polylang are loaded in the test env, so with detection on

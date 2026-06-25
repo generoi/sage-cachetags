@@ -52,6 +52,7 @@ class Bootstrap
         protected array $actions = [Core::class],
         protected bool $nonceCron = false,
         protected bool $autoDetectActions = true,
+        protected ?string $baseTag = 'page',
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -135,6 +136,18 @@ class Bootstrap
     }
 
     /**
+     * Set (or disable, with null) the base tag added to every cacheable page and
+     * REST response — a single key to purge all WordPress-served pages at once
+     * (static assets, which never carry it, stay cached). Default "page".
+     */
+    public function baseTag(?string $tag): static
+    {
+        $this->baseTag = $tag;
+
+        return $this;
+    }
+
+    /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
@@ -208,6 +221,12 @@ class Bootstrap
             },
             $this->withDetectedActions(array_filter($this->actions))
         );
+
+        // Always-on base tag (unless disabled with baseTag(null)) — bound with the
+        // configured tag name, so a single purge clears all WP-served pages.
+        if ($this->baseTag) {
+            $actions[] = new Actions\BaseTag($this->cacheTags, $this->baseTag);
+        }
 
         foreach ($actions as $action) {
             $this->cacheTags->bindAction($action);
