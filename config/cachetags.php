@@ -34,6 +34,13 @@ return [
     // cached at the edge leaves an object you can't purge by tag. null to disable.
     'prune-older-than' => '30d',
 
+    // Opt in to the Fastly query-param allowlist: name the Edge Dictionary the
+    // `wp cachetags fastly-allowlist` commands sync the cache-significant params to
+    // (WooCommerce attributes, FacetWP facets, search, …). A static VCL snippet
+    // reads it and strips every other query param from the cache key, collapsing
+    // tracker/bot noise. null = off. See the README "Fastly query-param allowlist".
+    'fastly-allowlist-dictionary' => null,
+
     'action' => [
         Core::class,
         DebugComment::class,

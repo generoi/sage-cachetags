@@ -192,6 +192,69 @@ return [
 ];
 ````
 
+### Fastly query-param allowlist (edge cache-key normalisation)
+
+Query-string variants fragment the edge cache: `/shop/?orderby=price&fbclid=x`,
+`/shop/?orderby=price&utm_source=…` and `/shop/?orderby=price` are three cached
+objects when they should be one. The fix is an **allowlist** — only
+*cache-significant* params (a WooCommerce attribute filter, a FacetWP facet,
+`orderby`, `s`, …) belong in the cache key; everything else is stripped at the
+edge. But that list is **site-specific and dynamic**, which only WordPress knows.
+
+So the plugin computes the allowlist and syncs it to a Fastly **Edge Dictionary**
+(versionless — updates hit the live edge in ~30s, no deploy), and a small static
+VCL snippet reads it and filters the cache key. Opt in by naming the dictionary:
+
+```php
+// config/cachetags.php  (or ->fastlyAllowlistDictionary('…') standalone)
+'fastly-allowlist-dictionary' => 'cachetags_query_allowlist',
+```
+
+**Setup:**
+
+1. Create an Edge Dictionary named `cachetags_query_allowlist` on your Fastly
+   service (one-time, in the Fastly UI/API). Make sure `FASTLY_SERVICE_ID` /
+   `FASTLY_API_KEY` are set (same env as purging).
+2. Add the VCL snippet below to `vcl_recv` (one-time).
+3. Review the computed list and push it:
+
+   ```sh
+   wp cachetags fastly-allowlist preview   # what WordPress will sync — review it
+   wp cachetags fastly-allowlist sync      # push to the dictionary
+   wp cachetags fastly-allowlist status    # what's at Fastly + in-sync?
+   ```
+
+   Re-run `sync` whenever your attributes/facets change (e.g. from a deploy hook).
+
+**VCL snippet** (`vcl_recv`):
+
+```vcl
+declare local var.allow STRING;
+set var.allow = table.lookup(cachetags_query_allowlist, "params", "");
+if (var.allow != "") {                                  # fail-open until first sync
+  set var.allow = regsuball(var.allow, ",", querystring.filtersep());
+  set req.url = querystring.filter_except(req.url, var.allow);
+}
+set req.url = querystring.sort(req.url);                 # canonical param order
+```
+
+> ⚠️ **An incomplete allowlist serves wrong content.** A param that's stripped but
+> *was* meaningful (a missed facet, `min_price`) collapses real variants into one
+> cached page — silently. This is fail-*dangerous*, unlike the deny-list of known
+> trackers. Always `preview` before `sync`, and add anything the built-ins miss via
+> the `cachetags/fastly-allowed-query-params` filter:
+
+```php
+add_filter('cachetags/fastly-allowed-query-params', function (array $params) {
+    $params[] = 'my_custom_facet';
+    return $params;
+});
+```
+
+The built-ins cover core (`s`, `orderby`, `paged`), WooCommerce (attribute filters,
+price, rating) and FacetWP facets. Syncing is manual (CLI) — wire it to a deploy
+hook if you want it automated.
+
 ## REST API integration
 
 For headless/decoupled setups where pages are served from the WordPress REST
