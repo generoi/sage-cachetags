@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\BaseTag;
 use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Actions\Gravityform;
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\Actions\WooCommerce;
 use Genero\Sage\CacheTags\Bootstrap;
@@ -89,9 +90,13 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertNotFalse(has_action('shutdown', [$bootstrap, 'purgeCacheTags']));
     }
 
-    public function test_schedules_the_nonce_cron_when_enabled(): void
+    public function test_gravityform_action_schedules_the_nonce_cron(): void
     {
-        (new Bootstrap)->store(TransientStore::class)->actions([])->nonceCron(true)->bootstrap();
+        NonceCron::unschedule();
+        $cacheTags = (new Bootstrap)->store(TransientStore::class)->actions([])->disable()->bootstrap();
+
+        // The action owns the cron — binding it schedules the purge.
+        (new Gravityform($cacheTags))->bind();
 
         $this->assertNotFalse(wp_next_scheduled(NonceCron::HOOK));
         NonceCron::unschedule();
@@ -224,6 +229,21 @@ class TestBootstrap extends WP_UnitTestCase
 
         $this->assertContains(WooCommerce::class, $result);
         $this->assertContains(Polylang::class, $result);
+        // Gravity Forms isn't loaded in the test env, so its detection key (also
+        // wired) stays absent — never falsely appended.
+        $this->assertNotContains(Gravityform::class, $result);
+    }
+
+    public function test_nonce_cron_is_unscheduled_without_the_gravityform_action(): void
+    {
+        // Pretend a stale schedule exists, then bootstrap without the Gravityform
+        // action — Bootstrap cleans up the orphaned cron.
+        NonceCron::register();
+        $this->assertNotFalse(wp_next_scheduled(NonceCron::HOOK));
+
+        (new Bootstrap)->store(TransientStore::class)->actions([])->autoDetectActions(false)->bootstrap();
+
+        $this->assertFalse(wp_next_scheduled(NonceCron::HOOK));
     }
 
     public function test_auto_detect_actions_can_be_disabled(): void

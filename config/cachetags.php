@@ -2,7 +2,6 @@
 
 use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Actions\DebugComment;
-use Genero\Sage\CacheTags\Actions\Gravityform;
 use Genero\Sage\CacheTags\Invalidators\SuperCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 
@@ -14,13 +13,14 @@ return [
     'invalidator' => [
         SuperCacheInvalidator::class,
     ],
-    // Auto-enable the WooCommerce and Polylang actions when their plugin is
-    // active (WooCommerce keeps cart/checkout/account out of the shared cache;
-    // Polylang adds language-aware purging). Set false to manage the action list
-    // entirely via 'action' below.
+
+    // The WooCommerce, Polylang and Gravity Forms actions are auto-enabled when
+    // their plugin is active — cart/checkout/account stay uncached, language-aware
+    // purging, and prepopulated-form handling. Set false to manage 'action'
+    // entirely yourself.
     'auto-detect-actions' => true,
 
-    // A tag added to every cacheable page and REST response, so one purge
+    // A tag on every cacheable page + REST response, so one purge
     // (`wp cachetags clear page`) clears all WordPress-served pages while static
     // assets stay cached. Set to null to disable, or rename it.
     'base-tag' => 'page',
@@ -28,7 +28,9 @@ return [
     'action' => [
         Core::class,
         DebugComment::class,
-        Gravityform::class,
+
+        // WooCommerce / Polylang / Gravity Forms are added automatically when
+        // active (see auto-detect-actions above); list them here to force them on.
 
         // Tag REST API read responses for headless/decoupled setups. Keep Core
         // enabled alongside it so block-derived tags are collected too.
@@ -44,16 +46,4 @@ return [
         // login cookie. Cart/checkout/account still bypass.
         // \Genero\Sage\CacheTags\Actions\CacheCustomers::class,
     ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Nonce Cron
-    |--------------------------------------------------------------------------
-    |
-    | When enabled, WP-Cron will purge cache for pages tagged with 'nonce'
-    | every 12 hours. Enable this when using forms with file uploads (e.g.
-    | Gravity Forms) that are cached, since nonces expire after 12-24 hours.
-    |
-    */
-    'nonce-cron' => false,
 ];

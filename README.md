@@ -399,21 +399,23 @@ for 12–24h; once one ages out, the action it guards (a form submit, an AJAX
 
 Two ways to handle a page that bakes a nonce into its HTML:
 
-1. **Tag it `nonce` and enable the nonce cron.** The page is then purged every
-   12 hours, before any embedded nonce can expire. Enable `'nonce-cron' => true`
-   in the config (or `->nonceCron()` on `Bootstrap`), and add the tag wherever
-   the nonce is rendered:
+1. **Tag it `nonce`.** The page is then purged every 12 hours by the nonce cron,
+   before any embedded nonce can expire. When **Gravity Forms** is active its
+   action handles this automatically (it tags file-upload form pages and schedules
+   the cron). To tag your own page, add the tag where the nonce renders — and, if
+   you're *not* relying on Gravity Forms, schedule the cron once with
+   `NonceCron::register()`:
 
    ```php
    // e.g. a product page that prints a WooCommerce Store API nonce for add-to-cart
+   \Genero\Sage\CacheTags\NonceCron::register(); // no-op if already scheduled
+
    add_action('wp_footer', function () {
        if (function_exists('is_product') && is_product()) {
            \Genero\Sage\CacheTags\CacheTags::getInstance()?->add(['nonce']);
        }
    });
    ```
-
-   The `Gravityform` action already does this for file-upload fields.
 
 2. **Mark it non-cacheable** when the page also shows genuinely real-time data
    (e.g. live availability), where a 12h refresh isn't enough:
@@ -504,16 +506,20 @@ class ArticleList extends Block
 
 ## Integrations
 
-### WooCommerce & Polylang (auto-enabled)
+### WooCommerce, Polylang & Gravity Forms (auto-enabled)
 
-When WooCommerce or Polylang is active, its action is enabled automatically — you
-don't need to list it in `action`:
+When WooCommerce, Polylang or Gravity Forms is active, its action is enabled
+automatically — you don't need to list it in `action`:
 
 - **WooCommerce** keeps cart/checkout/account out of the shared cache and purges a
   product (plus its archives) on price/stock/status changes.
 - **Polylang** makes archive tags language-specific (`archive:post:fi`) so a change
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete.
+- **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
+  form's pages when it changes. Its file-upload forms use a per-session nonce, so
+  the [nonce cron](#nonces-in-cached-pages) also turns itself on when Gravity Forms
+  is active (`'nonce-cron' => null` = auto; set `true`/`false` to force it).
 
 To manage the action list entirely yourself, turn detection off:
 

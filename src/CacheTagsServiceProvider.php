@@ -48,7 +48,6 @@ class CacheTagsServiceProvider extends ServiceProvider
             store: $config->get('cachetags.store', WordpressDbStore::class),
             invalidators: $config->get('cachetags.invalidator', []),
             actions: $config->get('cachetags.action', []),
-            nonceCron: $config->get('cachetags.nonce-cron', false),
             autoDetectActions: $config->get('cachetags.auto-detect-actions', true),
             baseTag: $config->get('cachetags.base-tag', 'page'),
         );

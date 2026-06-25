@@ -50,7 +50,6 @@ class Bootstrap
         protected array $invalidators = [],
         /** @var Action[] */
         protected array $actions = [Core::class],
-        protected bool $nonceCron = false,
         protected bool $autoDetectActions = true,
         protected ?string $baseTag = 'page',
     ) {
@@ -113,13 +112,6 @@ class Bootstrap
     public function disable(bool $disable = true): static
     {
         $this->disable = $disable;
-
-        return $this;
-    }
-
-    public function nonceCron(bool $enable = true): static
-    {
-        $this->nonceCron = $enable;
 
         return $this;
     }
@@ -187,9 +179,10 @@ class Bootstrap
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
 
-            if ($this->nonceCron) {
-                NonceCron::register();
-            } else {
+            // The Gravityform action owns the nonce purge cron (it's the only
+            // producer of 'nonce' tags, from file-upload forms) and registers it in
+            // bind(). Clean up the orphaned schedule when that action isn't active.
+            if (! $this->cacheTags->hasAction(Actions\Gravityform::class)) {
                 NonceCron::unschedule();
             }
         } else {
@@ -234,10 +227,10 @@ class Bootstrap
     }
 
     /**
-     * Auto-enable integration actions whose plugin is active, so their safety
-     * vetoes (WooCommerce keeps cart/checkout/account out of the shared cache)
-     * and language-aware purging (Polylang) aren't silently missing when an
-     * operator forgets to list them. Toggle with autoDetectActions().
+     * Auto-enable integration actions whose plugin is active (WooCommerce,
+     * Polylang, Gravity Forms), so their safety vetoes (cart/checkout/account,
+     * prepopulated forms) and language-aware purging aren't silently missing when
+     * an operator forgets to list them. Toggle with autoDetectActions().
      *
      * @param  array<string|Action>  $actions
      * @return array<string|Action>
@@ -251,6 +244,7 @@ class Bootstrap
         $detected = array_filter([
             Actions\WooCommerce::class => class_exists('WooCommerce'),
             Actions\Polylang::class => defined('POLYLANG_VERSION'),
+            Actions\Gravityform::class => class_exists('GFForms'),
         ]);
 
         foreach (array_keys($detected) as $action) {
