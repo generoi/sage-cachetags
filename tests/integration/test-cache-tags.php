@@ -1,6 +1,7 @@
 <?php
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 
 /**
  * The header-byte-budget collapse in CacheTags::get()/bound(): when the combined
@@ -71,6 +72,20 @@ class TestCacheTags extends WP_UnitTestCase
 
         $this->assertContains('post:1', $tags);
         $this->assertNotContains("evil\r\nX-Injected: 1", $tags);
+    }
+
+    // The structured Tag API and raw custom strings interoperate through add().
+    public function test_accepts_tag_objects_alongside_custom_strings(): void
+    {
+        $cacheTags = $this->resetTags();
+        $id = self::factory()->post->create(['post_status' => 'publish']);
+
+        $cacheTags->add([Tag::post($id), 'banner', Tag::archive('post')->any()]);
+
+        $tags = $cacheTags->get();
+        $this->assertContains("post:{$id}", $tags, 'Tag object serialized');
+        $this->assertContains('banner', $tags, 'custom raw string preserved verbatim');
+        $this->assertContains('archive:post:any', $tags);
     }
 
     // The Site action prefixes every tag with "site:N:"; the collapse must see

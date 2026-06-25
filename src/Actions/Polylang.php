@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\PolylangTags;
 use WP_Post;
@@ -76,12 +77,17 @@ class Polylang implements Action
 
         $result = [];
         foreach ($tags as $tag) {
-            $parts = explode(':', $tag);
-            $isTranslatedArchive = count($parts) === 2 && $parts[0] === 'archive' && pll_is_translated_post_type($parts[1]);
+            $parsed = Tag::from($tag);
+            // Only a bare archive:{type} (no language/any qualifier, no site
+            // scope) — matching the previous count===2 string check exactly.
+            $isBareTranslatedArchive = $parsed->type === 'archive'
+                && $parsed->qualifier === null
+                && $parsed->scope === null
+                && pll_is_translated_post_type($parsed->identifier);
 
-            if ($isTranslatedArchive && $languages) {
+            if ($isBareTranslatedArchive && $languages) {
                 foreach ($languages as $language) {
-                    $result[] = "{$tag}:{$language}";
+                    $result[] = (string) $parsed->inLanguage($language);
                 }
 
                 continue;

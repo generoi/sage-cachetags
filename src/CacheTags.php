@@ -78,13 +78,16 @@ class CacheTags
     /**
      * Add a set of cache tags to this page load.
      *
-     * @param  string[]  $tags
+     * Accepts plain strings (a site's custom tags, the CoreTags builders) and/or
+     * Tag value objects; both are stored as their string form.
+     *
+     * @param  array<string|Tag|array>  $tags
      */
     public function add(array $tags): void
     {
         $this->cacheTags = [
             ...$this->cacheTags,
-            ...$tags,
+            ...Tag::toStrings(Util::flatten($tags)),
         ];
 
         $this->boundedTags = null;
@@ -135,12 +138,12 @@ class CacheTags
         $coarse = [];
 
         foreach ($tags as $tag) {
-            $collapsed = $this->collapse($tag);
+            $collapsed = $this->collapse(Tag::parse($tag));
 
             if ($collapsed === null) {
                 $kept[] = $tag;
             } else {
-                $coarse = [...$coarse, ...$collapsed];
+                $coarse[] = (string) $collapsed;
             }
         }
 
@@ -160,43 +163,26 @@ class CacheTags
 
     /**
      * Collapse a high-cardinality post:/term: tag to its coarse "any" form, or
-     * return null when it can't be collapsed (so the caller keeps it as-is). A
-     * multisite "site:N:" prefix is preserved so the coarse tag still matches
-     * what was stored.
+     * return null when it can't be collapsed (so the caller keeps it as-is).
      *
-     * @return string[]|null
+     * Operates on the structured Tag — a multisite scope is a field carried onto
+     * the coarse tag, so there's no string parsing or prefix juggling here.
      */
-    protected function collapse(string $tag): ?array
+    protected function collapse(Tag $tag): ?Tag
     {
-        [$prefix, $inner] = $this->splitSitePrefix($tag);
+        if ($tag->type === 'post' && is_int($tag->identifier)) {
+            $type = get_post_type($tag->identifier);
 
-        if (str_starts_with($inner, 'post:')) {
-            $type = get_post_type((int) substr($inner, strlen('post:')));
-
-            return $type ? $this->prefixed($prefix, CoreTags::anyArchive($type)) : null;
+            return $type ? Tag::archive($type)->any()->withScope($tag->scope) : null;
         }
 
-        if (str_starts_with($inner, 'term:')) {
-            $term = get_term((int) explode(':', $inner)[1]);
+        if ($tag->type === 'term' && is_int($tag->identifier)) {
+            $term = get_term($tag->identifier);
 
-            return $term instanceof WP_Term ? $this->prefixed($prefix, CoreTags::anyTerm($term->taxonomy)) : null;
+            return $term instanceof WP_Term ? Tag::taxonomy($term->taxonomy)->any()->withScope($tag->scope) : null;
         }
 
         return null;
-    }
-
-    /**
-     * Split an optional multisite "site:N:" prefix off the front of a tag.
-     *
-     * @return array{0: string, 1: string} [prefix, remainder]
-     */
-    protected function splitSitePrefix(string $tag): array
-    {
-        if (preg_match('/^(site:\d+:)(.*)$/', $tag, $matches)) {
-            return [$matches[1], $matches[2]];
-        }
-
-        return ['', $tag];
     }
 
     /**
@@ -223,21 +209,6 @@ class CacheTags
     }
 
     /**
-     * Re-apply a "site:N:" prefix to a set of (coarse) tags.
-     *
-     * @param  string[]  $tags
-     * @return string[]
-     */
-    protected function prefixed(string $prefix, array $tags): array
-    {
-        if ($prefix === '') {
-            return $tags;
-        }
-
-        return array_map(fn ($tag) => $prefix.$tag, $tags);
-    }
-
-    /**
      * Save current accumulated tags for current page url.
      */
     public function save(string $url): void
@@ -256,15 +227,15 @@ class CacheTags
     }
 
     /**
-     * Queue tags to be cleared from cache.
+     * Queue tags to be cleared from cache. Accepts strings and/or Tag objects.
      *
-     * @param  string[]  $tags
+     * @param  array<string|Tag|array>  $tags
      */
     public function clear(array $tags): void
     {
         $this->purgeTags = [
             ...$this->purgeTags,
-            ...$tags,
+            ...Tag::toStrings(Util::flatten($tags)),
         ];
     }
 
