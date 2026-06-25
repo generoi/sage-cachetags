@@ -34,6 +34,17 @@ class TestSiteAction extends WP_UnitTestCase
         $this->assertSame([$siteTag, "site:{$id}:post:1"], $result);
     }
 
+    // Only THIS site's own bare tag is left unscoped; a custom site:* tag or
+    // another site's tag flowing through still gets scoped (no cross-site collision).
+    public function test_scopes_a_custom_or_foreign_site_tag(): void
+    {
+        $id = get_current_blog_id();
+
+        $result = $this->action()->addSitePrefix(['site:foo', "site:{$id}", 'post:1']);
+
+        $this->assertSame(["site:{$id}:site:foo", "site:{$id}", "site:{$id}:post:1"], $result);
+    }
+
     public function test_add_site_tag_adds_the_current_site(): void
     {
         $cacheTags = CacheTags::getInstance();

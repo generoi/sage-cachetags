@@ -190,8 +190,7 @@ final class Tag implements \Stringable
         // them, so a bare "site:5" stays a tag but "site:5:post:3" is scoped.
         while (count($segments) > 2 && in_array($segments[0], self::SCOPE_DIMENSIONS, true)) {
             $dimension = array_shift($segments);
-            $value = array_shift($segments);
-            $scopes[] = [$dimension, ctype_digit($value) ? (int) $value : $value];
+            $scopes[] = [$dimension, self::intIfCanonical(array_shift($segments))];
         }
 
         $type = $segments[0];
@@ -203,13 +202,23 @@ final class Tag implements \Stringable
         if ($type !== '' && count($segments) <= 3) {
             return new self(
                 $type,
-                $id !== null && ctype_digit($id) ? (int) $id : $id,
+                $id !== null ? self::intIfCanonical($id) : null,
                 $qualifier,
                 $scopes,
             );
         }
 
         return new self('', null, null, $scopes, implode(':', $segments));
+    }
+
+    /**
+     * Cast a segment to int only when it's a canonical integer, so a custom tag's
+     * numeric-looking segment still round-trips verbatim (leading zeros like
+     * "0123", or values past PHP_INT_MAX, are kept as strings).
+     */
+    private static function intIfCanonical(string $value): int|string
+    {
+        return ctype_digit($value) && (string) (int) $value === $value ? (int) $value : $value;
     }
 
     /**

@@ -30,8 +30,9 @@ class Site implements Action
             function (string $tag) use ($siteId) {
                 $parsed = Tag::from($tag);
 
-                // Leave the bare site tag itself unscoped; scope everything else.
-                return $parsed->type === 'site' && $parsed->scopes === []
+                // Leave this site's own bare tag unscoped; scope everything else
+                // (incl. a custom site:foo or another site's tag flowing through).
+                return $parsed->type === 'site' && $parsed->id === $siteId && $parsed->scopes === []
                     ? $tag
                     : (string) $parsed->scope('site', $siteId);
             },
