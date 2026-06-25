@@ -103,6 +103,7 @@ class FastlyCacheInvalidator implements Invalidator
             for ($attempt = 0; ; $attempt++) {
                 $responses = $this->requestMultiple($pending);
                 $retry = [];
+                $retryAfter = '';
                 $reset = '';
 
                 foreach ($responses as $i => $response) {
@@ -114,6 +115,7 @@ class FastlyCacheInvalidator implements Invalidator
                     // just spend more of the purge budget). Other failures are fatal.
                     if ($response instanceof Response && $response->status_code === 429 && $attempt < self::MAX_PURGE_RETRIES) {
                         $retry[] = $pending[$i];
+                        $retryAfter = (string) ($response->headers['retry-after'] ?? $retryAfter);
                         $reset = (string) ($response->headers['fastly-ratelimit-reset'] ?? $reset);
 
                         continue;
@@ -126,7 +128,7 @@ class FastlyCacheInvalidator implements Invalidator
                     break;
                 }
 
-                $this->pauseBeforeRetry($this->backoffSeconds($reset));
+                $this->pauseBeforeRetry($this->backoffSeconds($retryAfter, $reset, $attempt));
                 $pending = $retry;
             }
         }
@@ -147,16 +149,24 @@ class FastlyCacheInvalidator implements Invalidator
     }
 
     /**
-     * Seconds to wait before retrying a 429. Fastly sends no Retry-After, only
-     * Fastly-RateLimit-Reset (a Unix timestamp); honour it, but cap the wait so a
-     * purge running on shutdown can't hang for minutes, and floor it at 1s.
+     * Seconds to wait before retrying a 429. Fastly's purge limit is a separate
+     * bucket from the API limit and isn't documented to return a timing header at
+     * all, so try, in order: Retry-After (defensive — Fastly doesn't document it,
+     * but a proxy might add it; delta-seconds or HTTP-date), then the documented
+     * Fastly-RateLimit-Reset (a Unix timestamp), then plain exponential backoff.
+     * The wait is capped so a purge running on shutdown can't hang, floored at 1s.
      */
-    protected function backoffSeconds(string $reset): int
+    protected function backoffSeconds(string $retryAfter, string $reset, int $attempt): int
     {
-        $reset = (int) $reset;
-        $wait = $reset > 0 ? $reset - time() : 1;
+        if ($retryAfter !== '') {
+            $wait = is_numeric($retryAfter) ? (int) $retryAfter : (strtotime($retryAfter) ?: time()) - time();
+        } elseif ((int) $reset > 0) {
+            $wait = (int) $reset - time();
+        } else {
+            $wait = 2 ** $attempt; // 1s, 2s, 4s, …
+        }
 
-        return max(1, min(self::MAX_BACKOFF_SECONDS, $wait));
+        return max(1, min(self::MAX_BACKOFF_SECONDS, (int) $wait));
     }
 
     /** Seam so tests don't actually sleep. */
@@ -206,10 +216,13 @@ class FastlyCacheInvalidator implements Invalidator
                 return true;
             }
 
-            // Rate-limited: back off against Fastly-RateLimit-Reset and retry.
+            // Rate-limited: back off (Retry-After / Fastly-RateLimit-Reset /
+            // exponential) and retry.
             if ($responseCode === 429 && $attempt < self::MAX_PURGE_RETRIES) {
                 $this->pauseBeforeRetry($this->backoffSeconds(
-                    (string) wp_remote_retrieve_header($result, 'fastly-ratelimit-reset')
+                    (string) wp_remote_retrieve_header($result, 'retry-after'),
+                    (string) wp_remote_retrieve_header($result, 'fastly-ratelimit-reset'),
+                    $attempt,
                 ));
 
                 continue;

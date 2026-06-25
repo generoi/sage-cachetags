@@ -154,21 +154,30 @@ class TestFastlyInvalidator extends WP_UnitTestCase
         $this->assertSame(1, $invalidator->pauses);
     }
 
-    public function test_backoff_honours_the_reset_header_capped_and_floored(): void
+    public function test_backoff_precedence_retry_after_then_reset_then_exponential(): void
     {
         $invalidator = new class extends FastlyCacheInvalidator
         {
-            public function backoff(string $reset): int
+            public function backoff(string $retryAfter, string $reset, int $attempt): int
             {
-                return $this->backoffSeconds($reset);
+                return $this->backoffSeconds($retryAfter, $reset, $attempt);
             }
         };
 
-        $this->assertGreaterThanOrEqual(4, $invalidator->backoff((string) (time() + 5)));
-        $this->assertLessThanOrEqual(5, $invalidator->backoff((string) (time() + 5)));
-        $this->assertSame(FastlyCacheInvalidator::MAX_BACKOFF_SECONDS, $invalidator->backoff((string) (time() + 9999)), 'capped');
-        $this->assertSame(1, $invalidator->backoff(''), 'floored when no reset header');
-        $this->assertSame(1, $invalidator->backoff((string) (time() - 100)), 'floored when reset is past');
+        // 1. Retry-After (delta seconds) wins, even over a far-future reset.
+        $this->assertSame(3, $invalidator->backoff('3', (string) (time() + 9999), 0));
+
+        // 2. Fastly-RateLimit-Reset (Unix ts) when there's no Retry-After.
+        $this->assertGreaterThanOrEqual(4, $invalidator->backoff('', (string) (time() + 5), 0));
+        $this->assertLessThanOrEqual(5, $invalidator->backoff('', (string) (time() + 5), 0));
+        $this->assertSame(FastlyCacheInvalidator::MAX_BACKOFF_SECONDS, $invalidator->backoff('', (string) (time() + 9999), 0), 'capped');
+        $this->assertSame(1, $invalidator->backoff('', (string) (time() - 100), 0), 'floored when reset is past');
+
+        // 3. No timing header (the realistic purge-429 case): exponential backoff.
+        $this->assertSame(1, $invalidator->backoff('', '', 0));
+        $this->assertSame(2, $invalidator->backoff('', '', 1));
+        $this->assertSame(8, $invalidator->backoff('', '', 3));
+        $this->assertSame(FastlyCacheInvalidator::MAX_BACKOFF_SECONDS, $invalidator->backoff('', '', 10), 'capped');
     }
 
     public function test_clear_returns_false_on_a_non_200_response(): void
