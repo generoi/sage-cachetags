@@ -87,9 +87,34 @@ class KinstaCacheInvalidator implements Invalidator
 
         curl_exec($request);
         $errorCode = curl_errno($request);
+        $errorMessage = curl_error($request);
         $responseCode = curl_getinfo($request, CURLINFO_HTTP_CODE);
 
-        return $errorCode === 0 && $responseCode === 200;
+        if ($errorCode !== 0 || $responseCode !== 200) {
+            // The MU-plugin endpoint normally answers 200 on accept; a non-200 (or
+            // a cURL error) is the only client-side signal of endpoint backpressure
+            // or trouble, so surface it instead of failing silently. Downstream
+            // edge (Cloudflare) throttling stays invisible — the purge is dispatched
+            // asynchronously after this returns.
+            $this->logPurgeFailure($endpoint, $responseCode, $errorCode, $errorMessage);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Log a failed purge POST. A seam so it can be asserted without scraping logs.
+     */
+    protected function logPurgeFailure(string $endpoint, int $status, int $errno, string $error): void
+    {
+        error_log(sprintf(
+            '[sage-cachetags] Kinsta purge to %s failed: HTTP %d%s',
+            $endpoint,
+            $status,
+            $errno !== 0 ? " (cURL {$errno}: {$error})" : '',
+        ));
     }
 
     public function flush(): bool
