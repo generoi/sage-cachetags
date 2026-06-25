@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Util;
 
 class DebugComment implements Action
@@ -21,13 +22,12 @@ class DebugComment implements Action
     {
         $cacheTags = array_map(
             function ($tag) {
-                $subtag = $tag;
-                if (str_starts_with($tag, 'site:')) {
-                    [$prefix, $site, $subtag] = explode(':', $tag.':', 3);
-                }
-                [$entity, $id] = explode(':', $subtag.':');
+                // Parse to ignore any scope prefix (site:/network:) and read the
+                // underlying entity, so a scoped tag annotates like a bare one.
+                $parsed = Tag::parse($tag);
+                $id = (int) $parsed->id;
 
-                switch ($entity) {
+                switch ($parsed->type) {
                     case 'menu':
                     case 'term':
                         $term = get_term($id);
@@ -42,7 +42,7 @@ class DebugComment implements Action
                             ? sprintf('[%s] %s', $tag, esc_html($comment->comment_author))
                             : sprintf('[%s]', $tag);
                     case 'post':
-                        return sprintf('[%s] %s (%s)', $tag, esc_html(get_post($id)?->post_title ?: $id), esc_html(get_post_type($id) ?: ''));
+                        return sprintf('[%s] %s (%s)', $tag, esc_html(get_post($id)?->post_title ?: $parsed->id), esc_html(get_post_type($id) ?: ''));
                     default:
                         return sprintf('[%s]', $tag);
                 }
