@@ -399,23 +399,21 @@ for 12–24h; once one ages out, the action it guards (a form submit, an AJAX
 
 Two ways to handle a page that bakes a nonce into its HTML:
 
-1. **Tag it `nonce`.** The page is then purged every 12 hours by the nonce cron,
-   before any embedded nonce can expire. When **Gravity Forms** is active its
-   action handles this automatically (it tags file-upload form pages and schedules
-   the cron). To tag your own page, add the tag where the nonce renders — and, if
-   you're *not* relying on Gravity Forms, schedule the cron once with
-   `NonceCron::register()`:
+1. **Tag it `nonce`.** The page is then purged every 12 hours, before any embedded
+   nonce can expire. The `Nonce` action runs that cron and is enabled by default,
+   so you only need to add the tag where the nonce renders (the `Gravityform`
+   action already does this for file-upload forms):
 
    ```php
    // e.g. a product page that prints a WooCommerce Store API nonce for add-to-cart
-   \Genero\Sage\CacheTags\NonceCron::register(); // no-op if already scheduled
-
    add_action('wp_footer', function () {
        if (function_exists('is_product') && is_product()) {
            \Genero\Sage\CacheTags\CacheTags::getInstance()?->add(['nonce']);
        }
    });
    ```
+
+   Remove `Nonce::class` from the `action` config to opt out of the cron.
 
 2. **Mark it non-cacheable** when the page also shows genuinely real-time data
    (e.g. live availability), where a 12h refresh isn't enough:

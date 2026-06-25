@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Actions\DebugComment;
+use Genero\Sage\CacheTags\Actions\Nonce;
 use Genero\Sage\CacheTags\Invalidators\SuperCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 
@@ -28,6 +29,10 @@ return [
     'action' => [
         Core::class,
         DebugComment::class,
+
+        // Purge pages tagged 'nonce' twice daily so a cached page never serves an
+        // expired nonce. Light cron; remove this to opt out.
+        Nonce::class,
 
         // WooCommerce / Polylang / Gravity Forms are added automatically when
         // active (see auto-detect-actions above); list them here to force them on.

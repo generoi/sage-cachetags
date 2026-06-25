@@ -179,10 +179,10 @@ class Bootstrap
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
 
-            // The Gravityform action owns the nonce purge cron (it's the only
-            // producer of 'nonce' tags, from file-upload forms) and registers it in
-            // bind(). Clean up the orphaned schedule when that action isn't active.
-            if (! $this->cacheTags->hasAction(Actions\Gravityform::class)) {
+            // The Nonce action owns the nonce purge cron and registers it in
+            // bind(); clean up the orphaned schedule when it's removed from the
+            // action set (opt-out).
+            if (! $this->cacheTags->hasAction(Actions\Nonce::class)) {
                 NonceCron::unschedule();
             }
         } else {
