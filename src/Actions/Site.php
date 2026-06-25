@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 
 class Site implements Action
@@ -24,13 +25,15 @@ class Site implements Action
     public function addSitePrefix(array $tags): array
     {
         $siteId = get_current_blog_id();
-        $siteTags = SiteTags::sites();
 
         return array_map(
-            function (string $tag) use ($siteId, $siteTags) {
-                return in_array($tag, $siteTags)
+            function (string $tag) use ($siteId) {
+                $parsed = Tag::from($tag);
+
+                // Leave the bare site tag itself unscoped; scope everything else.
+                return $parsed->type === 'site' && $parsed->scope === null
                     ? $tag
-                    : sprintf('site:%d:%s', $siteId, $tag);
+                    : (string) $parsed->withScope($siteId);
             },
             $tags
         );
