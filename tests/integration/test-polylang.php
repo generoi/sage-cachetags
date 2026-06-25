@@ -86,7 +86,7 @@ class TestPolylang extends WP_UnitTestCase
 
     public function test_tags_helper_returns_the_current_language(): void
     {
-        $this->assertSame(['lang:en'], PolylangTags::language());
+        $this->assertSame(['lang:en'], Tag::toStrings(PolylangTags::language()));
     }
 
     public function test_tags_helper_builds_a_per_language_archive(): void
@@ -97,7 +97,7 @@ class TestPolylang extends WP_UnitTestCase
             $model->clean_languages_cache();
         }
 
-        $tags = PolylangTags::archiveAllLanguages('post');
+        $tags = Tag::toStrings(PolylangTags::archiveAllLanguages('post'));
 
         // 'post' is translated, so it expands to one archive tag per language.
         $this->assertContains('archive:post:en', $tags);

@@ -2,7 +2,7 @@
 
 namespace Genero\Sage\CacheTags\Tags;
 
-use Genero\Sage\CacheTags\Util;
+use Genero\Sage\CacheTags\Tag;
 use WC_Product;
 use WP_Post;
 
@@ -12,7 +12,7 @@ class WooCommerceTags
      * Return cache tags for one or multiple products.
      *
      * @param  mixed  $products
-     * @return string[]
+     * @return Tag[]
      */
     public static function products($products = null): array
     {
@@ -21,27 +21,21 @@ class WooCommerceTags
         }
 
         if (is_array($products)) {
-            $tags = array_map(
-                function ($product) {
-                    $id = match (true) {
-                        $product instanceof WP_Post => $product->ID,
-                        $product instanceof WC_Product => $product->get_id(),
-                        default => $product
-                    };
-
-                    return [sprintf('post:%d', $id)];
-                },
+            return array_map(
+                fn ($product) => Tag::post((int) match (true) {
+                    $product instanceof WP_Post => $product->ID,
+                    $product instanceof WC_Product => $product->get_id(),
+                    default => $product,
+                }),
                 $products
             );
-
-            return Util::flatten($tags);
         }
 
         return [];
     }
 
     /**
-     * @return string[]
+     * @return Tag[]
      */
     public static function shop(): array
     {
@@ -50,6 +44,6 @@ class WooCommerceTags
             return [];
         }
 
-        return ["post:$pageId"];
+        return [Tag::post($pageId)];
     }
 }

@@ -5,6 +5,7 @@ namespace Genero\Sage\CacheTags\Invalidators;
 use Genero\Sage\CacheTags\Actions\Site;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 use Genero\Sage\CacheTags\Util;
 use WP_Error;
@@ -95,7 +96,7 @@ class FastlyCacheInvalidator implements Invalidator
     public function flush(): bool
     {
         if ($this->hasAction(Site::class)) {
-            $tags = SiteTags::sites('any');
+            $tags = Tag::toStrings(SiteTags::sites('any'));
 
             return $this->clear($tags, $tags);
         } else {

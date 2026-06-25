@@ -2,7 +2,7 @@
 
 namespace Genero\Sage\CacheTags\Tags;
 
-use Genero\Sage\CacheTags\Util;
+use Genero\Sage\CacheTags\Tag;
 
 class GravityformTags
 {
@@ -12,7 +12,7 @@ class GravityformTags
      * @see https://docs.gravityforms.com/form-object/
      *
      * @param  mixed  $forms
-     * @return string[]
+     * @return Tag[]
      */
     public static function forms($forms = null): array
     {
@@ -21,12 +21,10 @@ class GravityformTags
         }
 
         if (is_array($forms)) {
-            $tags = array_map(
-                fn ($form) => [sprintf('gform:%d', isset($form['id']) ? $form['id'] : $form)],
+            return array_map(
+                fn ($form) => Tag::form((int) (isset($form['id']) ? $form['id'] : $form)),
                 $forms
             );
-
-            return Util::flatten($tags);
         }
 
         return [];

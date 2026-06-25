@@ -27,7 +27,7 @@ class TestSiteAction extends WP_UnitTestCase
     public function test_does_not_double_prefix_a_site_tag(): void
     {
         $id = get_current_blog_id();
-        $siteTag = SiteTags::sites()[0];
+        $siteTag = (string) SiteTags::sites()[0];
 
         $result = $this->action()->addSitePrefix([$siteTag, 'post:1']);
 

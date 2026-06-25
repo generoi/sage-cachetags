@@ -2,6 +2,8 @@
 
 namespace Genero\Sage\CacheTags\Tags;
 
+use Genero\Sage\CacheTags\Tag;
+
 class PolylangTags
 {
     /**
@@ -9,7 +11,7 @@ class PolylangTags
      * fetches posts across all languages (e.g. WP_Query with lang => '').
      *
      * @param  string|string[]  $postTypes
-     * @return string[]
+     * @return Tag[]
      */
     public static function archiveAllLanguages(string|array $postTypes): array
     {
@@ -25,10 +27,10 @@ class PolylangTags
         foreach ($postTypes as $postType) {
             if (pll_is_translated_post_type($postType)) {
                 foreach ($languages as $lang) {
-                    $tags[] = "archive:{$postType}:{$lang}";
+                    $tags[] = Tag::archive($postType)->qualify($lang);
                 }
             } else {
-                $tags[] = "archive:{$postType}";
+                $tags[] = Tag::archive($postType);
             }
         }
 
@@ -38,12 +40,12 @@ class PolylangTags
     /**
      * Return the current language as a cache tag.
      *
-     * @return string[]
+     * @return Tag[]
      */
     public static function language(): array
     {
         $lang = function_exists('pll_current_language') ? pll_current_language() : null;
 
-        return $lang ? ["lang:{$lang}"] : [];
+        return $lang ? [Tag::language($lang)] : [];
     }
 }
