@@ -42,20 +42,33 @@ class TestFastlyInvalidator extends WP_UnitTestCase
         $this->assertStringNotContainsString('example.com', wp_json_encode($body));
     }
 
-    public function test_clear_chunks_surrogate_keys_to_the_256_limit(): void
+    public function test_clear_chunks_and_dispatches_in_parallel_above_256_keys(): void
     {
+        // >256 keys go through the parallel path; capture the prepared requests.
+        $invalidator = new class extends FastlyCacheInvalidator
+        {
+            /** @var array<int, array<string, mixed>> */
+            public array $dispatched = [];
+
+            protected function dispatchParallel(array $requests): bool
+            {
+                $this->dispatched = $requests;
+
+                return true;
+            }
+        };
+
         $tags = array_map(fn ($i) => "post:{$i}", range(1, 600));
 
-        $ok = (new FastlyCacheInvalidator)->clear([], $tags);
+        $this->assertTrue($invalidator->clear([], $tags));
 
-        $this->assertTrue($ok);
-
-        $batchSizes = array_map(
-            fn ($request) => count(json_decode($request['args']['body'], true)['surrogate_keys']),
-            $this->requests
+        $sizes = array_map(
+            fn ($request) => count(json_decode($request['data'], true)['surrogate_keys']),
+            $invalidator->dispatched
         );
-        // Fastly rejects >256 keys per request, so 600 → 256 + 256 + 88.
-        $this->assertSame([256, 256, 88], $batchSizes);
+        // Fastly rejects >256 keys per request, so 600 → 256 + 256 + 88, each its
+        // own concurrent request.
+        $this->assertSame([256, 256, 88], $sizes);
     }
 
     public function test_clear_returns_false_on_a_non_200_response(): void

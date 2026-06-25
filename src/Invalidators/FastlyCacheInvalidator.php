@@ -8,6 +8,8 @@ use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 use Genero\Sage\CacheTags\Util;
 use WP_Error;
+use WpOrg\Requests\Requests;
+use WpOrg\Requests\Response;
 
 class FastlyCacheInvalidator implements Invalidator
 {
@@ -32,17 +34,62 @@ class FastlyCacheInvalidator implements Invalidator
 
     public function clear(array $urls, array $tags): bool
     {
-        $ok = true;
+        $chunks = array_chunk($tags, self::MAX_KEYS_PER_PURGE);
 
-        foreach (array_chunk($tags, self::MAX_KEYS_PER_PURGE) as $chunk) {
-            $response = $this->apiCall('/purge/', [
-                'surrogate_keys' => array_values($chunk),
-            ]);
-
-            $ok = ! is_wp_error($response) && $ok;
+        if ($chunks === []) {
+            return true;
         }
 
-        return $ok;
+        // One request — the overwhelmingly common case — stays a simple blocking
+        // call (and goes through the WP HTTP API).
+        if (count($chunks) === 1) {
+            return ! is_wp_error($this->apiCall('/purge/', ['surrogate_keys' => array_values($chunks[0])]));
+        }
+
+        // Bulk (>256 keys): fan the chunks out concurrently rather than make N
+        // sequential blocking round-trips.
+        return $this->purgeChunksInParallel($chunks);
+    }
+
+    /**
+     * @param  array<int, string[]>  $chunks
+     */
+    protected function purgeChunksInParallel(array $chunks): bool
+    {
+        $url = self::FASTLY_BASE_URL.$this->serviceId.'/purge/';
+
+        $requests = array_map(function (array $chunk) use ($url) {
+            // Reuse buildRequest so the soft-purge subclass's header carries over.
+            $args = $this->buildRequest(['surrogate_keys' => array_values($chunk)]);
+
+            return [
+                'url' => $url,
+                'type' => Requests::POST,
+                'headers' => $args['headers'],
+                'data' => $args['body'],
+            ];
+        }, $chunks);
+
+        return $this->dispatchParallel($requests);
+    }
+
+    /**
+     * Send prepared requests concurrently; true only if every purge returns 200.
+     * Isolated as a seam so the chunking can be asserted without real HTTP.
+     *
+     * @param  array<int, array<string, mixed>>  $requests
+     */
+    protected function dispatchParallel(array $requests): bool
+    {
+        $responses = Requests::request_multiple($requests, ['timeout' => 5, 'verify' => false]);
+
+        foreach ($responses as $response) {
+            if (! $response instanceof Response || $response->status_code !== 200) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function flush(): bool
