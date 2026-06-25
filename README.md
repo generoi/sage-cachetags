@@ -146,6 +146,12 @@ Two invalidators, differing in how Kinsta resolves the purge:
   request. It disables query-string storage (`cachetags/store-query-string`)
   since the bare path is enough, keeping the store lean. This is the right choice
   for a standard Kinsta setup, where query-string URLs bypass the cache anyway.
+  Collapsing many URLs into a single prefix purge also keeps **purge volume low**
+  — Kinsta dispatches purges to its edge (Cloudflare) asynchronously and rate-
+  limits/coalesces them server-side, and the localhost endpoint returns `200` on
+  *accept* (downstream throttling is invisible to the request), so fewer, coarser
+  purges are the most effective way to stay under those limits. Bulk purges are
+  additionally routed to Kinsta's throttled endpoint rather than a full flush.
 - **`KinstaCacheInvalidator`** purges by `single|` — the exact URL only. Use this
   if you've configured Kinsta to cache query-string URLs and need each variant
   purged by its full stored URL (see [Stored URL and query strings](#stored-url-and-query-strings)).
