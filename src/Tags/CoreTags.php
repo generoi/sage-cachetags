@@ -3,6 +3,7 @@
 namespace Genero\Sage\CacheTags\Tags;
 
 use Exception;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Util;
 use WP_Comment;
 use WP_Post;
@@ -16,15 +17,15 @@ use WP_User;
 class CoreTags
 {
     /**
-     * Build "prefix:id" tags for one or many entities given as an id, an object,
-     * or an array of either. Returns [] for null/unrecognised input.
+     * Build tags of $type for one or many entities given as an id, an object, or
+     * an array of either. Returns [] for null/unrecognised input.
      *
      * @param  int|object|array<int|object>|null  $items
      * @param  class-string  $className
      * @param  callable(object):int  $idOf
-     * @return string[]
+     * @return Tag[]
      */
-    protected static function entityTags($items, string $prefix, string $className, callable $idOf): array
+    protected static function entityTags($items, string $type, string $className, callable $idOf): array
     {
         if (is_numeric($items) || $items instanceof $className) {
             $items = [$items];
@@ -35,7 +36,7 @@ class CoreTags
         }
 
         return array_map(
-            fn ($item) => sprintf('%s:%d', $prefix, $item instanceof $className ? $idOf($item) : $item),
+            fn ($item) => Tag::of($type, $item instanceof $className ? $idOf($item) : (int) $item),
             $items
         );
     }
@@ -50,7 +51,7 @@ class CoreTags
     {
         return self::entityTags(
             $posts,
-            prefix: 'post',
+            type: 'post',
             className: WP_Post::class,
             idOf: fn (WP_Post $post) => $post->ID,
         );
@@ -66,7 +67,7 @@ class CoreTags
     {
         return self::entityTags(
             $terms,
-            prefix: 'term',
+            type: 'term',
             className: WP_Term::class,
             idOf: fn (WP_Term $term) => $term->term_id,
         );
@@ -80,7 +81,7 @@ class CoreTags
      */
     public static function termPages($terms = null): array
     {
-        return array_map(fn ($tag) => "$tag:full", self::terms($terms));
+        return array_map(fn (Tag $tag) => $tag->full(), self::terms($terms));
     }
 
     /**
@@ -93,7 +94,7 @@ class CoreTags
     {
         return self::entityTags(
             $users,
-            prefix: 'user',
+            type: 'user',
             className: WP_User::class,
             idOf: fn (WP_User $user) => $user->ID,
         );
@@ -109,7 +110,7 @@ class CoreTags
     {
         return self::entityTags(
             $comments,
-            prefix: 'comment',
+            type: 'comment',
             className: WP_Comment::class,
             idOf: fn (WP_Comment $comment) => $comment->comment_ID,
         );
@@ -156,7 +157,7 @@ class CoreTags
             throw new Exception('CoreTags::menu received an unknown menu: '.(is_scalar($menu) ? $menu : get_debug_type($menu)));
         }
 
-        return ["menu:{$object->term_id}"];
+        return [Tag::menu($object->term_id)];
     }
 
     /**
@@ -211,7 +212,7 @@ class CoreTags
      * @param  callable():string[]  $all  resolver for the 'any' keyword
      * @return string[]
      */
-    protected static function nameTags($items, string $prefix, callable $all, string $suffix = ''): array
+    protected static function nameTags($items, string $type, callable $all, ?string $qualifier = null): array
     {
         if ($items === 'any') {
             $items = $all();
@@ -225,10 +226,11 @@ class CoreTags
             return [];
         }
 
-        return array_map(
-            fn ($item) => sprintf('%s:%s%s', $prefix, is_object($item) ? $item->name : $item, $suffix),
-            $items
-        );
+        return array_map(function ($item) use ($type, $qualifier) {
+            $tag = Tag::of($type, is_object($item) ? $item->name : $item);
+
+            return $qualifier !== null ? $tag->qualify($qualifier) : $tag;
+        }, $items);
     }
 
     /**
@@ -241,7 +243,7 @@ class CoreTags
     {
         return self::nameTags(
             $postTypes,
-            prefix: 'archive',
+            type: 'archive',
             all: [self::class, 'getCacheablePostTypes'],
         );
     }
@@ -256,7 +258,7 @@ class CoreTags
     {
         return self::nameTags(
             $taxonomies,
-            prefix: 'taxonomy',
+            type: 'taxonomy',
             all: [self::class, 'getCacheableTaxonomies'],
         );
     }
@@ -271,9 +273,9 @@ class CoreTags
     {
         return self::nameTags(
             $taxonomies,
-            prefix: 'taxonomy',
+            type: 'taxonomy',
             all: [self::class, 'getCacheableTaxonomies'],
-            suffix: ':any',
+            qualifier: 'any',
         );
     }
 
@@ -291,9 +293,9 @@ class CoreTags
     {
         return self::nameTags(
             $postTypes,
-            prefix: 'archive',
+            type: 'archive',
             all: [self::class, 'getCacheablePostTypes'],
-            suffix: ':any',
+            qualifier: 'any',
         );
     }
 
@@ -307,7 +309,7 @@ class CoreTags
     {
         return self::nameTags(
             $roles,
-            prefix: 'role',
+            type: 'role',
             all: [self::class, 'getCacheableUserRoles'],
         );
     }
@@ -427,7 +429,7 @@ class CoreTags
     public static function option($options): array
     {
         return array_map(
-            fn ($option) => sprintf('option:%s', $option),
+            fn ($option) => Tag::option($option),
             is_array($options) ? $options : [$options]
         );
     }

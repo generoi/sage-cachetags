@@ -1,58 +1,69 @@
 <?php
 
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 
 /**
- * Pure formatting behaviour of the tag helpers.
+ * Pure formatting behaviour of the tag helpers — the builders return Tag objects,
+ * asserted here in their string form.
  *
  * @covers \Genero\Sage\CacheTags\Tags\CoreTags
  */
 class TestCoreTags extends WP_UnitTestCase
 {
+    /**
+     * @param  Tag[]  $tags
+     * @return string[]
+     */
+    private function strings(array $tags): array
+    {
+        return Tag::toStrings($tags);
+    }
+
     public function test_posts_formats_ids_and_objects(): void
     {
         $post = self::factory()->post->create_and_get();
 
-        $this->assertSame(['post:1'], CoreTags::posts(1));
-        $this->assertSame(['post:1', 'post:2'], CoreTags::posts([1, 2]));
-        $this->assertSame(["post:{$post->ID}"], CoreTags::posts($post));
-        $this->assertSame([], CoreTags::posts(null));
+        $this->assertSame(['post:1'], $this->strings(CoreTags::posts(1)));
+        $this->assertSame(['post:1', 'post:2'], $this->strings(CoreTags::posts([1, 2])));
+        $this->assertSame(["post:{$post->ID}"], $this->strings(CoreTags::posts($post)));
+        $this->assertSame([], $this->strings(CoreTags::posts(null)));
     }
 
     public function test_terms_and_term_pages(): void
     {
-        $this->assertSame(['term:5'], CoreTags::terms(5));
-        $this->assertSame(['term:5', 'term:6'], CoreTags::terms([5, 6]));
-        $this->assertSame(['term:5:full'], CoreTags::termPages(5));
+        $this->assertSame(['term:5'], $this->strings(CoreTags::terms(5)));
+        $this->assertSame(['term:5', 'term:6'], $this->strings(CoreTags::terms([5, 6])));
+        $this->assertSame(['term:5:full'], $this->strings(CoreTags::termPages(5)));
     }
 
     public function test_users(): void
     {
-        $this->assertSame(['user:2'], CoreTags::users(2));
-        $this->assertSame(['user:2', 'user:3'], CoreTags::users([2, 3]));
+        $this->assertSame(['user:2'], $this->strings(CoreTags::users(2)));
+        $this->assertSame(['user:2', 'user:3'], $this->strings(CoreTags::users([2, 3])));
     }
 
     public function test_comments(): void
     {
-        $this->assertSame(['comment:9'], CoreTags::comments(9));
+        $this->assertSame(['comment:9'], $this->strings(CoreTags::comments(9)));
     }
 
     public function test_archive_accepts_string_and_array(): void
     {
-        $this->assertSame(['archive:post'], CoreTags::archive('post'));
-        $this->assertSame(['archive:post', 'archive:page'], CoreTags::archive(['post', 'page']));
+        $this->assertSame(['archive:post'], $this->strings(CoreTags::archive('post')));
+        $this->assertSame(['archive:post', 'archive:page'], $this->strings(CoreTags::archive(['post', 'page'])));
     }
 
     public function test_taxonomy_and_any_term(): void
     {
-        $this->assertSame(['taxonomy:category'], CoreTags::taxonomy('category'));
-        $this->assertSame(['taxonomy:category:any'], CoreTags::anyTerm('category'));
+        $this->assertSame(['taxonomy:category'], $this->strings(CoreTags::taxonomy('category')));
+        $this->assertSame(['taxonomy:category:any'], $this->strings(CoreTags::anyTerm('category')));
     }
 
     public function test_any_archive(): void
     {
-        $this->assertSame(['archive:post:any'], CoreTags::anyArchive('post'));
-        $this->assertSame(['archive:post:any', 'archive:page:any'], CoreTags::anyArchive(['post', 'page']));
+        $this->assertSame(['archive:post:any'], $this->strings(CoreTags::anyArchive('post')));
+        $this->assertSame(['archive:post:any', 'archive:page:any'], $this->strings(CoreTags::anyArchive(['post', 'page'])));
     }
 
     public function test_cacheable_user_roles_are_slugs(): void
@@ -67,12 +78,12 @@ class TestCoreTags extends WP_UnitTestCase
         $post = self::factory()->post->create_and_get();
         $termId = self::factory()->category->create();
 
-        $this->assertSame(["post:{$post->ID}"], CoreTags::queriedObject($post));
+        $this->assertSame(["post:{$post->ID}"], $this->strings(CoreTags::queriedObject($post)));
         $this->assertSame(
             ["term:{$termId}", "term:{$termId}:full"],
-            CoreTags::queriedObject(get_term($termId))
+            $this->strings(CoreTags::queriedObject(get_term($termId)))
         );
-        $this->assertSame(['archive:post'], CoreTags::queriedObject(get_post_type_object('post')));
+        $this->assertSame(['archive:post'], $this->strings(CoreTags::queriedObject(get_post_type_object('post'))));
     }
 
     public function test_query_tags_each_post_in_a_wp_query(): void
@@ -82,27 +93,27 @@ class TestCoreTags extends WP_UnitTestCase
 
         $this->assertSame(
             array_map(fn ($id) => "post:{$id}", $ids),
-            CoreTags::query($query)
+            $this->strings(CoreTags::query($query))
         );
     }
 
     public function test_any_user(): void
     {
-        $this->assertSame(['role:editor'], CoreTags::anyUser('editor'));
-        $this->assertSame(['role:editor', 'role:author'], CoreTags::anyUser(['editor', 'author']));
+        $this->assertSame(['role:editor'], $this->strings(CoreTags::anyUser('editor')));
+        $this->assertSame(['role:editor', 'role:author'], $this->strings(CoreTags::anyUser(['editor', 'author'])));
     }
 
     public function test_menu_and_navigation(): void
     {
         $menuId = wp_create_nav_menu('Footer');
 
-        $this->assertSame(["menu:{$menuId}"], CoreTags::menu($menuId));
+        $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::menu($menuId)));
 
         register_nav_menu('footer', 'Footer location');
         set_theme_mod('nav_menu_locations', ['footer' => $menuId]);
 
-        $this->assertSame(["menu:{$menuId}"], CoreTags::navigation('footer'));
-        $this->assertSame([], CoreTags::navigation('missing-location'));
+        $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::navigation('footer')));
+        $this->assertSame([], $this->strings(CoreTags::navigation('missing-location')));
     }
 
     public function test_is_cacheable_predicates(): void
@@ -123,8 +134,8 @@ class TestCoreTags extends WP_UnitTestCase
 
     public function test_option_formats_option_tags(): void
     {
-        $this->assertSame(['option:blogname'], CoreTags::option('blogname'));
-        $this->assertSame(['option:blogname', 'option:foo'], CoreTags::option(['blogname', 'foo']));
+        $this->assertSame(['option:blogname'], $this->strings(CoreTags::option('blogname')));
+        $this->assertSame(['option:blogname', 'option:foo'], $this->strings(CoreTags::option(['blogname', 'foo'])));
     }
 
     public function test_cacheable_options_default_and_filter(): void
@@ -138,20 +149,20 @@ class TestCoreTags extends WP_UnitTestCase
 
     public function test_any_keyword_expands_to_the_cacheable_sets(): void
     {
-        $this->assertContains('archive:post', CoreTags::archive('any'));
-        $this->assertContains('taxonomy:category', CoreTags::taxonomy('any'));
-        $this->assertContains('taxonomy:category:any', CoreTags::anyTerm('any'));
-        $this->assertContains('archive:post:any', CoreTags::anyArchive('any'));
-        $this->assertContains('role:administrator', CoreTags::anyUser('any'));
+        $this->assertContains('archive:post', $this->strings(CoreTags::archive('any')));
+        $this->assertContains('taxonomy:category', $this->strings(CoreTags::taxonomy('any')));
+        $this->assertContains('taxonomy:category:any', $this->strings(CoreTags::anyTerm('any')));
+        $this->assertContains('archive:post:any', $this->strings(CoreTags::anyArchive('any')));
+        $this->assertContains('role:administrator', $this->strings(CoreTags::anyUser('any')));
     }
 
     public function test_set_builders_accept_wp_objects(): void
     {
-        $this->assertSame(['archive:post'], CoreTags::archive(get_post_type_object('post')));
-        $this->assertSame(['archive:post:any'], CoreTags::anyArchive(get_post_type_object('post')));
-        $this->assertSame(['taxonomy:category'], CoreTags::taxonomy(get_taxonomy('category')));
-        $this->assertSame(['taxonomy:category:any'], CoreTags::anyTerm(get_taxonomy('category')));
-        $this->assertSame(['role:administrator'], CoreTags::anyUser(get_role('administrator')));
+        $this->assertSame(['archive:post'], $this->strings(CoreTags::archive(get_post_type_object('post'))));
+        $this->assertSame(['archive:post:any'], $this->strings(CoreTags::anyArchive(get_post_type_object('post'))));
+        $this->assertSame(['taxonomy:category'], $this->strings(CoreTags::taxonomy(get_taxonomy('category'))));
+        $this->assertSame(['taxonomy:category:any'], $this->strings(CoreTags::anyTerm(get_taxonomy('category'))));
+        $this->assertSame(['role:administrator'], $this->strings(CoreTags::anyUser(get_role('administrator'))));
     }
 
     public function test_builders_return_empty_for_unusable_input(): void
@@ -172,9 +183,9 @@ class TestCoreTags extends WP_UnitTestCase
         $menuId = wp_create_nav_menu('Primary');
 
         // wp_nav_menu()'s `menu` arg can be an id, slug, name, or object.
-        $this->assertSame(["menu:{$menuId}"], CoreTags::menu($menuId));
-        $this->assertSame(["menu:{$menuId}"], CoreTags::menu('primary'));
-        $this->assertSame(["menu:{$menuId}"], CoreTags::menu('Primary'));
+        $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::menu($menuId)));
+        $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::menu('primary')));
+        $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::menu('Primary')));
     }
 
     public function test_menu_throws_for_an_unknown_menu(): void
