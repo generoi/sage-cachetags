@@ -7,9 +7,9 @@ namespace Genero\Sage\CacheTags;
  *
  * The codebase passes Tags around, not strings; a tag is only turned into a
  * string at a true boundary (the Cache-Tag header, the store, an HTTP purge),
- * and a string only becomes a Tag when one comes in (a site's custom tag, the
- * cachetags/filter-tags filter). parse() and __toString() are the single place
- * that conversion happens.
+ * and a string only becomes a Tag when one comes in (a site's custom string
+ * passed to add()/clear()). parse() and __toString() are the single place that
+ * conversion happens.
  *
  * Context is expressed with two general operations rather than purpose-built
  * methods, so new dimensions (a multisite network, a tenant, …) need no new API:

@@ -67,8 +67,8 @@ class Polylang implements Action
      * match none of the stored `archive:{type}:{lang}` entries and the
      * translated listings would never clear (the herrfors alert-banner bug).
      *
-     * @param  string[]  $tags
-     * @return string[]
+     * @param  array<string|Tag>  $tags
+     * @return Tag[]
      */
     public function filterArchiveTags(array $tags): array
     {
@@ -87,13 +87,13 @@ class Polylang implements Action
 
             if ($isBareTranslatedArchive && $languages) {
                 foreach ($languages as $language) {
-                    $result[] = (string) $parsed->qualify($language);
+                    $result[] = $parsed->qualify($language);
                 }
 
                 continue;
             }
 
-            $result[] = $tag;
+            $result[] = $parsed;
         }
 
         return $result;

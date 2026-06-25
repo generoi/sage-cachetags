@@ -19,22 +19,22 @@ class Site implements Action
     }
 
     /**
-     * @param  string[]  $tags
-     * @return string[]
+     * @param  array<string|Tag>  $tags
+     * @return Tag[]
      */
     public function addSitePrefix(array $tags): array
     {
         $siteId = get_current_blog_id();
 
         return array_map(
-            function (string $tag) use ($siteId) {
+            function ($tag) use ($siteId) {
                 $parsed = Tag::from($tag);
 
                 // Leave this site's own bare tag unscoped; scope everything else
                 // (incl. a custom site:foo or another site's tag flowing through).
                 return $parsed->type === 'site' && $parsed->id === $siteId && $parsed->scopes === []
-                    ? $tag
-                    : (string) $parsed->scope('site', $siteId);
+                    ? $parsed
+                    : $parsed->scope('site', $siteId);
             },
             $tags
         );

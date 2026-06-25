@@ -60,7 +60,7 @@ class TestPolylang extends WP_UnitTestCase
     public function test_suffixes_translated_archive_tags_with_the_language(): void
     {
         // 'post' is a translated post type by default.
-        $tags = $this->action()->filterArchiveTags(['archive:post', 'post:5']);
+        $tags = Tag::toStrings($this->action()->filterArchiveTags(['archive:post', 'post:5']));
 
         $this->assertSame(['archive:post:en', 'post:5'], $tags);
     }
@@ -75,7 +75,7 @@ class TestPolylang extends WP_UnitTestCase
         // No current language (admin/cron/WC/REST purge context).
         PLL()->curlang = null;
 
-        $tags = $this->action()->filterArchiveTags(['archive:post', 'post:5']);
+        $tags = Tag::toStrings($this->action()->filterArchiveTags(['archive:post', 'post:5']));
 
         // A bare archive tag must reach every language's stored listing.
         $this->assertContains('archive:post:en', $tags);

@@ -40,8 +40,28 @@ or passing them to something typed `string[]`. Wrap with `Tag::toStrings()`:
 +$strings = Tag::toStrings(CoreTags::posts($ids));
 ```
 
-Your own custom string tags, the `cachetags/filter-tags` filter, and the
-`Store`/`Invalidator` payloads are all still plain strings — unchanged.
+Your own custom string tags and the `Store`/`Invalidator` payloads are all still
+plain strings — unchanged.
+
+### `cachetags/filter-tags` now passes `Tag[]`
+
+The `cachetags/filter-tags` filter receives and returns an array of `Tag` objects
+instead of strings, so tags stay structured through the whole pipeline. A filter
+that built strings can use the `Tag` API instead, and returning plain strings
+still works (they're parsed back):
+
+```diff
+ add_filter('cachetags/filter-tags', function (array $tags) {
+-    $tags[] = "site:{$id}:" . $tag;          // string munging
++    $tags[] = Tag::of($type, $id)->scope('site', $id);
+     return $tags;
+ });
+```
+
+Output is still validated before it reaches the header, so a filter can't smuggle
+a header-unsafe tag through. The bundled `Site` and `Polylang` actions already use
+this. (No release shipped a consumer of this filter; this only matters if you hook
+it yourself.)
 
 ### Internal state is now `Tag[]`
 
@@ -93,8 +113,9 @@ this replaces the trick of enabling the `Site` action just to get a flush-all ke
 ### Unchanged
 
 Compatible without changes: `CacheTags::add/clear/save/flush/getInstance/hasAction`
-and the public `invalidators` property; every `cachetags/*` filter (incl.
-`cachetags/filter-tags`, still `string[] → string[]`); the `Store`, `Invalidator`
+and the public `invalidators` property; the config filters (`cachetags/cacheable`,
+`cachetags/url-ignored-params`, `cachetags/options`, …); the `Store`, `Invalidator`
 and `Action` contracts; the bundled actions/invalidators/stores; the `Bootstrap`
 fluent API and `CacheTagsServiceProvider`; `Util::normalizeTags()`; the config
-keys; and the WP-CLI commands.
+keys; and the WP-CLI commands. (`cachetags/filter-tags` is the one filter whose
+signature changed — see above.)
