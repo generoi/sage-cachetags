@@ -67,4 +67,23 @@ class TestStore extends WP_UnitTestCase
         $this->assertTrue($store->save([], '/a/'));
         $this->assertSame([], $store->get(['post:1']));
     }
+
+    public function test_inspect_reports_stats_top_tags_and_tags_for_a_url(): void
+    {
+        $store = new WordpressDbStore;
+        $store->flush();
+        $store->save(['post:1', 'archive:post'], '/a/');
+        $store->save(['archive:post'], '/b/');
+
+        $this->assertSame(['rows' => 3, 'tags' => 2, 'urls' => 2], $store->stats());
+
+        // archive:post (2 urls) is wider than post:1 (1 url).
+        $this->assertSame(
+            [['tag' => 'archive:post', 'urls' => 2], ['tag' => 'post:1', 'urls' => 1]],
+            $store->topTags(10)
+        );
+
+        $this->assertEqualsCanonicalizing(['post:1', 'archive:post'], $store->tagsForUrl('/a/'));
+        $this->assertSame([], $store->tagsForUrl('/missing/'));
+    }
 }

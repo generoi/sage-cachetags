@@ -5,6 +5,7 @@ namespace Genero\Sage\CacheTags;
 use Genero\Sage\CacheTags\Console\ClearCommand;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
+use Genero\Sage\CacheTags\Console\StatusCommand;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Illuminate\Support\ServiceProvider;
 
@@ -32,6 +33,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             DatabaseCommand::class,
             FlushCommand::class,
             ClearCommand::class,
+            StatusCommand::class,
         ]);
     }
 
