@@ -17,11 +17,18 @@ class FastlyCacheInvalidator implements Invalidator
     const FASTLY_BASE_URL = 'https://api.fastly.com/service/';
 
     /**
-     * Fastly's bulk surrogate-key purge accepts at most 256 keys per request;
-     * a larger payload is rejected (and the purge silently fails). Bulk edits or
-     * a multisite flush can exceed this, so keys are chunked.
+     * Fastly's bulk surrogate-key purge accepts at most 256 keys per request; a
+     * larger payload is rejected wholesale with HTTP 400. Bulk edits or a
+     * multisite flush can exceed this, so keys are chunked.
      */
     const MAX_KEYS_PER_PURGE = 256;
+
+    /**
+     * Cap how many chunk purges fan out at once. Fastly's purge budget is ~100k/h
+     * (~27/s); firing hundreds of requests in one burst risks 429s and exhausts
+     * local connection handles for no gain. Windows of this size keep it bounded.
+     */
+    const MAX_CONCURRENT_PURGES = 10;
 
     protected ?string $serviceId;
 
@@ -82,11 +89,14 @@ class FastlyCacheInvalidator implements Invalidator
      */
     protected function dispatchParallel(array $requests): bool
     {
-        $responses = Requests::request_multiple($requests, ['timeout' => 5, 'verify' => false]);
+        // Bounded fan-out: at most MAX_CONCURRENT_PURGES in flight per window.
+        foreach (array_chunk($requests, self::MAX_CONCURRENT_PURGES) as $window) {
+            $responses = Requests::request_multiple($window, ['timeout' => 5]);
 
-        foreach ($responses as $response) {
-            if (! $response instanceof Response || $response->status_code !== 200) {
-                return false;
+            foreach ($responses as $response) {
+                if (! $response instanceof Response || $response->status_code !== 200) {
+                    return false;
+                }
             }
         }
 
@@ -147,7 +157,6 @@ class FastlyCacheInvalidator implements Invalidator
                 // 'fastly-soft-purge' => '1',
                 'Accept' => 'application/json',
             ],
-            'sslverify' => false,
             'timeout' => 5,
         ];
 
