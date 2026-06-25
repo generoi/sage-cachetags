@@ -102,6 +102,11 @@ class Util
     }
 
     /**
+     * Max length of a stored tag or URL — the `varchar(191)` store columns.
+     */
+    const MAX_LENGTH = 191;
+
+    /**
      * Whether a value is a usable cache tag: a non-empty, single header token
      * (no whitespace or control characters) that fits the store column.
      *
@@ -115,14 +120,13 @@ class Util
             return false;
         }
 
-        if (strlen($tag) > (int) apply_filters('cachetags/max-tag-length', 191)) {
+        if (strlen($tag) > self::MAX_LENGTH) {
             return false;
         }
 
-        return (bool) preg_match(
-            apply_filters('cachetags/tag-pattern', '/^[^\s\x00-\x1F]+$/'),
-            $tag
-        );
+        // A single header-safe token: no whitespace (would split the
+        // space-delimited header) or control characters.
+        return (bool) preg_match('/^[^\s\x00-\x1F]+$/', $tag);
     }
 
     /**
@@ -172,7 +176,7 @@ class Util
 
         // The url column is varchar(191); fall back to the path if the query
         // string overflows it, which also bounds pathological junk-param keys.
-        return strlen($full) <= apply_filters('cachetags/max-url-length', 191) ? $full : $url;
+        return strlen($full) <= self::MAX_LENGTH ? $full : $url;
     }
 
     /**
