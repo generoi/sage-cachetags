@@ -121,6 +121,13 @@ every cache miss, and live pages are never pruned. **Set `'prune-older-than'` ab
 your edge cache's max TTL** (≈30d on Kinsta/Fastly), or disable GC with
 `'prune-older-than' => null`. `wp cachetags prune --older-than=…` runs it manually.
 
+### New (optional): Fastly query-param allowlist
+
+Opt-in (default off). Name a Fastly Edge Dictionary in `'fastly-allowlist-dictionary'`
+and `wp cachetags fastly-allowlist sync` pushes the cache-significant query params
+(WooCommerce/FacetWP/search) to it, for a static VCL snippet to filter the cache
+key. No migration — additive and off by default. See the README.
+
 ### Unchanged
 
 Compatible without changes: `CacheTags::add/clear/save/flush/getInstance/hasAction`
