@@ -37,6 +37,9 @@ class TestTag extends WP_UnitTestCase
         yield 'custom single' => ['banner'];
         yield 'custom deep' => ['a:b:c:d:e'];
         yield 'scoped custom' => ['site:3:my:custom:tag'];
+        // Numeric-looking custom segments must survive verbatim, not be coerced.
+        yield 'zero-padded id' => ['sku:0123'];
+        yield 'overflow id' => ['ext:99999999999999999999'];
     }
 
     /**
@@ -104,6 +107,17 @@ class TestTag extends WP_UnitTestCase
         $this->assertSame('site', $tag->type);
         $this->assertSame(5, $tag->id);
         $this->assertSame([], $tag->scopes);
+    }
+
+    public function test_only_canonical_integers_are_coerced_to_int(): void
+    {
+        // A real post id is a canonical int.
+        $this->assertSame(5, Tag::parse('post:5')->id);
+
+        // A custom tag's non-canonical numeric segment stays a string so it
+        // round-trips verbatim (no leading-zero stripping or overflow).
+        $this->assertSame('0123', Tag::parse('sku:0123')->id);
+        $this->assertSame('99999999999999999999', Tag::parse('ext:99999999999999999999')->id);
     }
 
     public function test_from_accepts_strings_and_tags(): void
