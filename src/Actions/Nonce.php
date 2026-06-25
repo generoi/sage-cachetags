@@ -11,10 +11,10 @@ use Genero\Sage\CacheTags\NonceCron;
  * cached page never serves an expired nonce (a form submit, AJAX action or
  * add-to-cart that then fails for everyone served that page).
  *
- * Enabled by default — it's a light twice-daily cron, and any page tagged `nonce`
- * (the Gravityform action does this for file-upload forms, but a theme can tag its
- * own) needs it without having to wire a cron by hand. Remove it from the action
- * set to opt out.
+ * Enabled by default in the shipped config — it's a light twice-daily cron, and
+ * any page tagged `nonce` (the Gravityform action does this for file-upload forms,
+ * but a theme can tag its own) needs it without having to wire a cron by hand.
+ * Remove it from the action set to opt out.
  */
 class Nonce implements Action
 {

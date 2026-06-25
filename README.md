@@ -515,9 +515,9 @@ automatically — you don't need to list it in `action`:
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete.
 - **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
-  form's pages when it changes. Its file-upload forms use a per-session nonce, so
-  the [nonce cron](#nonces-in-cached-pages) also turns itself on when Gravity Forms
-  is active (`'nonce-cron' => null` = auto; set `true`/`false` to force it).
+  form's pages when it changes. It tags file-upload form pages `nonce`; the
+  always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
+  those before the nonce expires.
 
 To manage the action list entirely yourself, turn detection off:
 
@@ -559,6 +559,9 @@ network, enable the `Site` action. It prefixes every tag with the site id
 another, and tags each page with `site:{id}` for a per-site flush-all
 (`wp cachetags clear site:5`). On a single site you don't need it — the base
 `page` tag above already gives flush-all without the per-tag prefixing.
+
+Note the `Site` prefix also applies to the base tag, so with `Site` active the
+flush-all key is per-site `site:5:page` rather than the bare `page`.
 
 ### Multisite tables
 
