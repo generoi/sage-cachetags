@@ -43,7 +43,7 @@ class Gravityform implements Action
         foreach ($form['fields'] as $field) {
             // 2.9.24+ uses nonce for file uploads
             if ($field['type'] === 'fileupload') {
-                $this->cacheTags->add([Tag::nonce()]);
+                $this->cacheTags->add(Tag::nonce());
             }
 
             $this->collectPrepopulateParams($field);

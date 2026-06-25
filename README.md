@@ -674,13 +674,16 @@ Tag::archive('post')->qualify($lang);                 // archive:post:fi
 
 The builder classes (`CoreTags`, `WooCommerceTags`, `SiteTags`, `PolylangTags`,
 `GravityformTags`) return `Tag[]`; pass them — and any plain strings — straight to
-`add()`/`clear()`:
+`add()`/`clear()`. Both take tags as individual arguments or arrays, nested
+freely:
 
 ```php
+$cacheTags->add(Tag::nonce());                 // a single tag
+$cacheTags->add('post:5', Tag::term(9));       // several arguments
 $cacheTags->add([
     Tag::archive('product'),
-    ...CoreTags::posts($ids),   // CoreTags returns Tag[]
-    'my:custom:tag',            // plain strings still work
+    ...CoreTags::posts($ids),                  // CoreTags returns Tag[]
+    'my:custom:tag',                           // plain strings still work
 ]);
 ```
 

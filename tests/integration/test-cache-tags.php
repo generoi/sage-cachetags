@@ -88,6 +88,20 @@ class TestCacheTags extends WP_UnitTestCase
         $this->assertContains('archive:post:any', $tags);
     }
 
+    public function test_add_accepts_a_single_tag_multiple_args_or_an_array(): void
+    {
+        $cacheTags = $this->resetTags();
+
+        $cacheTags->add(Tag::nonce());                            // single Tag
+        $cacheTags->add('post:1', 'term:2');                      // variadic strings
+        $cacheTags->add(['comment:3', Tag::archive('post')->any()]); // array (back-compat)
+
+        $tags = $cacheTags->get();
+        foreach (['nonce', 'post:1', 'term:2', 'comment:3', 'archive:post:any'] as $expected) {
+            $this->assertContains($expected, $tags);
+        }
+    }
+
     // The Site action prefixes every tag with "site:N:"; the collapse must see
     // through the prefix and re-apply it, or the prefixed post:/term: tags would
     // be dropped instead of collapsed → stale.

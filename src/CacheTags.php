@@ -75,15 +75,19 @@ class CacheTags
     }
 
     /**
-     * Add a set of cache tags to this page load.
+     * Add cache tags to this page load.
      *
      * Accepts Tag objects and/or plain strings (a site's custom tags, anything
-     * built elsewhere); strings are parsed to Tags so the rest of the pipeline
-     * works with structure.
+     * built elsewhere) as individual arguments or arrays, nested freely — strings
+     * are parsed to Tags so the rest of the pipeline works with structure:
      *
-     * @param  array<string|Tag|array>  $tags
+     *     $cacheTags->add(Tag::post(5));
+     *     $cacheTags->add('post:5', 'term:9');
+     *     $cacheTags->add([...CoreTags::posts($ids), 'my:custom:tag']);
+     *
+     * @param  string|Tag|array<string|Tag|array>  ...$tags
      */
-    public function add(array $tags): void
+    public function add(string|Tag|array ...$tags): void
     {
         foreach (Tag::fromMany($tags) as $tag) {
             $this->cacheTags[] = $tag;
@@ -277,11 +281,12 @@ class CacheTags
     }
 
     /**
-     * Queue tags to be cleared from cache. Accepts strings and/or Tag objects.
+     * Queue tags to be cleared from cache. Accepts strings and/or Tag objects as
+     * individual arguments or arrays, nested freely (see add()).
      *
-     * @param  array<string|Tag|array>  $tags
+     * @param  string|Tag|array<string|Tag|array>  ...$tags
      */
-    public function clear(array $tags): void
+    public function clear(string|Tag|array ...$tags): void
     {
         foreach (Tag::fromMany($tags) as $tag) {
             $this->purgeTags[] = $tag;
