@@ -63,17 +63,18 @@ class TestKinstaInvalidators extends WP_UnitTestCase
         $this->assertStringContainsString('example.com', urldecode($invalidator->posts[0][1]));
     }
 
-    public function test_clear_bulk_flushes_when_it_would_take_more_than_three_requests(): void
+    public function test_clear_bulk_routes_to_the_throttled_endpoint_not_a_full_flush(): void
     {
         $invalidator = new class extends KinstaCacheInvalidator
         {
             public bool $flushed = false;
 
-            public int $postCount = 0;
+            /** @var string[] */
+            public array $endpoints = [];
 
             protected function post(string $endpoint, string $body): bool
             {
-                $this->postCount++;
+                $this->endpoints[] = $endpoint;
 
                 return true;
             }
@@ -92,8 +93,13 @@ class TestKinstaInvalidators extends WP_UnitTestCase
         }
 
         $this->assertTrue($invalidator->clear($urls, ['post:1']));
-        $this->assertTrue($invalidator->flushed, 'over three chunks → single bulk flush');
-        $this->assertSame(0, $invalidator->postCount, 'individual posts skipped');
+        $this->assertFalse($invalidator->flushed, 'a bulk purge must NOT nuke the whole cache');
+        $this->assertGreaterThan(KinstaCacheInvalidator::IMMEDIATE_MAX_REQUESTS, count($invalidator->endpoints));
+        $this->assertSame(
+            [KinstaCacheInvalidator::THROTTLED_PATH],
+            array_values(array_unique($invalidator->endpoints)),
+            'bulk chunks all go to the throttled endpoint',
+        );
     }
 
     public function test_flush_calls_the_clear_all_endpoint(): void

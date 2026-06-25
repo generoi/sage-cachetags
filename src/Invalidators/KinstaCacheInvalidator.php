@@ -9,9 +9,17 @@ class KinstaCacheInvalidator implements Invalidator
 {
     const IMMEDIATE_PATH = 'https://localhost/kinsta-clear-cache/v2/immediate';
 
+    // Kinsta's throttled endpoint coalesces and rate-smooths purges server-side;
+    // its MU-plugin routes high-cardinality URLs here rather than to immediate.
+    const THROTTLED_PATH = 'https://localhost/kinsta-clear-cache/v2/throttled';
+
     const CLEAR_ALL_PATH = 'https://localhost/kinsta-clear-cache-all';
 
     const POST_MAX_BODY_SIZE = 51200;
+
+    // Above this many chunks a purge is "bulk" and routes to the throttled
+    // endpoint instead of immediate (and never to a full-site flush).
+    const IMMEDIATE_MAX_REQUESTS = 3;
 
     /**
      * @param  string[]  $urls
@@ -25,13 +33,18 @@ class KinstaCacheInvalidator implements Invalidator
 
         $requests = Util::chunkRequest($this->purgeList($urls), self::POST_MAX_BODY_SIZE);
 
-        if (count($requests) > 3) {
-            return $this->flush();
-        }
+        // A small purge goes to the immediate endpoint so the edit is live at
+        // once. A bulk purge goes to Kinsta's throttled endpoint, which coalesces
+        // and rate-smooths server-side — far better than escalating to a full-site
+        // flush, which is rate-limited (1 per 10s) and leaves every page cold for
+        // minutes (an origin stampede on exactly the busy sites that hit it).
+        $endpoint = count($requests) > self::IMMEDIATE_MAX_REQUESTS
+            ? self::THROTTLED_PATH
+            : self::IMMEDIATE_PATH;
 
         return array_reduce(
             $requests,
-            fn (bool $result, string $chunk) => $this->post(self::IMMEDIATE_PATH, $chunk) ? $result : false,
+            fn (bool $result, string $chunk) => $this->post($endpoint, $chunk) ? $result : false,
             true
         );
     }
