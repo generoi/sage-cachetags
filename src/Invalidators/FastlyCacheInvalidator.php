@@ -9,6 +9,7 @@ use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 use Genero\Sage\CacheTags\Util;
 use WP_Error;
+use WpOrg\Requests\Exception;
 use WpOrg\Requests\Requests;
 use WpOrg\Requests\Response;
 
@@ -29,6 +30,12 @@ class FastlyCacheInvalidator implements Invalidator
      * local connection handles for no gain. Windows of this size keep it bounded.
      */
     const MAX_CONCURRENT_PURGES = 10;
+
+    /** Retry a rate-limited (429) purge this many times before giving up. */
+    const MAX_PURGE_RETRIES = 2;
+
+    /** Cap the 429 backoff so a shutdown-time purge can't hang for minutes. */
+    const MAX_BACKOFF_SECONDS = 10;
 
     protected ?string $serviceId;
 
@@ -91,16 +98,71 @@ class FastlyCacheInvalidator implements Invalidator
     {
         // Bounded fan-out: at most MAX_CONCURRENT_PURGES in flight per window.
         foreach (array_chunk($requests, self::MAX_CONCURRENT_PURGES) as $window) {
-            $responses = Requests::request_multiple($window, ['timeout' => 5]);
+            $pending = array_values($window);
 
-            foreach ($responses as $response) {
-                if (! $response instanceof Response || $response->status_code !== 200) {
+            for ($attempt = 0; ; $attempt++) {
+                $responses = $this->requestMultiple($pending);
+                $retry = [];
+                $reset = '';
+
+                foreach ($responses as $i => $response) {
+                    if ($response instanceof Response && $response->status_code === 200) {
+                        continue;
+                    }
+
+                    // Retry only the rate-limited chunks (re-sending the rest would
+                    // just spend more of the purge budget). Other failures are fatal.
+                    if ($response instanceof Response && $response->status_code === 429 && $attempt < self::MAX_PURGE_RETRIES) {
+                        $retry[] = $pending[$i];
+                        $reset = (string) ($response->headers['fastly-ratelimit-reset'] ?? $reset);
+
+                        continue;
+                    }
+
                     return false;
                 }
+
+                if ($retry === []) {
+                    break;
+                }
+
+                $this->pauseBeforeRetry($this->backoffSeconds($reset));
+                $pending = $retry;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Real concurrent dispatch — isolated as a seam so the retry/window logic can
+     * be tested without real HTTP.
+     *
+     * @param  array<int, array<string, mixed>>  $requests
+     * @return array<int, Response|Exception>
+     */
+    protected function requestMultiple(array $requests): array
+    {
+        return Requests::request_multiple($requests, ['timeout' => 5]);
+    }
+
+    /**
+     * Seconds to wait before retrying a 429. Fastly sends no Retry-After, only
+     * Fastly-RateLimit-Reset (a Unix timestamp); honour it, but cap the wait so a
+     * purge running on shutdown can't hang for minutes, and floor it at 1s.
+     */
+    protected function backoffSeconds(string $reset): int
+    {
+        $reset = (int) $reset;
+        $wait = $reset > 0 ? $reset - time() : 1;
+
+        return max(1, min(self::MAX_BACKOFF_SECONDS, $wait));
+    }
+
+    /** Seam so tests don't actually sleep. */
+    protected function pauseBeforeRetry(int $seconds): void
+    {
+        sleep($seconds);
     }
 
     public function flush(): bool
@@ -132,18 +194,31 @@ class FastlyCacheInvalidator implements Invalidator
     protected function apiCall(string $path, ?array $payload = null): true|WP_Error
     {
         $url = self::FASTLY_BASE_URL.$this->serviceId.$path;
-        $result = wp_remote_post($url, $this->buildRequest($payload));
-        if (is_wp_error($result)) {
-            return $result;
-        }
-        $responseCode = wp_remote_retrieve_response_code($result);
-        if ($responseCode === 200) {
-            return true;
-        }
 
-        $response = json_decode(wp_remote_retrieve_body($result));
+        for ($attempt = 0; ; $attempt++) {
+            $result = wp_remote_post($url, $this->buildRequest($payload));
+            if (is_wp_error($result)) {
+                return $result;
+            }
 
-        return new WP_Error('fastly_error', $response->msg ?? 'Unknown', $response->detail ?? '');
+            $responseCode = wp_remote_retrieve_response_code($result);
+            if ($responseCode === 200) {
+                return true;
+            }
+
+            // Rate-limited: back off against Fastly-RateLimit-Reset and retry.
+            if ($responseCode === 429 && $attempt < self::MAX_PURGE_RETRIES) {
+                $this->pauseBeforeRetry($this->backoffSeconds(
+                    (string) wp_remote_retrieve_header($result, 'fastly-ratelimit-reset')
+                ));
+
+                continue;
+            }
+
+            $response = json_decode(wp_remote_retrieve_body($result));
+
+            return new WP_Error('fastly_error', $response->msg ?? 'Unknown', $response->detail ?? '');
+        }
     }
 
     /**
