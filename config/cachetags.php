@@ -23,7 +23,8 @@ return [
 
     // A tag on every cacheable page + REST response, so one purge
     // (`wp cachetags clear page`) clears all WordPress-served pages while static
-    // assets stay cached. Set to null to disable, or rename it.
+    // assets stay cached. Set to null to disable, or rename it. (Wired by the
+    // BaseTag action automatically from this value — it isn't listed in 'action'.)
     'base-tag' => 'page',
 
     'action' => [
@@ -33,6 +34,10 @@ return [
         // Purge pages tagged 'nonce' twice daily so a cached page never serves an
         // expired nonce. Light cron; remove this to opt out.
         Nonce::class,
+
+        // Emit the cache-tag HTTP header (above) for surrogate-key CDNs like
+        // Fastly. Not needed for URL/store-based purging (e.g. WP Super Cache).
+        // \Genero\Sage\CacheTags\Actions\HttpHeader::class,
 
         // WooCommerce / Polylang / Gravity Forms are added automatically when
         // active (see auto-detect-actions above); list them here to force them on.

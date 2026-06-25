@@ -117,8 +117,8 @@ class Bootstrap
     }
 
     /**
-     * Auto-enable integration actions (WooCommerce, Polylang) when their plugin
-     * is active. On by default; opt out for full manual control of the action list.
+     * Auto-enable integration actions (WooCommerce, Polylang, Gravity Forms) when
+     * their plugin is active. On by default; opt out for full manual control.
      */
     public function autoDetectActions(bool $enable = true): static
     {
@@ -156,9 +156,6 @@ class Bootstrap
             ),
         );
 
-        // Bind actions
-        $this->bindActions();
-
         // Register WP-CLI commands if available
         $this->registerWpCliCommands();
 
@@ -173,8 +170,12 @@ class Bootstrap
         // database` covers headless/network upgrades.
         add_action('admin_init', [$this, 'upgradeTable']);
 
-        // Set up WordPress hooks
+        // Bind actions and the save/purge hooks — unless disabled. Binding only
+        // when enabled keeps a disabled install fully inert; the Nonce action in
+        // particular would otherwise schedule its cron via a deferred init hook.
         if (! $this->disable) {
+            $this->bindActions();
+
             add_action('wp_footer', [$this, 'saveCacheTags']);
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);

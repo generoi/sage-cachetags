@@ -66,10 +66,11 @@ class Util
     }
 
     /**
-     * Flatten nested arrays recursively.
+     * Flatten nested arrays recursively, preserving non-array leaves (strings or
+     * Tag objects) as-is.
      *
-     * @param  array<string|array>  $array
-     * @return string[]
+     * @param  array<mixed>  $array
+     * @return list<mixed>
      */
     public static function flatten(array $array): array
     {

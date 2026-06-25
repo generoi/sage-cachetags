@@ -197,13 +197,29 @@ class TestBootstrap extends WP_UnitTestCase
 
     public function test_base_tag_action_is_bound_by_default_and_disabled_with_null(): void
     {
-        $withBase = (new Bootstrap)->store(TransientStore::class)->actions([])->disable()->bootstrap();
+        $withBase = (new Bootstrap)->store(TransientStore::class)->actions([])->autoDetectActions(false)->bootstrap();
         $this->assertTrue($withBase->hasAction(BaseTag::class), 'base tag bound by default');
 
         $this->instanceProp()->setValue(null, null);
 
-        $without = (new Bootstrap)->store(TransientStore::class)->actions([])->baseTag(null)->disable()->bootstrap();
+        $without = (new Bootstrap)->store(TransientStore::class)->actions([])->autoDetectActions(false)->baseTag(null)->bootstrap();
         $this->assertFalse($without->hasAction(BaseTag::class), 'baseTag(null) binds nothing');
+    }
+
+    public function test_disabled_bootstrap_binds_nothing_and_leaves_no_nonce_cron(): void
+    {
+        NonceCron::unschedule();
+
+        // Disabled must be fully inert — including not scheduling the Nonce cron,
+        // whose deferred init hook would otherwise survive the synchronous cleanup.
+        $cacheTags = (new Bootstrap)
+            ->store(TransientStore::class)
+            ->actions([Core::class, Nonce::class])
+            ->disable()
+            ->bootstrap();
+
+        $this->assertFalse($cacheTags->hasAction(Nonce::class), 'no actions bound when disabled');
+        $this->assertFalse(wp_next_scheduled(NonceCron::HOOK), 'and no cron scheduled');
     }
 
     public function test_base_tag_action_tags_every_page(): void
