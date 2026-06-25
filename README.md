@@ -632,10 +632,16 @@ a store that supports inspection (the default `WordpressDbStore` does).
 `prune` garbage-collects store rows whose URL hasn't been rendered within the
 given age (`12h`/`30d`/`4w`) — query-string, bot and campaign-link variants that
 otherwise accumulate forever, especially on query-bypass edges. A row's age is
-*last seen* (refreshed on each render), so actively-served pages are never pruned.
-**The age must exceed your edge cache's max TTL** — pruning a URL still cached at
-the edge leaves an object you can no longer purge by tag. Pruning is manual; the
-default `WordpressDbStore` supports it (the in-memory `TransientStore` doesn't).
+*last seen* (refreshed on each render, at most once a day to avoid write churn),
+so actively-served pages are never pruned.
+
+This **runs daily by default** (the `prune-older-than` config, default `30d`) — the
+manual command above just forces a run. **The age must exceed your edge cache's
+max TTL**: pruning a URL still cached at the edge leaves an object you can no
+longer purge by tag (on Kinsta/Fastly the max TTL is ~30d, so raise it if your
+edge holds objects that long). Disable GC with `'prune-older-than' => null`. Only
+a prunable store (the default `WordpressDbStore`) is affected — `TransientStore`
+no-ops.
 
 The store is a rebuildable cache, so `--rebuild` migrates an existing (even
 million-row) table to the latest schema by dropping and recreating it — avoiding

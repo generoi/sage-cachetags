@@ -5,12 +5,14 @@ use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Actions\Gravityform;
 use Genero\Sage\CacheTags\Actions\Nonce;
 use Genero\Sage\CacheTags\Actions\Polylang;
+use Genero\Sage\CacheTags\Actions\PruneStore;
 use Genero\Sage\CacheTags\Actions\WooCommerce;
 use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Store;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
 use Genero\Sage\CacheTags\NonceCron;
+use Genero\Sage\CacheTags\PruneCron;
 use Genero\Sage\CacheTags\Stores\TransientStore;
 
 /**
@@ -101,6 +103,32 @@ class TestBootstrap extends WP_UnitTestCase
 
         $this->assertNotFalse(wp_next_scheduled(NonceCron::HOOK));
         NonceCron::unschedule();
+    }
+
+    public function test_prune_store_action_is_bound_by_default_and_schedules_the_cron(): void
+    {
+        PruneCron::unschedule();
+
+        // Default prune-older-than ('30d') binds PruneStore, which schedules GC.
+        $cacheTags = (new Bootstrap)->store(TransientStore::class)->actions([])->autoDetectActions(false)->bootstrap();
+
+        $this->assertTrue($cacheTags->hasAction(PruneStore::class), 'GC on by default');
+        $this->assertNotFalse(wp_next_scheduled(PruneCron::HOOK));
+        PruneCron::unschedule();
+    }
+
+    public function test_prune_can_be_disabled_and_unschedules_the_cron(): void
+    {
+        PruneCron::register('30d'); // pretend a schedule already exists
+        $this->assertNotFalse(wp_next_scheduled(PruneCron::HOOK));
+
+        $cacheTags = (new Bootstrap)
+            ->store(TransientStore::class)->actions([])->autoDetectActions(false)
+            ->pruneOlderThan(null)
+            ->bootstrap();
+
+        $this->assertFalse($cacheTags->hasAction(PruneStore::class), 'opted out');
+        $this->assertFalse(wp_next_scheduled(PruneCron::HOOK), 'orphaned cron cleaned up');
     }
 
     public function test_save_cache_tags_stores_a_cacheable_front_end_url(): void

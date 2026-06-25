@@ -46,6 +46,7 @@ tests_add_filter('muplugins_loaded', function (): void {
         ->actions([Core::class, HttpHeader::class, RestApi::class])
         ->autoDetectActions(false)
         ->baseTag(null) // tested in isolation; keep it out of the shared tag set
+        ->pruneOlderThan(null) // tested in isolation; no stray prune cron
         ->bootstrap();
 
     // The activation hook does not run in the test environment, so create the
