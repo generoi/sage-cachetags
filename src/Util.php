@@ -108,6 +108,21 @@ class Util
     const MAX_LENGTH = 191;
 
     /**
+     * Parse a human age like "30d", "12h" or "4w" (hours/days/weeks) into the
+     * cutoff datetime that many units ago. Null if the format isn't recognised.
+     */
+    public static function cutoffFromAge(string $age): ?\DateTimeImmutable
+    {
+        if (! preg_match('/^\s*(\d+)\s*([hdw])\s*$/i', $age, $match)) {
+            return null;
+        }
+
+        $units = ['h' => 'hours', 'd' => 'days', 'w' => 'weeks'];
+
+        return new \DateTimeImmutable("-{$match[1]} {$units[strtolower($match[2])]}");
+    }
+
+    /**
      * Whether a value is a usable cache tag: a non-empty, single header token
      * (no whitespace or control characters) that fits the store column.
      *

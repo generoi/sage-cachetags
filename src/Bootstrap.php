@@ -203,6 +203,7 @@ class Bootstrap
         \WP_CLI::add_command('cachetags flush', WpCli\FlushCommand::class);
         \WP_CLI::add_command('cachetags clear', WpCli\ClearCommand::class);
         \WP_CLI::add_command('cachetags status', WpCli\StatusCommand::class);
+        \WP_CLI::add_command('cachetags prune', WpCli\PruneCommand::class);
     }
 
     protected function bindActions(): void
