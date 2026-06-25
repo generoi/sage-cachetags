@@ -43,7 +43,7 @@ class NonceCron
         if ($cacheTags === null) {
             return;
         }
-        $cacheTags->clear(['nonce']);
+        $cacheTags->clear([Tag::nonce()]);
         $cacheTags->purgeQueued();
     }
 }

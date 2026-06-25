@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\GravityformTags;
 
 class Gravityform implements Action
@@ -42,7 +43,7 @@ class Gravityform implements Action
         foreach ($form['fields'] as $field) {
             // 2.9.24+ uses nonce for file uploads
             if ($field['type'] === 'fileupload') {
-                $this->cacheTags->add(['nonce']);
+                $this->cacheTags->add([Tag::nonce()]);
             }
 
             $this->collectPrepopulateParams($field);
