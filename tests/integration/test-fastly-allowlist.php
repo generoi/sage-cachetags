@@ -110,8 +110,27 @@ class TestFastlyAllowlist extends WP_UnitTestCase
 
         $item = $dictionary->patched['body']['items'][0];
         $this->assertSame('upsert', $item['op']);
-        $this->assertSame('params', $item['item_key']);
+        $this->assertSame(parse_url(home_url(), PHP_URL_HOST), $item['item_key'], 'keyed per host');
         $this->assertSame('orderby,paged', $item['item_value']);
+    }
+
+    public function test_exceeds_limit_guards_the_8000_char_value_cap(): void
+    {
+        $dictionary = new AllowlistDictionary('d');
+
+        $this->assertFalse($dictionary->exceedsLimit(['orderby', 'paged']));
+        // ~9000 chars of comma-joined names.
+        $this->assertTrue($dictionary->exceedsLimit(array_map(fn ($i) => "param_{$i}", range(1, 1000))));
+    }
+
+    public function test_collect_includes_custom_registered_query_vars(): void
+    {
+        // A theme/plugin registering a public query var should be allowlisted, not
+        // silently stripped at the edge.
+        add_filter('query_vars', fn ($vars) => array_merge($vars, ['my_theme_filter']));
+
+        $this->assertContains('my_theme_filter', QueryAllowlist::collect());
+        $this->assertContains('cpage', QueryAllowlist::collect(), 'comment paging');
     }
 
     public function test_is_synced_compares_current_value_to_the_joined_list(): void

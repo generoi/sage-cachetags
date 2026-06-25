@@ -66,6 +66,16 @@ class FastlyAllowlistCommand extends Command
         }
 
         if ($action === 'sync') {
+            if ($dictionary->exceedsLimit($params)) {
+                $this->error(sprintf(
+                    'Allowlist too long (%d chars > %d) — too many attributes/facets for one dictionary item.',
+                    strlen(implode(',', $params)),
+                    AllowlistDictionary::MAX_VALUE_LENGTH
+                ));
+
+                return self::FAILURE;
+            }
+
             if (! $this->option('force') && $dictionary->isSynced($params)) {
                 $this->info('Already in sync; nothing to push.');
 

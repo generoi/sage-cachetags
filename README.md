@@ -237,13 +237,14 @@ The core of it:
 
 ```vcl
 declare local var.allow STRING;
-set var.allow = table.lookup(cachetags_query_allowlist, "params", "");
+set var.allow = table.lookup(cachetags_query_allowlist, req.http.host, "");  # per-host
 if (var.allow != ""                                    # fail-open until first sync
     && req.method == "GET"
     && req.url.path !~ "^/(wp|wp-admin|wp-json)/"
     && req.url !~ "(add-to-cart|remove_item|wc-ajax)=") {   # keep functional params
   set req.url = querystring.filter_except(req.url, regsuball(var.allow, ",", querystring.filtersep()));
 }
+set req.url = querystring.clean(req.url);              # drop empty params
 set req.url = querystring.sort(req.url);               # canonical param order
 ```
 
@@ -252,8 +253,8 @@ origin — so the guards keep it from stripping functional params (add-to-cart,
 AJAX) or running on admin/non-GET requests before the cache-bypass logic sees
 them. Stripped trackers (`utm_*`, `fbclid`, …) therefore won't reach origin on a
 cache *miss* (client-side GA is unaffected — the browser URL is untouched). The
-example file slots in where a Genero VCL normally does the tracker deny-list +
-`querystring.sort`.
+item is keyed by **host**, so a multisite network on one Fastly service keeps a
+separate allowlist per site.
 
 > ⚠️ **An incomplete allowlist serves wrong content.** A param that's stripped but
 > *was* meaningful (a missed facet, `min_price`, a custom CPT's `post_type`)
@@ -269,11 +270,25 @@ add_filter('cachetags/fastly-allowed-query-params', function (array $params) {
 });
 ```
 
-The built-ins cover core (`s`, `post_type`, `orderby`, `paged`), WooCommerce
-(attribute `filter_*`/`query_type_*`, price, rating, stock, `product-page`),
-FacetWP facets (the `_`-prefixed vars + `_paged`/`_per_page`/`_sort`) and Polylang
-`lang`. Commonly-missed: a theme's custom query vars, `cpage` (comment paging),
-`feed`. Syncing is manual (CLI) — wire it to a deploy hook to automate.
+The built-ins cover WordPress's registered public query vars (core *and* anything
+a theme/plugin registers via the `query_vars` filter, incl. `cpage`/`feed`/ugly
+permalinks), WooCommerce (attribute `filter_*`/`query_type_*`, price, rating,
+stock, `product-page`), FacetWP facets (the `_`-prefixed vars + `_paged`/
+`_per_page`/`_sort`) and Polylang `lang`.
+
+**Operational notes:**
+- **Sync *before* deploying a feature that adds a param.** Dictionary updates
+  propagate in ~30s; in that window a newly-added param is still stripped, and any
+  page cached then stays collapsed until its TTL — so `sync`, confirm with
+  `status`, then ship (and purge the affected pages if you're adding a param).
+- Block-theme **Query Loop pagination** (`?query-{id}-page=`, a dynamic id) can't
+  be enumerated or wildcarded — block-paginated archives won't vary on it.
+- `querystring.sort` leaves the URL unsorted above **32 params** (a Fastly limit) —
+  a corner case for heavily multi-select faceted pages.
+- The allowlist can't exceed Fastly's 8000-char item value (≈230 attributes);
+  `sync` errors clearly if it would.
+
+Syncing is manual (CLI) — wire it to a deploy hook to automate.
 
 ## REST API integration
 

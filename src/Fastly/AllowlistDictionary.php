@@ -18,11 +18,33 @@ class AllowlistDictionary
 {
     const BASE_URL = 'https://api.fastly.com';
 
-    const ITEM_KEY = 'params';
+    /** Fastly Edge Dictionary value cap. */
+    const MAX_VALUE_LENGTH = 8000;
 
     protected ?string $dictionaryId = null;
 
     public function __construct(protected string $dictionary) {}
+
+    /**
+     * Dictionary item key — the site's host, so a multisite network sharing one
+     * Fastly service stores one allowlist per host instead of clobbering a single
+     * shared item. The VCL looks the value up by `req.http.host`.
+     */
+    public function itemKey(): string
+    {
+        return (string) (parse_url(home_url(), PHP_URL_HOST) ?: 'params');
+    }
+
+    /**
+     * True when the comma-joined list would exceed the dictionary value cap — too
+     * many attributes/facets for one item. The caller should report it, not push.
+     *
+     * @param  string[]  $params
+     */
+    public function exceedsLimit(array $params): bool
+    {
+        return strlen(implode(',', $params)) > self::MAX_VALUE_LENGTH;
+    }
 
     public function isConfigured(): bool
     {
@@ -40,7 +62,7 @@ class AllowlistDictionary
             return null;
         }
 
-        $item = $this->apiGet("/service/{$this->serviceId()}/dictionary/{$id}/item/".self::ITEM_KEY);
+        $item = $this->apiGet("/service/{$this->serviceId()}/dictionary/{$id}/item/".rawurlencode($this->itemKey()));
 
         return isset($item['item_value']) ? (string) $item['item_value'] : null;
     }
@@ -63,14 +85,14 @@ class AllowlistDictionary
     public function push(array $params): bool
     {
         $id = $this->dictionaryId();
-        if ($id === null) {
+        if ($id === null || $this->exceedsLimit($params)) {
             return false;
         }
 
         return $this->apiPatch("/service/{$this->serviceId()}/dictionary/{$id}/items", [
             'items' => [[
                 'op' => 'upsert',
-                'item_key' => self::ITEM_KEY,
+                'item_key' => $this->itemKey(),
                 'item_value' => implode(',', $params),
             ]],
         ]);

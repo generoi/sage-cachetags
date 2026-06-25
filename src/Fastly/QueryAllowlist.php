@@ -27,9 +27,7 @@ class QueryAllowlist
      */
     public static function collect(): array
     {
-        $params = ['s', 'post_type', 'orderby', 'order', 'paged', 'page'];
-
-        $params = array_merge($params, self::wooCommerce(), self::facetwp(), self::polylang());
+        $params = array_merge(self::core(), self::wooCommerce(), self::facetwp(), self::polylang());
 
         /**
          * Final say over the allowlist — add a site's bespoke params, or remove
@@ -58,6 +56,25 @@ class QueryAllowlist
      *
      * @return string[]
      */
+    /**
+     * WordPress's content-determining query vars — the built-ins plus anything a
+     * theme/plugin registers via the `query_vars` filter, so custom routable params
+     * aren't silently stripped. These all select content, so allowlisting them is
+     * safe; high-cardinality noise (trackers) is never a registered query var.
+     *
+     * @return string[]
+     */
+    protected static function core(): array
+    {
+        $builtins = [
+            's', 'post_type', 'orderby', 'order', 'paged', 'page', 'cpage',
+            'p', 'page_id', 'name', 'pagename', 'cat', 'category_name', 'tag',
+            'author', 'author_name', 'feed', 'm', 'year', 'monthnum', 'day',
+        ];
+
+        return array_map('strval', (array) apply_filters('query_vars', $builtins));
+    }
+
     protected static function wooCommerce(): array
     {
         return function_exists('wc_get_attribute_taxonomies')

@@ -85,6 +85,14 @@ class FastlyAllowlistCommand extends WP_CLI_Command
         $dictionary = $this->dictionary($assoc);
         $params = QueryAllowlist::collect();
 
+        if ($dictionary->exceedsLimit($params)) {
+            WP_CLI::error(sprintf(
+                'Allowlist too long (%d chars > %d) — too many attributes/facets for one dictionary item.',
+                strlen(implode(',', $params)),
+                AllowlistDictionary::MAX_VALUE_LENGTH
+            ));
+        }
+
         if (! isset($assoc['force']) && $dictionary->isSynced($params)) {
             WP_CLI::success('Already in sync; nothing to push.');
 

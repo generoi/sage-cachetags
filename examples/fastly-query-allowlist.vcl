@@ -26,7 +26,9 @@
 #     plugin can't introspect via the `cachetags/fastly-allowed-query-params` filter.
 
 declare local var.cachetags_allow STRING;
-set var.cachetags_allow = table.lookup(cachetags_query_allowlist, "params", "");
+# Keyed by host: a multisite network on one Fastly service stores one allowlist
+# per host (the plugin syncs per site), so they don't clobber each other.
+set var.cachetags_allow = table.lookup(cachetags_query_allowlist, req.http.host, "");
 
 if (var.cachetags_allow != ""
     && req.method == "GET"
@@ -56,5 +58,8 @@ if (var.cachetags_allow != ""
       "gclid");
 }
 
-# Canonical param order, so ?a=1&b=2 and ?b=2&a=1 share one cached object.
+# Drop empty params (?filter_color=) — classic empty-facet / bot noise — then
+# sort so ?a=1&b=2 and ?b=2&a=1 share one cached object.
+# (To also collapse ?paged=1 ≡ no param, add a regsub for paged/page/_paged=1.)
+set req.url = querystring.clean(req.url);
 set req.url = querystring.sort(req.url);
