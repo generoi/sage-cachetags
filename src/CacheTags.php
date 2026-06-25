@@ -316,10 +316,7 @@ class CacheTags
             $result = $this->store->clear($urls, $tags);
         }
 
-        // Let sites attach logging/metrics, and surface a failure that would
-        // otherwise be swallowed (leaving content stale at the edge).
-        do_action('cachetags/purged', $tags, $urls, $result);
-
+        // Surface a failure that would otherwise be swallowed (stale at the edge).
         if (! $result) {
             $this->logFailure(sprintf('purge failed for %d tag(s): %s', count($tags), implode(' ', array_slice($tags, 0, 20))));
         }
@@ -343,8 +340,6 @@ class CacheTags
             // Flush the tag caches only if invalidators succeeded.
             $result = $this->store->flush();
         }
-
-        do_action('cachetags/flushed', $result);
 
         if (! $result) {
             $this->logFailure('flush failed');

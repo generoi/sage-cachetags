@@ -306,15 +306,14 @@ safe (for both front-end pages and REST responses):
   taxonomy. This over-purges rather than dropping tags.
 
 ```php
-// Tag header byte budget before collapsing to coarse tags (default 16384).
+// Tag header byte budget before collapsing to coarse tags (default 16384,
+// Fastly's Surrogate-Key total). Tune it for a provider with a different limit.
 add_filter('cachetags/max-header-bytes', fn () => 8192);
-
-// Maximum length of a single tag (default 191, the store column width).
-add_filter('cachetags/max-tag-length', fn () => 191);
-
-// Pattern a tag must match to be kept.
-add_filter('cachetags/tag-pattern', fn () => '/^[^\s\x00-\x1F]+$/');
 ```
+
+(The single-tag length cap — 191, the `varchar(191)` store column — and the
+header-token validation pattern are fixed, not filterable: they're tied to the
+schema and to header safety.)
 
 ## Front-end tagging
 
