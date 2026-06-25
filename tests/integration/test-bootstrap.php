@@ -3,6 +3,7 @@
 use Genero\Sage\CacheTags\Actions\BaseTag;
 use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Actions\Gravityform;
+use Genero\Sage\CacheTags\Actions\Nonce;
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\Actions\WooCommerce;
 use Genero\Sage\CacheTags\Bootstrap;
@@ -90,13 +91,13 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertNotFalse(has_action('shutdown', [$bootstrap, 'purgeCacheTags']));
     }
 
-    public function test_gravityform_action_schedules_the_nonce_cron(): void
+    public function test_nonce_action_schedules_the_cron(): void
     {
         NonceCron::unschedule();
         $cacheTags = (new Bootstrap)->store(TransientStore::class)->actions([])->disable()->bootstrap();
 
         // The action owns the cron — binding it schedules the purge.
-        (new Gravityform($cacheTags))->bind();
+        (new Nonce($cacheTags))->bind();
 
         $this->assertNotFalse(wp_next_scheduled(NonceCron::HOOK));
         NonceCron::unschedule();
@@ -234,10 +235,10 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertNotContains(Gravityform::class, $result);
     }
 
-    public function test_nonce_cron_is_unscheduled_without_the_gravityform_action(): void
+    public function test_nonce_cron_is_unscheduled_when_the_action_is_removed(): void
     {
-        // Pretend a stale schedule exists, then bootstrap without the Gravityform
-        // action — Bootstrap cleans up the orphaned cron.
+        // Pretend a stale schedule exists, then bootstrap without the Nonce action
+        // (opt-out) — Bootstrap cleans up the orphaned cron.
         NonceCron::register();
         $this->assertNotFalse(wp_next_scheduled(NonceCron::HOOK));
 

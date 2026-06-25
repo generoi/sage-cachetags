@@ -83,12 +83,12 @@ this replaces the trick of enabling the `Site` action just to get a flush-all ke
   plugin is active — it no longer needs to be listed in `action`. If you publish
   the config, `Gravityform::class` is dropped from the default `action` list (it's
   detected instead). Turn detection off with `'auto-detect-actions' => false`.
-- **Nonce cron** is now owned by the Gravity Forms action — it schedules the
-  12-hour purge of `nonce`-tagged pages (file-upload forms) when bound, and the
-  schedule is cleaned up when the action isn't active. The `'nonce-cron'` config
-  key and `Bootstrap::nonceCron()` are **removed** (the cron only ever mattered
-  with Gravity Forms, the sole producer of `nonce` tags). For a custom nonce
-  tagger without Gravity Forms, call `NonceCron::register()` yourself.
+- **Nonce cron** is now a default `Nonce` action (in the published config's
+  `action` list) that schedules the 12-hour purge of `nonce`-tagged pages. The
+  `'nonce-cron'` config key and `Bootstrap::nonceCron()` are **removed** — it's on
+  by default (a light twice-daily cron), so any page tagged `nonce`, including a
+  theme's own, is covered without wiring a cron. Opt out by removing `Nonce::class`
+  from `action`.
 
 ### Unchanged
 
