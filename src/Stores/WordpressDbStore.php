@@ -2,10 +2,12 @@
 
 namespace Genero\Sage\CacheTags\Stores;
 
+use DateTimeInterface;
 use Genero\Sage\CacheTags\Contracts\InspectableStore;
+use Genero\Sage\CacheTags\Contracts\PrunableStore;
 use Genero\Sage\CacheTags\Contracts\Store;
 
-class WordpressDbStore implements InspectableStore, Store
+class WordpressDbStore implements InspectableStore, PrunableStore, Store
 {
     /**
      * @param  string[]  $tags
@@ -24,9 +26,21 @@ class WordpressDbStore implements InspectableStore, Store
             $values[] = $url;
         }
 
+        // Upsert, refreshing created_at so it tracks "last seen" — that's what
+        // makes pruning by it safe (a still-rendered URL keeps a fresh timestamp
+        // and survives GC; with INSERT IGNORE the timestamp never moved, so GC
+        // would have deleted live entries the edge still holds).
+        //
+        // But refresh at most once a day: bumping on every render would write the
+        // row on every cache miss and hammer the DB. When the row was seen within
+        // the last day the UPDATE sets created_at to itself — a no-op InnoDB skips
+        // (no write). GC TTLs are measured in weeks, so a day of slack is free.
         $result = $wpdb->query($wpdb->prepare("
-            INSERT IGNORE INTO `{$wpdb->prefix}cache_tags` (`tag`, `url`)
+            INSERT INTO `{$wpdb->prefix}cache_tags` (`tag`, `url`)
             VALUES {$placeholders}
+            ON DUPLICATE KEY UPDATE created_at = IF(
+                created_at < (NOW() - INTERVAL 1 DAY), NOW(), created_at
+            )
         ", ...$values));
 
         return $result !== false;
@@ -91,6 +105,38 @@ class WordpressDbStore implements InspectableStore, Store
         return $wpdb->query("
             TRUNCATE `{$wpdb->prefix}cache_tags`
         ") !== false;
+    }
+
+    /**
+     * Garbage-collect rows last stored (created_at) before $olderThan, batched so
+     * a large prune doesn't hold a long lock. Safe because save() bumps created_at
+     * on every re-store, so a still-rendered URL keeps a fresh timestamp.
+     *
+     * @return int rows removed
+     */
+    public function prune(DateTimeInterface $olderThan, int $batch = 1000): int
+    {
+        global $wpdb;
+
+        $cutoff = $olderThan->format('Y-m-d H:i:s');
+        $batch = max(1, $batch);
+        $removed = 0;
+
+        do {
+            $deleted = $wpdb->query($wpdb->prepare("
+                DELETE FROM `{$wpdb->prefix}cache_tags`
+                WHERE created_at < %s
+                LIMIT %d
+            ", $cutoff, $batch));
+
+            if ($deleted === false) {
+                break;
+            }
+
+            $removed += $deleted;
+        } while ($deleted === $batch);
+
+        return $removed;
     }
 
     /**

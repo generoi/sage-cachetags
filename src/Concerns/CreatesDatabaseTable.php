@@ -21,6 +21,10 @@ trait CreatesDatabaseTable
 
     /**
      * The current table definition.
+     *
+     * `created_at` is "last seen": WordpressDbStore::save() bumps it on every
+     * re-store, so store garbage collection can prune by it (rows untouched for
+     * longer than the edge TTL) without deleting still-live entries.
      */
     protected function tableSchema(): string
     {

@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags;
 
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
+use Genero\Sage\CacheTags\Contracts\PrunableStore;
 use Genero\Sage\CacheTags\Contracts\Store;
 use WP_Term;
 
@@ -352,6 +353,17 @@ class CacheTags
         }
 
         return $result;
+    }
+
+    /**
+     * Garbage-collect store entries last seen before $olderThan. Returns the rows
+     * removed, or null when the active store doesn't support pruning.
+     */
+    public function prune(\DateTimeInterface $olderThan, int $batch = 1000): ?int
+    {
+        return $this->store instanceof PrunableStore
+            ? $this->store->prune($olderThan, $batch)
+            : null;
     }
 
     protected function logFailure(string $message): void
