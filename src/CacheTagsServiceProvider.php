@@ -52,6 +52,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             actions: $config->get('cachetags.action', []),
             autoDetectActions: $config->get('cachetags.auto-detect-actions', true),
             baseTag: $config->get('cachetags.base-tag', 'page'),
+            pruneOlderThan: $config->get('cachetags.prune-older-than', '30d'),
         );
 
         return $bootstrap;

@@ -110,6 +110,17 @@ this replaces the trick of enabling the `Site` action just to get a flush-all ke
   theme's own, is covered without wiring a cron. Opt out by removing `Nonce::class`
   from `action`.
 
+### New default: store garbage collection
+
+The `WordpressDbStore` now garbage-collects itself: a daily cron prunes rows whose
+URL hasn't rendered within `'prune-older-than'` (default `30d`), so query-string /
+bot / campaign-link variants don't accumulate forever. To make this safe, `save()`
+switched from `INSERT IGNORE` to an upsert that refreshes a row's `created_at`
+("last seen") at most once a day — so a frequently-rendered URL isn't written on
+every cache miss, and live pages are never pruned. **Set `'prune-older-than'` above
+your edge cache's max TTL** (≈30d on Kinsta/Fastly), or disable GC with
+`'prune-older-than' => null`. `wp cachetags prune --older-than=…` runs it manually.
+
 ### Unchanged
 
 Compatible without changes: `CacheTags::add/clear/save/flush/getInstance/hasAction`

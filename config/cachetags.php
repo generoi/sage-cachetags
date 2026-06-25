@@ -27,6 +27,13 @@ return [
     // BaseTag action automatically from this value — it isn't listed in 'action'.)
     'base-tag' => 'page',
 
+    // Daily store garbage collection: prune cache_tags rows whose URL hasn't been
+    // rendered within this age (12h / 30d / 4w), so query-string / bot / campaign
+    // variants don't accumulate forever. A row's age is "last seen", so live pages
+    // are never pruned. MUST exceed your edge cache's max TTL — pruning a URL still
+    // cached at the edge leaves an object you can't purge by tag. null to disable.
+    'prune-older-than' => '30d',
+
     'action' => [
         Core::class,
         DebugComment::class,

@@ -52,6 +52,7 @@ class Bootstrap
         protected array $actions = [Core::class],
         protected bool $autoDetectActions = true,
         protected ?string $baseTag = 'page',
+        protected ?string $pruneOlderThan = '30d',
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -140,6 +141,17 @@ class Bootstrap
     }
 
     /**
+     * Set (or disable, with null) the age past which store rows not re-rendered
+     * are garbage-collected daily. Default "30d"; must exceed the edge cache TTL.
+     */
+    public function pruneOlderThan(?string $age): static
+    {
+        $this->pruneOlderThan = $age;
+
+        return $this;
+    }
+
+    /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
@@ -180,14 +192,17 @@ class Bootstrap
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
 
-            // The Nonce action owns the nonce purge cron and registers it in
-            // bind(); clean up the orphaned schedule when it's removed from the
-            // action set (opt-out).
+            // The Nonce / PruneStore actions own their crons and register them in
+            // bind(); clean up an orphaned schedule when either is opted out.
             if (! $this->cacheTags->hasAction(Actions\Nonce::class)) {
                 NonceCron::unschedule();
             }
+            if (! $this->cacheTags->hasAction(Actions\PruneStore::class)) {
+                PruneCron::unschedule();
+            }
         } else {
             NonceCron::unschedule();
+            PruneCron::unschedule();
         }
 
         return $this->cacheTags;
@@ -221,6 +236,12 @@ class Bootstrap
         // configured tag name, so a single purge clears all WP-served pages.
         if ($this->baseTag) {
             $actions[] = new Actions\BaseTag($this->cacheTags, $this->baseTag);
+        }
+
+        // Daily store garbage collection (unless disabled with prune-older-than:
+        // null) — bound with the configured age.
+        if ($this->pruneOlderThan !== null) {
+            $actions[] = new Actions\PruneStore($this->cacheTags, $this->pruneOlderThan);
         }
 
         foreach ($actions as $action) {
