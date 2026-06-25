@@ -222,12 +222,14 @@ final class Tag implements \Stringable
     }
 
     /**
-     * @param  array<string|Tag>  $tags
+     * Normalise a (possibly nested) array of strings/Tags to a flat Tag[].
+     *
+     * @param  array<string|Tag|array>  $tags
      * @return self[]
      */
     public static function fromMany(array $tags): array
     {
-        return array_map([self::class, 'from'], $tags);
+        return array_map([self::class, 'from'], Util::flatten($tags));
     }
 
     /**

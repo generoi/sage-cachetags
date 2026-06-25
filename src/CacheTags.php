@@ -85,10 +85,9 @@ class CacheTags
      */
     public function add(array $tags): void
     {
-        $this->cacheTags = [
-            ...$this->cacheTags,
-            ...Tag::fromMany(Util::flatten($tags)),
-        ];
+        foreach (Tag::fromMany($tags) as $tag) {
+            $this->cacheTags[] = $tag;
+        }
 
         $this->boundedTags = null;
     }
@@ -105,15 +104,26 @@ class CacheTags
             return $this->boundedTags;
         }
 
-        // Validate + dedupe in string form (the canonical comparison) and run the
-        // string filter for backwards compatibility, then collapse to budget as
-        // Tags. Util::normalizeTags also re-validates the filter output so a
-        // custom tag can't smuggle a newline into the header.
-        $strings = Util::normalizeTags(Tag::toStrings($this->cacheTags));
-        $strings = apply_filters(self::FILTER_TAGS, $strings);
-        $strings = Util::normalizeTags($strings);
+        $strings = $this->resolveTags($this->cacheTags);
 
         return $this->boundedTags = Tag::toStrings($this->bound(Tag::fromMany($strings)));
+    }
+
+    /**
+     * Reduce accumulated Tags to the validated, filtered string set the store,
+     * header and invalidators consume: serialize, validate + dedupe, run the
+     * (legacy string) FILTER_TAGS filter, then re-validate its output so a custom
+     * tag can't smuggle a newline into the header.
+     *
+     * @param  Tag[]  $tags
+     * @return string[]
+     */
+    protected function resolveTags(array $tags): array
+    {
+        $strings = Util::normalizeTags(Tag::toStrings($tags));
+        $strings = apply_filters(self::FILTER_TAGS, $strings);
+
+        return Util::normalizeTags($strings);
     }
 
     /**
@@ -273,19 +283,14 @@ class CacheTags
      */
     public function clear(array $tags): void
     {
-        $this->purgeTags = [
-            ...$this->purgeTags,
-            ...Tag::fromMany(Util::flatten($tags)),
-        ];
+        foreach (Tag::fromMany($tags) as $tag) {
+            $this->purgeTags[] = $tag;
+        }
     }
 
     public function purgeQueued(): bool
     {
-        // The store and invalidators work in strings; serialize the queued Tags,
-        // run the (string) filter, and re-validate.
-        $tags = Util::normalizeTags(Tag::toStrings($this->purgeTags));
-        $tags = apply_filters(self::FILTER_TAGS, $tags);
-        $tags = Util::normalizeTags($tags);
+        $tags = $this->resolveTags($this->purgeTags);
 
         if (empty($tags)) {
             return true;
