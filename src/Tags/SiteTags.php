@@ -2,14 +2,15 @@
 
 namespace Genero\Sage\CacheTags\Tags;
 
+use Genero\Sage\CacheTags\Tag;
 use WP_Site;
 
 class SiteTags
 {
     /**
-     * Return cache tag for the current site
+     * Return the cache tag(s) for the current site, given site(s), or 'any'.
      *
-     * @return string[]
+     * @return Tag[]
      */
     public static function sites($sites = null): array
     {
@@ -23,10 +24,7 @@ class SiteTags
 
         if (is_array($sites)) {
             return array_map(
-                fn ($site) => sprintf(
-                    'site:%d',
-                    $site instanceof WP_Site ? $site->blog_id : $site
-                ),
+                fn ($site) => Tag::site((int) ($site instanceof WP_Site ? $site->blog_id : $site)),
                 $sites
             );
         }
