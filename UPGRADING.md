@@ -77,6 +77,19 @@ It's additive — one extra tag per page. Rename or disable it with
 `'base-tag' => null` (config) or `->baseTag(null)` (bootstrap). On single sites
 this replaces the trick of enabling the `Site` action just to get a flush-all key.
 
+### New defaults: auto-enabled integrations & nonce cron
+
+- **Gravity Forms** now auto-enables (joining WooCommerce and Polylang) when its
+  plugin is active — it no longer needs to be listed in `action`. If you publish
+  the config, `Gravityform::class` is dropped from the default `action` list (it's
+  detected instead). Turn detection off with `'auto-detect-actions' => false`.
+- **Nonce cron** is now owned by the Gravity Forms action — it schedules the
+  12-hour purge of `nonce`-tagged pages (file-upload forms) when bound, and the
+  schedule is cleaned up when the action isn't active. The `'nonce-cron'` config
+  key and `Bootstrap::nonceCron()` are **removed** (the cron only ever mattered
+  with Gravity Forms, the sole producer of `nonce` tags). For a custom nonce
+  tagger without Gravity Forms, call `NonceCron::register()` yourself.
+
 ### Unchanged
 
 Compatible without changes: `CacheTags::add/clear/save/flush/getInstance/hasAction`

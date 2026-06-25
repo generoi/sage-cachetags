@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\NonceCron;
 use Genero\Sage\CacheTags\Tags\GravityformTags;
 
 class Gravityform implements Action
@@ -23,6 +24,10 @@ class Gravityform implements Action
         \add_filter('gform_pre_render', [$this, 'addGravityformCacheTags']);
         \add_action('gform_after_save_form', [$this, 'onSaveForm'], 10, 2);
         \add_filter('cachetags/cacheable', [$this, 'isCacheable']);
+
+        // File-upload forms tag their page 'nonce' (see addGravityformCacheTags);
+        // schedule the cron that purges those pages before the nonce expires.
+        NonceCron::register();
     }
 
     /**
