@@ -13,6 +13,10 @@ use WP_User;
 
 class Core implements Action
 {
+    /** Post ids already tagged from a block this request, to avoid re-adding the
+     * same post:{id} for every inner block carrying the postId context. */
+    protected array $taggedBlockPosts = [];
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
@@ -133,7 +137,8 @@ class Core implements Action
         $attributes = $block['attrs'] ?? [];
         $tags = [];
 
-        if (isset($instance->context['postId'])) {
+        if (isset($instance->context['postId']) && ! isset($this->taggedBlockPosts[$instance->context['postId']])) {
+            $this->taggedBlockPosts[$instance->context['postId']] = true;
             $tags[] = CoreTags::posts($instance->context['postId']);
         }
 
