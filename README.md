@@ -210,11 +210,15 @@ VCL snippet reads it and filters the cache key. Opt in by naming the dictionary:
 'fastly-allowlist-dictionary' => 'cachetags_query_allowlist',
 ```
 
+Only relevant when **Fastly is your edge** — it's a cache-key shaping concern, not
+tag purging.
+
 **Setup:**
 
 1. Create an Edge Dictionary named `cachetags_query_allowlist` on your Fastly
-   service (one-time, in the Fastly UI/API). Make sure `FASTLY_SERVICE_ID` /
-   `FASTLY_API_KEY` are set (same env as purging).
+   service (one-time, in the Fastly UI/API). `FASTLY_SERVICE_ID` / `FASTLY_API_KEY`
+   must be set — and the token needs **`write_dictionaries` (global/engineer)
+   scope**, not just purge scope, or `sync` fails with an opaque error.
 2. Add the VCL snippet below to `vcl_recv` (one-time).
 3. Review the computed list and push it:
 
@@ -226,23 +230,37 @@ VCL snippet reads it and filters the cache key. Opt in by naming the dictionary:
 
    Re-run `sync` whenever your attributes/facets change (e.g. from a deploy hook).
 
-**VCL snippet** (`vcl_recv`):
+**VCL snippet** — a complete, drop-in `vcl_recv` block (modelled on the Genero
+Fastly VCLs: same `querystring.filtersep()` idiom, with the tracker deny-list kept
+as a fallback) is at [`examples/fastly-query-allowlist.vcl`](examples/fastly-query-allowlist.vcl).
+The core of it:
 
 ```vcl
 declare local var.allow STRING;
 set var.allow = table.lookup(cachetags_query_allowlist, "params", "");
-if (var.allow != "") {                                  # fail-open until first sync
-  set var.allow = regsuball(var.allow, ",", querystring.filtersep());
-  set req.url = querystring.filter_except(req.url, var.allow);
+if (var.allow != ""                                    # fail-open until first sync
+    && req.method == "GET"
+    && req.url.path !~ "^/(wp|wp-admin|wp-json)/"
+    && req.url !~ "(add-to-cart|remove_item|wc-ajax)=") {   # keep functional params
+  set req.url = querystring.filter_except(req.url, regsuball(var.allow, ",", querystring.filtersep()));
 }
-set req.url = querystring.sort(req.url);                 # canonical param order
+set req.url = querystring.sort(req.url);               # canonical param order
 ```
 
+`querystring.filter_except` rewrites `req.url`, which on a miss is fetched from
+origin — so the guards keep it from stripping functional params (add-to-cart,
+AJAX) or running on admin/non-GET requests before the cache-bypass logic sees
+them. Stripped trackers (`utm_*`, `fbclid`, …) therefore won't reach origin on a
+cache *miss* (client-side GA is unaffected — the browser URL is untouched). The
+example file slots in where a Genero VCL normally does the tracker deny-list +
+`querystring.sort`.
+
 > ⚠️ **An incomplete allowlist serves wrong content.** A param that's stripped but
-> *was* meaningful (a missed facet, `min_price`) collapses real variants into one
-> cached page — silently. This is fail-*dangerous*, unlike the deny-list of known
-> trackers. Always `preview` before `sync`, and add anything the built-ins miss via
-> the `cachetags/fastly-allowed-query-params` filter:
+> *was* meaningful (a missed facet, `min_price`, a custom CPT's `post_type`)
+> collapses real variants into one cached page — silently. This is
+> fail-*dangerous*, unlike the deny-list of known trackers. Always `preview` before
+> `sync`, and add anything the built-ins miss via the
+> `cachetags/fastly-allowed-query-params` filter:
 
 ```php
 add_filter('cachetags/fastly-allowed-query-params', function (array $params) {
@@ -251,9 +269,11 @@ add_filter('cachetags/fastly-allowed-query-params', function (array $params) {
 });
 ```
 
-The built-ins cover core (`s`, `orderby`, `paged`), WooCommerce (attribute filters,
-price, rating) and FacetWP facets. Syncing is manual (CLI) — wire it to a deploy
-hook if you want it automated.
+The built-ins cover core (`s`, `post_type`, `orderby`, `paged`), WooCommerce
+(attribute `filter_*`/`query_type_*`, price, rating, stock, `product-page`),
+FacetWP facets (the `_`-prefixed vars + `_paged`/`_per_page`/`_sort`) and Polylang
+`lang`. Commonly-missed: a theme's custom query vars, `cpage` (comment paging),
+`feed`. Syncing is manual (CLI) — wire it to a deploy hook to automate.
 
 ## REST API integration
 

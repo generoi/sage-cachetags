@@ -52,8 +52,15 @@ class FastlyAllowlistCommand extends Command
         if ($action === 'status') {
             $current = $dictionary->current();
             $this->line('Computed : '.implode(',', $params));
-            $this->line('At Fastly: '.($current ?? '(unset / unavailable)'));
-            $this->line($dictionary->isSynced($params) ? 'In sync.' : 'OUT OF SYNC — run sync.');
+
+            if ($current === null) {
+                $this->warn('Dictionary item unavailable — check the dictionary exists and the token has write_dictionaries scope.');
+
+                return self::SUCCESS;
+            }
+
+            $this->line('At Fastly: '.$current);
+            $this->line($current === implode(',', $params) ? 'In sync.' : 'OUT OF SYNC — run sync.');
 
             return self::SUCCESS;
         }

@@ -51,8 +51,15 @@ class FastlyAllowlistCommand extends WP_CLI_Command
         $current = $dictionary->current();
 
         WP_CLI::log('Computed : '.implode(',', $params));
-        WP_CLI::log('At Fastly: '.($current ?? '(unset / unavailable)'));
-        WP_CLI::log($dictionary->isSynced($params) ? 'In sync.' : 'OUT OF SYNC — run `sync`.');
+
+        if ($current === null) {
+            WP_CLI::warning('Dictionary item unavailable — check the dictionary exists and the token has write_dictionaries scope.');
+
+            return;
+        }
+
+        WP_CLI::log('At Fastly: '.$current);
+        WP_CLI::log($current === implode(',', $params) ? 'In sync.' : 'OUT OF SYNC — run `sync`.');
     }
 
     /**
@@ -94,6 +101,8 @@ class FastlyAllowlistCommand extends WP_CLI_Command
      */
     private function dictionary($assoc): AllowlistDictionary
     {
+        // Standalone WP-CLI has no Acorn config(); Bootstrap publishes the
+        // configured name through this filter so both contexts resolve it.
         $name = $assoc['dictionary'] ?? apply_filters('cachetags/fastly-allowlist-dictionary', null);
         if (! $name) {
             WP_CLI::error('No dictionary configured. Set "fastly-allowlist-dictionary" or pass --dictionary=<name>.');

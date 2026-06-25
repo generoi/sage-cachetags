@@ -27,9 +27,9 @@ class QueryAllowlist
      */
     public static function collect(): array
     {
-        $params = ['s', 'orderby', 'order', 'paged', 'page'];
+        $params = ['s', 'post_type', 'orderby', 'order', 'paged', 'page'];
 
-        $params = array_merge($params, self::wooCommerce(), self::facetwp());
+        $params = array_merge($params, self::wooCommerce(), self::facetwp(), self::polylang());
 
         /**
          * Final say over the allowlist — add a site's bespoke params, or remove
@@ -37,7 +37,15 @@ class QueryAllowlist
          */
         $params = (array) apply_filters(self::FILTER, $params);
 
-        $params = array_values(array_unique(array_filter(array_map('strval', $params))));
+        // Reject names that aren't header/cache-key safe: a comma would corrupt the
+        // comma-joined dictionary value (and the VCL's filtersep split), whitespace
+        // or control chars would break the edge filter. Mirrors Util::isValidTag.
+        $params = array_filter(
+            array_map('strval', $params),
+            fn ($param) => (bool) preg_match('/^[A-Za-z0-9_\-]+$/', $param)
+        );
+
+        $params = array_values(array_unique($params));
         sort($params);
 
         return $params;
@@ -52,13 +60,31 @@ class QueryAllowlist
      */
     protected static function wooCommerce(): array
     {
-        if (! function_exists('wc_get_attribute_taxonomies')) {
-            return [];
-        }
+        return function_exists('wc_get_attribute_taxonomies')
+            ? self::wooCommerceParams(wc_get_attribute_taxonomies())
+            : [];
+    }
 
-        $params = ['min_price', 'max_price', 'rating_filter', 'product_cat', 'product_tag'];
+    /**
+     * WooCommerce archive params for the given attribute taxonomies. Pure (no WC
+     * calls) so it's testable without WooCommerce loaded.
+     *
+     * @param  object[]  $taxonomies  objects with an `attribute_name` (un-prefixed slug)
+     * @return string[]
+     */
+    public static function wooCommerceParams(array $taxonomies): array
+    {
+        // post_type keeps product search (?s=…&post_type=product) distinct from
+        // blog search; product-page is the products-block pager.
+        $params = [
+            'post_type', 'product-page',
+            'min_price', 'max_price', 'rating_filter', 'filter_stock_status',
+            'product_cat', 'product_tag',
+        ];
 
-        foreach (wc_get_attribute_taxonomies() as $attribute) {
+        foreach ($taxonomies as $attribute) {
+            // Layered-nav / attribute-filter block read `filter_{slug}` +
+            // `query_type_{slug}`, where slug is the un-prefixed attribute name.
             $slug = $attribute->attribute_name;
             $params[] = "filter_{$slug}";
             $params[] = "query_type_{$slug}";
@@ -67,20 +93,43 @@ class QueryAllowlist
         return $params;
     }
 
-    /**
-     * FacetWP facet query vars (each facet reads `?{name}=…`).
-     *
-     * @return string[]
-     */
     protected static function facetwp(): array
     {
         if (! function_exists('FWP') || ! is_object(FWP()->helper ?? null)) {
             return [];
         }
 
-        return array_map(
-            fn ($facet) => (string) ($facet['name'] ?? ''),
-            (array) FWP()->helper->get_facets()
-        );
+        return self::facetParams((array) FWP()->helper->get_facets());
+    }
+
+    /**
+     * FacetWP query vars for the given facets. FacetWP prefixes every URL var with
+     * `_` (a facet named "color" reads `?_color=…`), plus its own pager/sort vars.
+     * Pure so it's testable without FacetWP loaded.
+     *
+     * @param  array<array{name?: string}>  $facets
+     * @return string[]
+     */
+    public static function facetParams(array $facets): array
+    {
+        $params = ['_paged', '_per_page', '_sort'];
+
+        foreach ($facets as $facet) {
+            if (! empty($facet['name'])) {
+                $params[] = '_'.$facet['name'];
+            }
+        }
+
+        return $params;
+    }
+
+    /**
+     * Polylang in query-string language mode keys on `?lang=…`.
+     *
+     * @return string[]
+     */
+    protected static function polylang(): array
+    {
+        return defined('POLYLANG_VERSION') ? ['lang'] : [];
     }
 }

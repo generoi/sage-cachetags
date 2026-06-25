@@ -95,7 +95,8 @@ class AllowlistDictionary
             return null;
         }
 
-        $dictionary = $this->apiGet("/service/{$this->serviceId()}/version/{$version}/dictionary/{$this->dictionary}");
+        $name = rawurlencode($this->dictionary);
+        $dictionary = $this->apiGet("/service/{$this->serviceId()}/version/{$version}/dictionary/{$name}");
 
         return $this->dictionaryId = isset($dictionary['id']) ? (string) $dictionary['id'] : null;
     }

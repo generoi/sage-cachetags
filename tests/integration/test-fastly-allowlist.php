@@ -34,6 +34,52 @@ class TestFastlyAllowlist extends WP_UnitTestCase
         $this->assertSame(1, count(array_keys($params, 'my_facet', true)), 'still de-duplicated');
     }
 
+    public function test_rejects_names_that_arent_cache_key_safe(): void
+    {
+        // A comma would split the dictionary value; whitespace/control breaks the
+        // VCL filter. Such names are dropped, valid ones kept.
+        add_filter(QueryAllowlist::FILTER, fn ($p) => array_merge($p, ['ok_name', 'has,comma', 'has space', "ctrl\n"]));
+
+        $params = QueryAllowlist::collect();
+
+        $this->assertContains('ok_name', $params);
+        $this->assertNotContains('has,comma', $params);
+        $this->assertNotContains('has space', $params);
+        foreach ($params as $param) {
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9_\-]+$/', $param);
+        }
+    }
+
+    public function test_woocommerce_params_use_unprefixed_attribute_slug(): void
+    {
+        $params = QueryAllowlist::wooCommerceParams([
+            (object) ['attribute_name' => 'color'],
+            (object) ['attribute_name' => 'size'],
+        ]);
+
+        $this->assertContains('filter_color', $params);
+        $this->assertContains('query_type_color', $params);
+        $this->assertContains('filter_size', $params);
+        $this->assertContains('post_type', $params, 'product search vs blog search');
+        $this->assertContains('filter_stock_status', $params);
+    }
+
+    public function test_facetwp_params_are_underscore_prefixed(): void
+    {
+        $params = QueryAllowlist::facetParams([
+            ['name' => 'flavors'],
+            ['name' => 'brand'],
+            ['label' => 'no name — skipped'],
+        ]);
+
+        // FacetWP reads ?_flavors=…, not ?flavors=… — the prefix is the whole point.
+        $this->assertContains('_flavors', $params);
+        $this->assertContains('_brand', $params);
+        $this->assertNotContains('flavors', $params);
+        $this->assertContains('_paged', $params);
+        $this->assertContains('_sort', $params);
+    }
+
     public function test_push_upserts_the_comma_joined_allowlist(): void
     {
         $dictionary = new class('mydict') extends AllowlistDictionary
@@ -90,6 +136,53 @@ class TestFastlyAllowlist extends WP_UnitTestCase
 
         $this->assertTrue($dictionary->isSynced(['orderby', 'paged']));
         $this->assertFalse($dictionary->isSynced(['orderby']));
+    }
+
+    public function test_resolves_dictionary_id_via_the_active_version(): void
+    {
+        $dictionary = new class('shop_allowlist') extends AllowlistDictionary
+        {
+            /** @var string[] */
+            public array $gets = [];
+
+            public string $patchedPath = '';
+
+            public function isConfigured(): bool
+            {
+                return true;
+            }
+
+            protected function serviceId(): string
+            {
+                return 'svc1';
+            }
+
+            protected function apiGet(string $path): ?array
+            {
+                $this->gets[] = $path;
+
+                if (str_contains($path, '/version/active')) {
+                    return ['number' => 7];
+                }
+                if (str_contains($path, '/dictionary/shop_allowlist')) {
+                    return ['id' => 'dictABC'];
+                }
+
+                return null;
+            }
+
+            protected function apiPatch(string $path, array $body): bool
+            {
+                $this->patchedPath = $path;
+
+                return true;
+            }
+        };
+
+        $this->assertTrue($dictionary->push(['orderby']));
+        $this->assertContains('/service/svc1/version/active', $dictionary->gets);
+        $this->assertContains('/service/svc1/version/7/dictionary/shop_allowlist', $dictionary->gets);
+        $this->assertSame('/service/svc1/dictionary/dictABC/items', $dictionary->patchedPath);
     }
 
     public function test_push_fails_when_the_dictionary_cannot_be_resolved(): void
