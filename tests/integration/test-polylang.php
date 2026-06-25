@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\PolylangTags;
 
 /**
@@ -139,7 +140,7 @@ class TestPolylang extends WP_UnitTestCase
 
         $this->action()->onPostStatusTransition('publish', 'draft', get_post($postId));
 
-        $this->assertContains('archive:post:en', $purge->getValue($cacheTags));
+        $this->assertContains('archive:post:en', Tag::toStrings($purge->getValue($cacheTags)));
     }
 
     // H2: a permanent delete never passes through transition_post_status, so the
@@ -156,7 +157,7 @@ class TestPolylang extends WP_UnitTestCase
 
         $this->action()->onPostDelete($postId);
 
-        $this->assertContains('archive:post:en', $purge->getValue($cacheTags));
+        $this->assertContains('archive:post:en', Tag::toStrings($purge->getValue($cacheTags)));
     }
 
     // H2: the lang: tag must be registered before the priority-10 save/header

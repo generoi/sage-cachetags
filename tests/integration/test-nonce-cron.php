@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\NonceCron;
+use Genero\Sage\CacheTags\Tag;
 
 /**
  * @covers \Genero\Sage\CacheTags\NonceCron
@@ -35,7 +36,7 @@ class TestNonceCron extends WP_UnitTestCase
 
         NonceCron::purge();
 
-        $this->assertContains('nonce', $prop->getValue($cacheTags));
+        $this->assertContains('nonce', Tag::toStrings($prop->getValue($cacheTags)));
     }
 
     public function test_unschedule_clears_the_event(): void

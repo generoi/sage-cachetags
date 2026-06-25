@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\Gravityform;
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 
 /**
  * @covers \Genero\Sage\CacheTags\Actions\Gravityform
@@ -78,11 +79,11 @@ class TestGravityform extends WP_UnitTestCase
 
         $purge->setValue($cacheTags, []);
         $action->onSaveForm(['id' => 7], false);
-        $this->assertContains('gform:7', $purge->getValue($cacheTags));
+        $this->assertContains('gform:7', Tag::toStrings($purge->getValue($cacheTags)));
 
         $purge->setValue($cacheTags, []);
         $action->onSaveForm(['id' => 7], true);
-        $this->assertNotContains('gform:7', $purge->getValue($cacheTags), 'a new form has nothing cached yet');
+        $this->assertNotContains('gform:7', Tag::toStrings($purge->getValue($cacheTags)), 'a new form has nothing cached yet');
     }
 
     public function test_prepopulated_form_request_is_non_cacheable(): void

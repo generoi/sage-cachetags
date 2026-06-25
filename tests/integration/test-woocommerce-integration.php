@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\WooCommerce;
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 
 /**
  * Real integration against an installed WooCommerce: exercises the action's
@@ -159,7 +160,7 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         $ref = new ReflectionProperty($cacheTags, 'purgeTags');
         $ref->setAccessible(true);
 
-        return $ref->getValue($cacheTags);
+        return Tag::toStrings($ref->getValue($cacheTags));
     }
 
     private function resetPurge(): void
