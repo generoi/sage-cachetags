@@ -626,15 +626,57 @@ use Genero\Sage\CacheTags\CacheTags;
 $cacheTags = CacheTags::getInstance();
 ```
 
+### Building tags with `Tag`
+
+Tags are `Tag` value objects — fluent to build, serialized to their string form
+(`post:5`, `archive:post:any`, `site:5:term:9`) only at the edge (header, store,
+purge). `add()` and `clear()` accept Tags, plain strings, and nested arrays
+interchangeably, so you rarely touch `Tag` directly — but it's there when you want
+type-safety or context.
+
+```php
+use Genero\Sage\CacheTags\Tag;
+
+Tag::post(5);                    // post:5
+Tag::archive('product');         // archive:product
+Tag::archive('product')->any();  // archive:product:any  (any product changing)
+Tag::term(9)->full();            // term:9:full
+Tag::option('blogname');         // option:blogname
+Tag::of('my-type', $id);         // an arbitrary custom type
+```
+
+Context is two general, composable operations — `scope()` to namespace a tag and
+`qualify()` for a variant — so new dimensions (a multisite network, a tenant) need
+no new API:
+
+```php
+Tag::post(5)->scope('site', 5);                       // site:5:post:5
+Tag::post(5)->scope('network', 2)->scope('site', 5);  // network:2:site:5:post:5
+Tag::archive('post')->qualify($lang);                 // archive:post:fi
+```
+
+The builder classes (`CoreTags`, `WooCommerceTags`, `SiteTags`, `PolylangTags`,
+`GravityformTags`) return `Tag[]`; pass them — and any plain strings — straight to
+`add()`/`clear()`:
+
+```php
+$cacheTags->add([
+    Tag::archive('product'),
+    ...CoreTags::posts($ids),   // CoreTags returns Tag[]
+    'my:custom:tag',            // plain strings still work
+]);
+```
+
 ### Create a custom tag
 
-The nicest way is to look at the code of this repo and create a custom `Action` and maybe a `CustomTag` class that you use, but the logic is really nothing more than:
+The nicest way is to look at the code of this repo and create a custom `Action`, but the logic is really nothing more than:
 
 **With Acorn:**
 ```php
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 
-// Tag content
+// Tag content (a bare string, or Tag::of('custom-tag') / Tag::of('thing', $id))
 app(CacheTags::class)->add(['custom-tag']);
 
 // Clear it whenever you want
