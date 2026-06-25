@@ -597,6 +597,9 @@ wp acorn cachetags:database --rebuild
 wp acorn cachetags:status
 # …or the tags a given URL is stored under
 wp acorn cachetags:status --url=https://example.com/article/
+
+# Garbage-collect store rows not re-rendered within the age (see note below)
+wp acorn cachetags:prune --older-than=30d
 ```
 
 **Standalone:**
@@ -617,11 +620,22 @@ wp cachetags database --rebuild
 # Inspect the store
 wp cachetags status
 wp cachetags status --url=https://example.com/article/
+
+# Garbage-collect store rows not re-rendered within the age (see note below)
+wp cachetags prune --older-than=30d
 ```
 
 `status` answers "what's bloating the store / why was this purged so widely" — a
 tag with a high URL count purges that many pages on a single change. It requires
 a store that supports inspection (the default `WordpressDbStore` does).
+
+`prune` garbage-collects store rows whose URL hasn't been rendered within the
+given age (`12h`/`30d`/`4w`) — query-string, bot and campaign-link variants that
+otherwise accumulate forever, especially on query-bypass edges. A row's age is
+*last seen* (refreshed on each render), so actively-served pages are never pruned.
+**The age must exceed your edge cache's max TTL** — pruning a URL still cached at
+the edge leaves an object you can no longer purge by tag. Pruning is manual; the
+default `WordpressDbStore` supports it (the in-memory `TransientStore` doesn't).
 
 The store is a rebuildable cache, so `--rebuild` migrates an existing (even
 million-row) table to the latest schema by dropping and recreating it — avoiding
