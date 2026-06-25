@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Actions\Site;
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 
 /**
@@ -19,7 +20,7 @@ class TestSiteAction extends WP_UnitTestCase
     {
         $id = get_current_blog_id();
 
-        $result = $this->action()->addSitePrefix(['post:1', 'term:5']);
+        $result = Tag::toStrings($this->action()->addSitePrefix(['post:1', 'term:5']));
 
         $this->assertSame(["site:{$id}:post:1", "site:{$id}:term:5"], $result);
     }
@@ -29,7 +30,7 @@ class TestSiteAction extends WP_UnitTestCase
         $id = get_current_blog_id();
         $siteTag = (string) SiteTags::sites()[0];
 
-        $result = $this->action()->addSitePrefix([$siteTag, 'post:1']);
+        $result = Tag::toStrings($this->action()->addSitePrefix([$siteTag, 'post:1']));
 
         $this->assertSame([$siteTag, "site:{$id}:post:1"], $result);
     }
@@ -40,7 +41,7 @@ class TestSiteAction extends WP_UnitTestCase
     {
         $id = get_current_blog_id();
 
-        $result = $this->action()->addSitePrefix(['site:foo', "site:{$id}", 'post:1']);
+        $result = Tag::toStrings($this->action()->addSitePrefix(['site:foo', "site:{$id}", 'post:1']));
 
         $this->assertSame(["site:{$id}:site:foo", "site:{$id}", "site:{$id}:post:1"], $result);
     }

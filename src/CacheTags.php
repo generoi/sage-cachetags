@@ -108,26 +108,27 @@ class CacheTags
             return $this->boundedTags;
         }
 
-        $strings = $this->resolveTags($this->cacheTags);
-
-        return $this->boundedTags = Tag::toStrings($this->bound(Tag::fromMany($strings)));
+        return $this->boundedTags = Tag::toStrings($this->bound($this->resolveTags($this->cacheTags)));
     }
 
     /**
-     * Reduce accumulated Tags to the validated, filtered string set the store,
-     * header and invalidators consume: serialize, validate + dedupe, run the
-     * (legacy string) FILTER_TAGS filter, then re-validate its output so a custom
-     * tag can't smuggle a newline into the header.
+     * Apply the FILTER_TAGS transforms — the Site prefix and Polylang language
+     * variants — to the accumulated Tags, drop any whose serialized form isn't a
+     * header-safe token, and dedupe. Tags stay structured throughout; only the
+     * header/store/invalidator edges serialize them.
      *
      * @param  Tag[]  $tags
-     * @return string[]
+     * @return Tag[]
      */
     protected function resolveTags(array $tags): array
     {
-        $strings = Util::normalizeTags(Tag::toStrings($tags));
-        $strings = apply_filters(self::FILTER_TAGS, $strings);
+        // fromMany tolerates a filter that returns strings or nested arrays.
+        $tags = Tag::fromMany(apply_filters(self::FILTER_TAGS, $tags));
 
-        return Util::normalizeTags($strings);
+        return $this->dedupe(array_values(array_filter(
+            $tags,
+            fn ($tag) => Util::isValidTag((string) $tag)
+        )));
     }
 
     /**
@@ -295,7 +296,7 @@ class CacheTags
 
     public function purgeQueued(): bool
     {
-        $tags = $this->resolveTags($this->purgeTags);
+        $tags = Tag::toStrings($this->resolveTags($this->purgeTags));
 
         if (empty($tags)) {
             return true;
