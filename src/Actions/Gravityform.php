@@ -36,9 +36,7 @@ class Gravityform implements Action
             return $form;
         }
 
-        $this->cacheTags->add([
-            ...GravityformTags::forms($form['id']),
-        ]);
+        $this->cacheTags->add(GravityformTags::forms($form['id']));
 
         foreach ($form['fields'] as $field) {
             // 2.9.24+ uses nonce for file uploads

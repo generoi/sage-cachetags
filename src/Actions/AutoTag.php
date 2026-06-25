@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Post;
 use WP_Query;
@@ -105,7 +106,7 @@ class AutoTag implements Action
      * Tag for a single queried post row in whatever shape `fields` produced.
      *
      * @param  mixed  $post
-     * @return string[]
+     * @return Tag[]
      */
     protected function postTag($post): array
     {

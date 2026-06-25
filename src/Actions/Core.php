@@ -61,9 +61,7 @@ class Core implements Action
                 break;
             case is_single():
             case is_page():
-                $this->cacheTags->add([
-                    ...CoreTags::queriedObject(),
-                ]);
+                $this->cacheTags->add(CoreTags::queriedObject());
                 break;
             case is_category():
             case is_tag():
@@ -74,31 +72,21 @@ class Core implements Action
                 ]);
                 break;
             case is_home():
-                $this->cacheTags->add([
-                    ...CoreTags::archive('post'),
-                ]);
+                $this->cacheTags->add(CoreTags::archive('post'));
                 break;
             case is_post_type_archive():
-                $this->cacheTags->add([
-                    ...CoreTags::archive(get_query_var('post_type')),
-                ]);
+                $this->cacheTags->add(CoreTags::archive(get_query_var('post_type')));
                 break;
             case is_author():
-                $this->cacheTags->add([
-                    ...CoreTags::users(get_query_var('author')),
-                ]);
+                $this->cacheTags->add(CoreTags::users(get_query_var('author')));
                 break;
             case is_attachment():
-                $this->cacheTags->add([
-                    ...CoreTags::queriedObject(),
-                ]);
+                $this->cacheTags->add(CoreTags::queriedObject());
                 break;
             case is_date():
             case is_search():
                 // Listings of any post that publishes/unpublishes into them.
-                $this->cacheTags->add([
-                    ...CoreTags::archive('post'),
-                ]);
+                $this->cacheTags->add(CoreTags::archive('post'));
                 break;
         }
     }
@@ -230,9 +218,7 @@ class Core implements Action
             return;
         }
 
-        $this->cacheTags->clear([
-            ...CoreTags::posts($commentData['comment_post_ID']),
-        ]);
+        $this->cacheTags->clear(CoreTags::posts($commentData['comment_post_ID']));
     }
 
     /**
@@ -419,9 +405,7 @@ class Core implements Action
      */
     public function onAttachmentEdit(int $attachmentId): void
     {
-        $this->cacheTags->clear([
-            ...CoreTags::posts($attachmentId),
-        ]);
+        $this->cacheTags->clear(CoreTags::posts($attachmentId));
     }
 
     /**
@@ -443,9 +427,7 @@ class Core implements Action
             return;
         }
 
-        $this->cacheTags->clear([
-            ...CoreTags::posts($objectId),
-        ]);
+        $this->cacheTags->clear(CoreTags::posts($objectId));
     }
 
     /**
@@ -516,9 +498,7 @@ class Core implements Action
             return;
         }
 
-        $this->cacheTags->clear([
-            ...CoreTags::option($option),
-        ]);
+        $this->cacheTags->clear(CoreTags::option($option));
     }
 
     /**
@@ -526,9 +506,7 @@ class Core implements Action
      */
     public function onMenuUpdate(int $menuId): void
     {
-        $this->cacheTags->clear([
-            ...CoreTags::menu($menuId),
-        ]);
+        $this->cacheTags->clear(CoreTags::menu($menuId));
     }
 
     public function onUserDelete(int $userId, ?int $reassign, WP_User $user): void

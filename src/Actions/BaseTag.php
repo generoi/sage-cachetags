@@ -23,6 +23,6 @@ class BaseTag implements Action
 
     public function addBaseTag(): void
     {
-        $this->cacheTags->add([$this->tag]);
+        $this->cacheTags->add($this->tag);
     }
 }
