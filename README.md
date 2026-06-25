@@ -75,7 +75,17 @@ across all sites.
 
 ## Invalidators
 
-Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
+Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer, WP Rocket and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
+
+**Coarse tags and full flushes.** A coarse tag like `archive:post` can resolve to
+many stored URLs (every page that lists posts). The URL-based invalidators
+(Kinsta, SiteGround, …) escalate to a **full cache flush** past a threshold rather
+than firing thousands of individual purges — so on a busy editorial site a single
+publish can flush the whole cache. This is intentional: those providers
+effectively rate-limit purges, and over-purging is safe when we can't know the
+exact set of URLs. The thresholds are tunable per provider (below). **Fastly is
+unaffected** — it purges by `Surrogate-Key`, so the URL count is irrelevant, which
+makes it the best fit for high-frequency editorial sites.
 
 ### Stored URL and query strings
 
@@ -493,6 +503,42 @@ class ArticleList extends Block
 }
 ```
 
+## Integrations
+
+### WooCommerce & Polylang (auto-enabled)
+
+When WooCommerce or Polylang is active, its action is enabled automatically — you
+don't need to list it in `action`:
+
+- **WooCommerce** keeps cart/checkout/account out of the shared cache and purges a
+  product (plus its archives) on price/stock/status changes.
+- **Polylang** makes archive tags language-specific (`archive:post:fi`) so a change
+  in one language only purges that language's listings, and clears the right
+  language archives on publish/unpublish/delete.
+
+To manage the action list entirely yourself, turn detection off:
+
+```php
+// config/cachetags.php
+'auto-detect-actions' => false,
+```
+
+```php
+// or on the standalone bootstrap
+(new Bootstrap)->autoDetectActions(false)->/* … */->bootstrap();
+```
+
+### Multisite
+
+Each site has its own `cache_tags` table, provisioned on activation and when a new
+subsite is created. Run `wp cachetags database` to (re)scaffold every site —
+useful after activating on a large network where the activation request can't
+finish provisioning all of them.
+
+Enable the `Site` action to scope tags per site (`site:5:post:123`) when a single
+edge (e.g. one Fastly service) fronts the whole network, so purging a tag on one
+site doesn't purge same-id content on another.
+
 ## CLI
 
 **With Acorn:**
@@ -501,8 +547,16 @@ class ArticleList extends Block
 # Flush the entire cache
 wp acorn cachetags:flush
 
-# Scaffold database table
+# Clear specific tags
+wp acorn cachetags:clear post:1 term:5
+
+# Scaffold database table (all sites on multisite)
 wp acorn cachetags:database
+
+# Inspect the store: row/tag/url counts and the widest-fan-out tags
+wp acorn cachetags:status
+# …or the tags a given URL is stored under
+wp acorn cachetags:status --url=https://example.com/article/
 ```
 
 **Standalone:**
@@ -511,9 +565,20 @@ wp acorn cachetags:database
 # Flush the entire cache
 wp cachetags flush
 
-# Scaffold database table
+# Clear specific tags
+wp cachetags clear post:1 term:5
+
+# Scaffold database table (all sites on multisite)
 wp cachetags database
+
+# Inspect the store
+wp cachetags status
+wp cachetags status --url=https://example.com/article/
 ```
+
+`status` answers "what's bloating the store / why was this purged so widely" — a
+tag with a high URL count purges that many pages on a single change. It requires
+a store that supports inspection (the default `WordpressDbStore` does).
 
 ## API
 

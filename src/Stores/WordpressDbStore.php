@@ -2,9 +2,10 @@
 
 namespace Genero\Sage\CacheTags\Stores;
 
+use Genero\Sage\CacheTags\Contracts\InspectableStore;
 use Genero\Sage\CacheTags\Contracts\Store;
 
-class WordpressDbStore implements Store
+class WordpressDbStore implements InspectableStore, Store
 {
     /**
      * @param  string[]  $tags
@@ -90,5 +91,50 @@ class WordpressDbStore implements Store
         return $wpdb->query("
             TRUNCATE `{$wpdb->prefix}cache_tags`
         ") !== false;
+    }
+
+    /**
+     * @return array{rows: int, tags: int, urls: int}
+     */
+    public function stats(): array
+    {
+        global $wpdb;
+        $table = "{$wpdb->prefix}cache_tags";
+
+        return [
+            'rows' => (int) $wpdb->get_var("SELECT COUNT(*) FROM `{$table}`"),
+            'tags' => (int) $wpdb->get_var("SELECT COUNT(DISTINCT tag) FROM `{$table}`"),
+            'urls' => (int) $wpdb->get_var("SELECT COUNT(DISTINCT url) FROM `{$table}`"),
+        ];
+    }
+
+    /**
+     * @return array<array{tag: string, urls: int}>
+     */
+    public function topTags(int $limit): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results($wpdb->prepare("
+            SELECT tag, COUNT(DISTINCT url) AS urls
+            FROM `{$wpdb->prefix}cache_tags`
+            GROUP BY tag
+            ORDER BY urls DESC
+            LIMIT %d
+        ", $limit), ARRAY_A);
+
+        return array_map(fn ($row) => ['tag' => $row['tag'], 'urls' => (int) $row['urls']], $rows);
+    }
+
+    /**
+     * @return string[]
+     */
+    public function tagsForUrl(string $url): array
+    {
+        global $wpdb;
+
+        return $wpdb->get_col($wpdb->prepare("
+            SELECT DISTINCT tag FROM `{$wpdb->prefix}cache_tags` WHERE url = %s
+        ", $url));
     }
 }
