@@ -69,6 +69,14 @@ Tag::archive('post')->qualify($lang)                 // language variant
 Tag::of('my-type', $id)                              // arbitrary type
 ```
 
+### New default: a `page` base tag on every page
+
+Every cacheable page and REST response is now tagged with `page`, so
+`wp cachetags clear page` flushes all WordPress-served pages (assets stay cached).
+It's additive — one extra tag per page. Rename or disable it with
+`'base-tag' => null` (config) or `->baseTag(null)` (bootstrap). On single sites
+this replaces the trick of enabling the `Site` action just to get a flush-all key.
+
 ### Unchanged
 
 Compatible without changes: `CacheTags::add/clear/save/flush/getInstance/hasAction`

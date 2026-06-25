@@ -20,6 +20,11 @@ return [
     // entirely via 'action' below.
     'auto-detect-actions' => true,
 
+    // A tag added to every cacheable page and REST response, so one purge
+    // (`wp cachetags clear page`) clears all WordPress-served pages while static
+    // assets stay cached. Set to null to disable, or rename it.
+    'base-tag' => 'page',
+
     'action' => [
         Core::class,
         DebugComment::class,
