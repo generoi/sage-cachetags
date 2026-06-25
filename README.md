@@ -528,16 +528,30 @@ To manage the action list entirely yourself, turn detection off:
 (new Bootstrap)->autoDetectActions(false)->/* … */->bootstrap();
 ```
 
-### Multisite
+### The `Site` action
+
+Enable the `Site` action to tag every WordPress-served page with a `site:{id}` key
+and prefix all other tags with it (`site:1:post:123`). Two uses, both common:
+
+- **Flush all dynamic pages in one purge — even on a single site.** Every
+  WP-rendered page carries `site:1`, but static assets (images/CSS/JS) don't, so
+  purging that one tag clears the whole site's pages at the edge while leaving
+  assets cached:
+
+  ```sh
+  wp cachetags clear site:1
+  ```
+
+- **Multisite scoping.** When one edge (e.g. a single Fastly service) fronts the
+  whole network, the `site:{id}:` prefix keeps a purge on one site from clearing
+  same-id content (`post:123`) on another.
+
+### Multisite tables
 
 Each site has its own `cache_tags` table, provisioned on activation and when a new
 subsite is created. Run `wp cachetags database` to (re)scaffold every site —
 useful after activating on a large network where the activation request can't
 finish provisioning all of them.
-
-Enable the `Site` action to scope tags per site (`site:5:post:123`) when a single
-edge (e.g. one Fastly service) fronts the whole network, so purging a tag on one
-site doesn't purge same-id content on another.
 
 ## CLI
 
