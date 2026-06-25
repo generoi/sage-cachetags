@@ -55,7 +55,8 @@ tests_add_filter('muplugins_loaded', function (): void {
 
         public function run(): void
         {
-            $this->createTable();
+            // Rebuild so each suite run starts from a clean current-schema table.
+            $this->rebuildTable();
         }
     })->run();
 });

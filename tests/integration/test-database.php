@@ -18,25 +18,29 @@ class TestDatabase extends WP_UnitTestCase
         $this->assertNotEmpty($indexes, 'url index exists for purge-by-url lookups');
     }
 
-    public function test_upgrade_reruns_migration_when_version_is_outdated(): void
+    public function test_table_has_surrogate_primary_key(): void
     {
-        // Simulate an install from before the schema version was tracked.
-        delete_option('cachetags_db_version');
+        global $wpdb;
 
-        $this->migrator()->upgradeTable();
+        $primary = $wpdb->get_results("SHOW INDEX FROM {$wpdb->prefix}cache_tags WHERE Key_name = 'PRIMARY'");
+        $this->assertSame('id', $primary[0]->Column_name ?? null, 'id is the clustered primary key');
 
-        $this->assertSame(2, (int) get_option('cachetags_db_version'));
+        $unique = $wpdb->get_results("SHOW INDEX FROM {$wpdb->prefix}cache_tags WHERE Key_name = 'tag_url'");
+        $this->assertNotEmpty($unique, '(tag, url) is kept unique');
     }
 
-    public function test_upgrade_is_a_noop_when_version_is_current(): void
+    // createTable provisions a missing table and is a safe no-op on an existing
+    // one. (rebuildTable's drop+recreate is exercised by the bootstrap, which
+    // builds the table the surrogate-key assertion above checks — real DROPs
+    // inside a test break the harness's transaction isolation.)
+    public function test_upgrade_is_idempotent_on_an_existing_table(): void
     {
-        update_option('cachetags_db_version', 2);
+        global $wpdb;
+        $table = "{$wpdb->prefix}cache_tags";
 
-        // Should not touch the option (already current); asserting it stays put
-        // and the call doesn't error is enough.
         $this->migrator()->upgradeTable();
 
-        $this->assertSame(2, (int) get_option('cachetags_db_version'));
+        $this->assertSame($table, $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)), 'existing table left in place');
     }
 
     /**

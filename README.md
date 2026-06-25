@@ -567,6 +567,9 @@ wp acorn cachetags:clear post:1 term:5
 # Scaffold database table (all sites on multisite)
 wp acorn cachetags:database
 
+# Migrate the table to the latest schema (drop + recreate + flush the cache)
+wp acorn cachetags:database --rebuild
+
 # Inspect the store: row/tag/url counts and the widest-fan-out tags
 wp acorn cachetags:status
 # …or the tags a given URL is stored under
@@ -585,6 +588,9 @@ wp cachetags clear post:1 term:5
 # Scaffold database table (all sites on multisite)
 wp cachetags database
 
+# Migrate the table to the latest schema (drop + recreate + flush the cache)
+wp cachetags database --rebuild
+
 # Inspect the store
 wp cachetags status
 wp cachetags status --url=https://example.com/article/
@@ -593,6 +599,12 @@ wp cachetags status --url=https://example.com/article/
 `status` answers "what's bloating the store / why was this purged so widely" — a
 tag with a high URL count purges that many pages on a single change. It requires
 a store that supports inspection (the default `WordpressDbStore` does).
+
+The store is a rebuildable cache, so `--rebuild` migrates an existing (even
+million-row) table to the latest schema by dropping and recreating it — avoiding
+a slow, locking `ALTER` — and flushes the edge so nothing is left stale while the
+store refills. Run it in a low-traffic window; the cold cache warms as pages
+re-render.
 
 ## API
 
