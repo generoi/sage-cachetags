@@ -4,8 +4,8 @@
 #
 # The plugin syncs the cache-significant query params (WooCommerce attribute
 # filters, FacetWP facets, search, sort, pagination) to an Edge Dictionary named
-# `cachetags_query_allowlist` (one item, key `params`, comma-separated). This keeps
-# only those in the cache key and strips everything else — utm_*, gclid, fbclid,
+# `cachetags_query_allowlist` (one comma-separated item per host). This keeps only
+# those in the cache key and strips everything else — utm_*, gclid, fbclid,
 # bot/session noise — collapsing the variants into one cached object.
 #
 # Setup
@@ -15,10 +15,12 @@
 #      `wp cachetags fastly-allowlist sync`     # push it to the dictionary
 #
 # Safety notes
-#   • The allowlist is authoritative ONLY for cacheable GETs with no functional
-#     params. Add-to-cart / wc-ajax / admin requests keep their full URL so the
-#     downstream `return(pass)` logic still detects them — and so analytics params
-#     reach the origin on those requests.
+#   • The allowlist is authoritative ONLY for cacheable GET HTML requests. PHP
+#     entry points (wp-login.php, wp-cron.php, xmlrpc.php, …), wp-admin/wp-json,
+#     and functional params (add-to-cart, wc-ajax) keep their full URL — so flows
+#     like the password-reset link (?action=rp&key=…) and login redirects aren't
+#     stripped, the downstream `return(pass)` logic still detects them, and
+#     analytics params reach origin on those requests.
 #   • Until the dictionary is synced (empty value), it falls back to the tracker
 #     deny-list below, so behaviour never regresses before the first sync.
 #   • An allowlist that omits a meaningful param silently collapses real variants
@@ -33,6 +35,7 @@ set var.cachetags_allow = table.lookup(cachetags_query_allowlist, req.http.host,
 if (var.cachetags_allow != ""
     && req.method == "GET"
     && req.url.path !~ "^/(wp|wp-admin|wp-json)/"
+    && req.url.path !~ "\.php$"
     && req.url !~ "(add-to-cart|remove_item|undo_item|wc-ajax|show-reset-form)=") {
   # Allowlist: keep only the cache-significant params, drop the rest.
   set req.url = querystring.filter_except(

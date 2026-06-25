@@ -10,9 +10,10 @@ use Genero\Sage\CacheTags\Util;
  * to filter the cache key. Dictionary items are versionless — updates hit the
  * live edge in ~30s with no service deploy.
  *
- * Stored as one item (key `params`) holding the comma-joined list; the value cap
- * is 8000 chars, ample for hundreds of params. Reuses the FASTLY_SERVICE_ID /
- * FASTLY_API_KEY env the purge invalidator uses.
+ * Stored as one item per host (key = the site host — see itemKey()) holding the
+ * comma-joined list, so a multisite network sharing one service doesn't clobber a
+ * single item; the value cap is 8000 chars, ample for hundreds of params. Reuses
+ * the FASTLY_SERVICE_ID / FASTLY_API_KEY env the purge invalidator uses.
  */
 class AllowlistDictionary
 {

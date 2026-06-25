@@ -54,7 +54,7 @@ class FastlyAllowlistCommand extends Command
             $this->line('Computed : '.implode(',', $params));
 
             if ($current === null) {
-                $this->warn('Dictionary item unavailable — check the dictionary exists and the token has write_dictionaries scope.');
+                $this->warn('No allowlist at Fastly yet — run sync. (If you have: check the dictionary exists and the token has write_dictionaries scope.)');
 
                 return self::SUCCESS;
             }

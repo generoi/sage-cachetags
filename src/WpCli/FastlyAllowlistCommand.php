@@ -53,7 +53,7 @@ class FastlyAllowlistCommand extends WP_CLI_Command
         WP_CLI::log('Computed : '.implode(',', $params));
 
         if ($current === null) {
-            WP_CLI::warning('Dictionary item unavailable — check the dictionary exists and the token has write_dictionaries scope.');
+            WP_CLI::warning('No allowlist at Fastly yet — run `sync`. (If you have: check the dictionary exists and the token has write_dictionaries scope.)');
 
             return;
         }

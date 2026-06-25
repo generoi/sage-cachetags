@@ -250,6 +250,7 @@ set var.allow = table.lookup(cachetags_query_allowlist, req.http.host, "");  # p
 if (var.allow != ""                                    # fail-open until first sync
     && req.method == "GET"
     && req.url.path !~ "^/(wp|wp-admin|wp-json)/"
+    && req.url.path !~ "\.php$"                         # wp-login.php, xmlrpc.php, …
     && req.url !~ "(add-to-cart|remove_item|wc-ajax)=") {   # keep functional params
   set req.url = querystring.filter_except(req.url, regsuball(var.allow, ",", querystring.filtersep()));
 }
@@ -259,11 +260,13 @@ set req.url = querystring.sort(req.url);               # canonical param order
 
 `querystring.filter_except` rewrites `req.url`, which on a miss is fetched from
 origin — so the guards keep it from stripping functional params (add-to-cart,
-AJAX) or running on admin/non-GET requests before the cache-bypass logic sees
-them. Stripped trackers (`utm_*`, `fbclid`, …) therefore won't reach origin on a
-cache *miss* (client-side GA is unaffected — the browser URL is untouched). The
-item is keyed by **host**, so a multisite network on one Fastly service keeps a
-separate allowlist per site.
+AJAX) or running on admin / non-GET / `.php` requests (so the `wp-login.php`
+password-reset link `?action=rp&key=…` and login redirects survive) before the
+cache-bypass logic sees them. Stripped trackers (`utm_*`, `fbclid`, …) therefore
+won't reach origin on a cache *miss* (client-side GA is unaffected — the browser
+URL is untouched). The item is keyed by **host**, so a multisite network on one
+Fastly service keeps a separate allowlist per site — run `sync` per site
+(`wp --url=https://site.example cachetags fastly-allowlist sync`).
 
 > ⚠️ **An incomplete allowlist serves wrong content.** A param that's stripped but
 > *was* meaningful (a missed facet, `min_price`, a custom CPT's `post_type`)
