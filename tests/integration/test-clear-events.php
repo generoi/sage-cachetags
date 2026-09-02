@@ -133,6 +133,46 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("menu:{$menuId}", $this->queuedPurgeTags());
     }
 
+    /**
+     * Core's "Add to Menu" button saves the submitted items through
+     * `wp_save_nav_menu_items(0, ...)`, so `wp_update_nav_menu_item` fires with a
+     * menu id of 0 for an item that is in no menu yet. That has to be a no-op:
+     * CoreTags::menu() throws on an id it cannot resolve, and the exception is
+     * uncaught inside admin-ajax, which turns the whole request into a 500.
+     */
+    public function test_adding_a_menu_item_with_no_menu_yet_is_a_noop(): void
+    {
+        $this->resetCacheTags();
+
+        $itemId = wp_update_nav_menu_item(0, 0, [
+            'menu-item-title' => 'Home',
+            'menu-item-url' => home_url('/'),
+            'menu-item-status' => 'publish',
+        ]);
+
+        $this->assertIsInt($itemId);
+        $this->assertNotWPError($itemId);
+        $this->assertSame([], $this->queuedPurgeTags());
+    }
+
+    /**
+     * The guard is on the menu id being absent, not on menu ids in general — a
+     * real menu still purges through the same hook.
+     */
+    public function test_adding_a_menu_item_to_a_real_menu_still_clears_it(): void
+    {
+        $menuId = wp_create_nav_menu('Guarded');
+        $this->resetCacheTags();
+
+        wp_update_nav_menu_item($menuId, 0, [
+            'menu-item-title' => 'Home',
+            'menu-item-url' => home_url('/'),
+            'menu-item-status' => 'publish',
+        ]);
+
+        $this->assertContains("menu:{$menuId}", $this->queuedPurgeTags());
+    }
+
     public function test_publishing_a_post_clears_it_its_archive_and_taxonomies(): void
     {
         $postId = self::factory()->post->create(['post_status' => 'draft']);
