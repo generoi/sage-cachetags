@@ -131,6 +131,15 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertFalse(wp_next_scheduled(PruneCron::HOOK), 'orphaned cron cleaned up');
     }
 
+    public function test_fastly_allowlist_dictionary_is_exposed_via_filter_when_configured(): void
+    {
+        (new Bootstrap)->store(TransientStore::class)->actions([])->disable()
+            ->fastlyAllowlistDictionary('shop_allowlist')->bootstrap();
+
+        $this->assertSame('shop_allowlist', apply_filters('cachetags/fastly-allowlist-dictionary', null));
+        remove_all_filters('cachetags/fastly-allowlist-dictionary');
+    }
+
     public function test_save_cache_tags_stores_a_cacheable_front_end_url(): void
     {
         $store = new TransientStore;

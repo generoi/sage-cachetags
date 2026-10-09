@@ -192,6 +192,124 @@ return [
 ];
 ````
 
+### Fastly query-param allowlist (edge cache-key normalisation)
+
+**Shrinks the query-string DDoS / cache-busting surface.** An attacker (or a
+runaway bot) can append unbounded unique query params — `?x=1`, `?x=2`, … — to
+force a cache miss on *every* request and hammer the origin. A deny-list of known
+trackers can't stop that (the attacker just uses names that aren't on it); an
+**allowlist** can — only known *cache-significant* params (a WooCommerce attribute
+filter, a FacetWP facet, `orderby`, `s`, …) survive into the cache key, so anything
+unrecognised collapses to the canonical cached object and never reaches origin. It
+de-fragments ordinary tracker/bot noise (`utm_*`, `gclid`) as a bonus. The list is
+**site-specific and dynamic**, which only WordPress knows.
+
+It allowlists param *names* (keeping values) — which covers the main vector
+(random names) and stays within Fastly's dictionary size budget. A high-cardinality
+*allowlisted* key can still be value-busted (notably `s` search — unbounded
+values); cache-bypass or rate-limit those at the edge separately rather than
+enumerating values here.
+
+So the plugin computes the allowlist and syncs it to a Fastly **Edge Dictionary**
+(versionless — updates hit the live edge in ~30s, no deploy), and a small static
+VCL snippet reads it and filters the cache key. Opt in by naming the dictionary:
+
+```php
+// config/cachetags.php  (or ->fastlyAllowlistDictionary('…') standalone)
+'fastly-allowlist-dictionary' => 'cachetags_query_allowlist',
+```
+
+Only relevant when **Fastly is your edge** — it's a cache-key shaping concern, not
+tag purging.
+
+**Setup:**
+
+1. Create an Edge Dictionary named `cachetags_query_allowlist` on your Fastly
+   service (one-time, in the Fastly UI/API). `FASTLY_SERVICE_ID` / `FASTLY_API_KEY`
+   must be set — and the token needs **`write_dictionaries` (global/engineer)
+   scope**, not just purge scope, or `sync` fails with an opaque error.
+2. Add the VCL snippet below to `vcl_recv` (one-time).
+3. Review the computed list and push it:
+
+   ```sh
+   wp cachetags fastly-allowlist preview   # what WordPress will sync — review it
+   wp cachetags fastly-allowlist sync      # push to the dictionary
+   wp cachetags fastly-allowlist status    # what's at Fastly + in-sync?
+   ```
+
+   Re-run `sync` whenever your attributes/facets change (e.g. from a deploy hook).
+
+**VCL snippet** — a complete, drop-in `vcl_recv` block (modelled on the Genero
+Fastly VCLs: same `querystring.filtersep()` idiom, with the tracker deny-list kept
+as a fallback) is at [`examples/fastly-query-allowlist.vcl`](examples/fastly-query-allowlist.vcl).
+The core of it:
+
+```vcl
+declare local var.allow STRING;
+set var.allow = table.lookup(cachetags_query_allowlist, req.http.host, "");  # per-host
+if (var.allow != ""                                    # fail-open until first sync
+    && req.method == "GET"
+    && req.url.path !~ "^/(wp|wp-admin|wp-json)/"
+    && req.url.path !~ "\.php$"                         # wp-login.php, xmlrpc.php, …
+    && req.url !~ "(add-to-cart|remove_item|wc-ajax)=") {   # keep functional params
+  set req.url = querystring.filter_except(req.url, regsuball(var.allow, ",", querystring.filtersep()));
+}
+set req.url = querystring.clean(req.url);              # drop empty params
+set req.url = querystring.sort(req.url);               # canonical param order
+```
+
+`querystring.filter_except` rewrites `req.url`, which on a miss is fetched from
+origin — so the guards keep it from stripping functional params (add-to-cart,
+AJAX) or running on admin / non-GET / `.php` requests (so the `wp-login.php`
+password-reset link `?action=rp&key=…` and login redirects survive) before the
+cache-bypass logic sees them. Stripped trackers (`utm_*`, `fbclid`, …) therefore
+won't reach origin on a cache *miss* (client-side GA is unaffected — the browser
+URL is untouched). The item is keyed by **host**, so a multisite network on one
+Fastly service keeps a separate allowlist per site — run `sync` per site
+(`wp --url=https://site.example cachetags fastly-allowlist sync`).
+
+> ⚠️ **An incomplete allowlist serves wrong content.** A param that's stripped but
+> *was* meaningful (a missed facet, `min_price`, a custom CPT's `post_type`)
+> collapses real variants into one cached page — silently. This is
+> fail-*dangerous*, unlike the deny-list of known trackers. Always `preview` before
+> `sync`, and add anything the built-ins miss via the
+> `cachetags/fastly-allowed-query-params` filter:
+
+```php
+// Add a param the built-ins missed (or drop one they got wrong):
+add_filter('cachetags/fastly-allowed-query-params', function (array $params) {
+    $params[] = 'my_custom_facet';
+    return $params;
+});
+
+// …or take the last word over the exact list synced to Fastly (edit/add/remove).
+// Runs after the built-ins + the filter above; the result is re-sanitised, so a
+// name with a comma/space/control char can't reach the dictionary.
+add_filter('cachetags/fastly-allowlist', function (array $params) {
+    return array_values(array_diff($params, ['feed', 'author']));
+});
+```
+
+The built-ins cover WordPress's registered public query vars (core *and* anything
+a theme/plugin registers via the `query_vars` filter, incl. `cpage`/`feed`/ugly
+permalinks), WooCommerce (attribute `filter_*`/`query_type_*`, price, rating,
+stock, `product-page`), FacetWP facets (the `_`-prefixed vars + `_paged`/
+`_per_page`/`_sort`) and Polylang `lang`.
+
+**Operational notes:**
+- **Sync *before* deploying a feature that adds a param.** Dictionary updates
+  propagate in ~30s; in that window a newly-added param is still stripped, and any
+  page cached then stays collapsed until its TTL — so `sync`, confirm with
+  `status`, then ship (and purge the affected pages if you're adding a param).
+- Block-theme **Query Loop pagination** (`?query-{id}-page=`, a dynamic id) can't
+  be enumerated or wildcarded — block-paginated archives won't vary on it.
+- `querystring.sort` leaves the URL unsorted above **32 params** (a Fastly limit) —
+  a corner case for heavily multi-select faceted pages.
+- The allowlist can't exceed Fastly's 8000-char item value (≈230 attributes);
+  `sync` errors clearly if it would.
+
+Syncing is manual (CLI) — wire it to a deploy hook to automate.
+
 ## REST API integration
 
 For headless/decoupled setups where pages are served from the WordPress REST

@@ -53,6 +53,7 @@ class Bootstrap
         protected bool $autoDetectActions = true,
         protected ?string $baseTag = 'page',
         protected ?string $pruneOlderThan = '30d',
+        protected ?string $fastlyAllowlistDictionary = null,
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -152,6 +153,17 @@ class Bootstrap
     }
 
     /**
+     * Opt in to the Fastly query-param allowlist by naming the Edge Dictionary the
+     * `wp cachetags fastly-allowlist` commands sync to. Null leaves it off.
+     */
+    public function fastlyAllowlistDictionary(?string $dictionary): static
+    {
+        $this->fastlyAllowlistDictionary = $dictionary;
+
+        return $this;
+    }
+
+    /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
@@ -167,6 +179,12 @@ class Bootstrap
                 array_filter($this->invalidators)
             ),
         );
+
+        // Expose the configured Fastly allowlist dictionary so the CLI (and any
+        // integration) can resolve it, regardless of Acorn vs standalone config.
+        if ($this->fastlyAllowlistDictionary !== null) {
+            add_filter('cachetags/fastly-allowlist-dictionary', fn () => $this->fastlyAllowlistDictionary);
+        }
 
         // Register WP-CLI commands if available
         $this->registerWpCliCommands();
@@ -219,6 +237,7 @@ class Bootstrap
         \WP_CLI::add_command('cachetags clear', WpCli\ClearCommand::class);
         \WP_CLI::add_command('cachetags status', WpCli\StatusCommand::class);
         \WP_CLI::add_command('cachetags prune', WpCli\PruneCommand::class);
+        \WP_CLI::add_command('cachetags fastly-allowlist', WpCli\FastlyAllowlistCommand::class);
     }
 
     protected function bindActions(): void

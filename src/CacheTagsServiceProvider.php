@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags;
 
 use Genero\Sage\CacheTags\Console\ClearCommand;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
+use Genero\Sage\CacheTags\Console\FastlyAllowlistCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
 use Genero\Sage\CacheTags\Console\PruneCommand;
 use Genero\Sage\CacheTags\Console\StatusCommand;
@@ -36,6 +37,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             ClearCommand::class,
             StatusCommand::class,
             PruneCommand::class,
+            FastlyAllowlistCommand::class,
         ]);
     }
 
@@ -53,6 +55,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             autoDetectActions: $config->get('cachetags.auto-detect-actions', true),
             baseTag: $config->get('cachetags.base-tag', 'page'),
             pruneOlderThan: $config->get('cachetags.prune-older-than', '30d'),
+            fastlyAllowlistDictionary: $config->get('cachetags.fastly-allowlist-dictionary', null),
         );
 
         return $bootstrap;
