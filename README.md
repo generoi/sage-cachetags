@@ -169,8 +169,9 @@ site.
 ### Cloudflare
 
 `CloudflareCacheInvalidator` purges by [cache tag](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-tags/)
-using the `Cache-Tag` header, which the `HttpHeader` action emits comma-separated
-as Cloudflare expects. Configure it with environment variables:
+using the `Cache-Tag` header. Cloudflare expects the tags comma-separated, so
+set the separator: `->httpHeader(['Cache-Tag' => ','])` (or
+`'http-header' => ['Cache-Tag' => ',']`). Configure it with environment variables:
 
 - `CLOUDFLARE_API_TOKEN` — an API token with the **Cache Purge** permission on the zones.
 - `CLOUDFLARE_ZONE_IDS` — comma-separated zone IDs. Tags are per zone, so a site
@@ -197,15 +198,15 @@ While migrating from Fastly, run both CDNs at once by emitting both headers:
 ```php
 (new Bootstrap)
     ->invalidators([KinstaCacheInvalidator::class, FastlySoftCacheInvalidator::class, CloudflareCacheInvalidator::class])
-    ->httpHeader(['Surrogate-Key', 'Cache-Tag'])
+    ->httpHeader(['Surrogate-Key' => ' ', 'Cache-Tag' => ','])
     // …
     ->bootstrap();
 ```
 
-or `'http-header' => ['Surrogate-Key', 'Cache-Tag']` in `config/cachetags.php`.
-`Cache-Tag` is joined with commas and every other header with spaces. Cloudflare
-strips `Cache-Tag` before responding to visitors; Fastly does not strip
-`Surrogate-Key` unless your VCL does.
+or `'http-header' => ['Surrogate-Key' => ' ', 'Cache-Tag' => ',']` in
+`config/cachetags.php`. A header given without a separator — a plain string or a
+list entry — is space-separated. Cloudflare strips `Cache-Tag` before
+responding to visitors; Fastly does not strip `Surrogate-Key` unless your VCL does.
 
 ### Fastly
 

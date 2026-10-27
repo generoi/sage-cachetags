@@ -37,33 +37,32 @@ class HttpHeader implements Action
             return;
         }
 
-        foreach ($this->headers() as $header) {
-            $this->emit($header, self::format($header, $tags));
+        foreach ($this->headers() as $header => $separator) {
+            $this->emit($header, implode($separator, $tags));
         }
     }
 
     /**
-     * The configured header names — one, or several when two CDNs read their own
-     * header during a migration (Surrogate-Key for Fastly, Cache-Tag for
-     * Cloudflare).
+     * The configured headers mapped to their tag separator. A header name on its
+     * own (a string, or a list entry) is space-separated; map names to
+     * separators to choose, e.g. ['Surrogate-Key' => ' ', 'Cache-Tag' => ',']
+     * to feed Fastly and Cloudflare (which needs commas) at once.
      *
-     * @return string[]
+     * @return array<string, string>
      */
     protected function headers(): array
     {
-        return array_filter((array) $this->cacheTags->httpHeader);
-    }
+        $headers = [];
+        foreach ((array) $this->cacheTags->httpHeader as $name => $separator) {
+            if (is_int($name)) {
+                [$name, $separator] = [$separator, ' '];
+            }
+            if ($name) {
+                $headers[$name] = $separator;
+            }
+        }
 
-    /**
-     * Join tags for a header. Cloudflare's Cache-Tag is comma-separated (it
-     * strips spaces, so a space-joined value would merge into one tag);
-     * Surrogate-Key and anything else stay space-separated.
-     *
-     * @param  string[]  $tags
-     */
-    public static function format(string $header, array $tags): string
-    {
-        return implode(strcasecmp($header, 'Cache-Tag') === 0 ? ',' : ' ', $tags);
+        return $headers;
     }
 
     /**
@@ -103,8 +102,8 @@ class HttpHeader implements Action
 
         if (! empty($tags) && $this->headers()) {
             $headers = $response->get_headers();
-            foreach ($this->headers() as $header) {
-                $headers[$header] = self::format($header, $tags);
+            foreach ($this->headers() as $header => $separator) {
+                $headers[$header] = implode($separator, $tags);
             }
             $response->set_headers($headers);
         }

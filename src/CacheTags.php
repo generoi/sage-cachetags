@@ -50,7 +50,7 @@ class CacheTags
     protected function __construct(
         public readonly Store $store,
         public readonly bool $debug = false,
-        /** @var string|string[]|null One header name, or several (e.g. Surrogate-Key + Cache-Tag) */
+        /** @var string|array<int|string, string>|null Header name(s), optionally mapped to a separator */
         public readonly string|array|null $httpHeader = 'Cache-Tag',
         /** @var Invalidator[] */
         public readonly array $invalidators = [],

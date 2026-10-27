@@ -98,10 +98,12 @@ class Bootstrap
     }
 
     /**
-     * Set the tag header name, or several to emit at once (e.g.
-     * ['Surrogate-Key', 'Cache-Tag'] while moving from Fastly to Cloudflare).
+     * Set the tag header name, or several to emit at once. Tags are
+     * space-separated unless a separator is given per header, e.g.
+     * ['Surrogate-Key' => ' ', 'Cache-Tag' => ','] while moving from Fastly to
+     * Cloudflare.
      *
-     * @param  string|string[]|null  $header
+     * @param  string|array<int|string, string>|null  $header
      */
     public function httpHeader(string|array|null $header): static
     {

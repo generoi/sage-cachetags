@@ -78,7 +78,7 @@ abstract class RestTestCase extends WP_UnitTestCase
     {
         $header = $response->get_headers()['Cache-Tag'] ?? '';
 
-        return $header === '' ? [] : explode(',', $header);
+        return $header === '' ? [] : explode(' ', $header);
     }
 
     /**
