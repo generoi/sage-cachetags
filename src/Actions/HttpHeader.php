@@ -32,11 +32,38 @@ class HttpHeader implements Action
         }
 
         $tags = $this->cacheTags->get();
-        $header = $this->cacheTags->httpHeader;
 
-        if ($header && ! empty($tags)) {
-            $this->emit($header, implode(' ', $tags));
+        if (empty($tags)) {
+            return;
         }
+
+        foreach ($this->headers() as $header) {
+            $this->emit($header, self::format($header, $tags));
+        }
+    }
+
+    /**
+     * The configured header names — one, or several when two CDNs read their own
+     * header during a migration (Surrogate-Key for Fastly, Cache-Tag for
+     * Cloudflare).
+     *
+     * @return string[]
+     */
+    protected function headers(): array
+    {
+        return array_filter((array) $this->cacheTags->httpHeader);
+    }
+
+    /**
+     * Join tags for a header. Cloudflare's Cache-Tag is comma-separated (it
+     * strips spaces, so a space-joined value would merge into one tag);
+     * Surrogate-Key and anything else stay space-separated.
+     *
+     * @param  string[]  $tags
+     */
+    public static function format(string $header, array $tags): string
+    {
+        return implode(strcasecmp($header, 'Cache-Tag') === 0 ? ',' : ' ', $tags);
     }
 
     /**
@@ -73,11 +100,12 @@ class HttpHeader implements Action
         }
 
         $tags = $this->cacheTags->get();
-        $header = $this->cacheTags->httpHeader;
 
-        if ($header && ! empty($tags)) {
+        if (! empty($tags) && $this->headers()) {
             $headers = $response->get_headers();
-            $headers[$header] = implode(' ', $tags);
+            foreach ($this->headers() as $header) {
+                $headers[$header] = self::format($header, $tags);
+            }
             $response->set_headers($headers);
         }
 

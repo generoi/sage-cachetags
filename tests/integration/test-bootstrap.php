@@ -223,6 +223,18 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertSame('Surrogate-Key', $cacheTags->httpHeader);
     }
 
+    public function test_http_header_accepts_several_header_names(): void
+    {
+        $cacheTags = (new Bootstrap)
+            ->httpHeader(['Surrogate-Key', 'Cache-Tag'])
+            ->actions([])
+            ->store(TransientStore::class)
+            ->disable()
+            ->bootstrap();
+
+        $this->assertSame(['Surrogate-Key', 'Cache-Tag'], $cacheTags->httpHeader);
+    }
+
     public function test_base_tag_action_is_bound_by_default_and_disabled_with_null(): void
     {
         $withBase = (new Bootstrap)->store(TransientStore::class)->actions([])->autoDetectActions(false)->bootstrap();

@@ -9,6 +9,8 @@ use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 return [
     'disable' => false,
     'debug' => defined('WP_DEBUG') ? WP_DEBUG : false,
+    // Tag header(s): 'Cache-Tag' (Cloudflare, comma-separated), 'Surrogate-Key'
+    // (Fastly, space-separated), or both as an array while migrating.
     'http-header' => 'Cache-Tag',
     'store' => WordpressDbStore::class,
     'invalidator' => [
