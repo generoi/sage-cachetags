@@ -1,6 +1,7 @@
 <?php
 
 use Genero\Sage\CacheTags\Invalidators\CloudflareCacheInvalidator;
+use Genero\Sage\CacheTags\Invalidators\CloudflareSoftCacheInvalidator;
 use WpOrg\Requests\Response;
 
 /**
@@ -152,6 +153,41 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         ], $invalidator->payloadsByZone());
     }
 
+    public function test_the_soft_invalidator_invalidates_instead_of_purging(): void
+    {
+        $buildRequest = new ReflectionMethod(CloudflareSoftCacheInvalidator::class, 'buildRequest');
+
+        $request = $buildRequest->invoke(new CloudflareSoftCacheInvalidator, ['zone' => 'zone-a', 'payload' => ['tags' => ['post:1']]]);
+
+        $this->assertSame('https://api.cloudflare.com/client/v4/zones/zone-a/invalidate_cache', $request['url']);
+        $this->assertSame('{"tags":["post:1"]}', $request['data'], 'same body as a purge');
+    }
+
+    public function test_a_purge_above_the_bulk_threshold_flushes_instead(): void
+    {
+        $invalidator = $this->invalidator(fn () => self::OK);
+        $tags = array_map(fn ($i) => "post:{$i}", range(1, CloudflareCacheInvalidator::BULK_PURGE_THRESHOLD + 1));
+
+        $this->assertTrue($invalidator->clear([], $tags));
+
+        $this->assertSame([
+            'zone-a' => [['purge_everything' => true]],
+            'zone-b' => [['purge_everything' => true]],
+        ], $invalidator->payloadsByZone(), 'one request per zone');
+    }
+
+    public function test_the_bulk_threshold_is_filterable(): void
+    {
+        add_filter('cachetags/cloudflare-bulk-purge-threshold', fn () => 1);
+        $invalidator = $this->invalidator(fn () => self::OK);
+
+        $invalidator->clear([], ['post:1']);
+        $this->assertSame([['tags' => ['post:1']]], $invalidator->payloadsByZone()['zone-a'], 'at the threshold: purged by tag');
+
+        $invalidator->clear([], ['post:1', 'post:2']);
+        $this->assertSame(['purge_everything' => true], $invalidator->payloadsByZone()['zone-a'][1], 'above it: flushed');
+    }
+
     public function test_a_200_without_success_true_is_a_failure(): void
     {
         $invalidator = $this->invalidator(fn () => [200, '{"success":false,"errors":[{"code":1000}]}']);
@@ -243,6 +279,7 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $invalidator = $this->invalidator(fn () => self::RATE_LIMITED);
         // 2 zones × 6 chunks = 12 requests → windows of 10 + 2.
         $tags = array_map(fn ($i) => "post:{$i}", range(1, 600));
+        add_filter('cachetags/cloudflare-bulk-purge-threshold', fn () => 1000);
 
         $this->assertTrue($invalidator->clear([], $tags));
 

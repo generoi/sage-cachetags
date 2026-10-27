@@ -23,6 +23,9 @@ class CloudflareCacheInvalidator implements Invalidator
 {
     const API_BASE_URL = 'https://api.cloudflare.com/client/v4/zones/';
 
+    /** Hard purge: the next request is a MISS. @see CloudflareSoftCacheInvalidator */
+    const ENDPOINT = 'purge_cache';
+
     /** Cloudflare accepts at most 100 tags per purge request, on every plan. */
     const MAX_TAGS_PER_PURGE = 100;
 
@@ -40,6 +43,17 @@ class CloudflareCacheInvalidator implements Invalidator
 
     /** Seconds until the deferred retry; the Free plan refills a token every 12s. */
     const DEFERRED_DELAY = 60;
+
+    /**
+     * Above this many tags a purge flushes instead (the site tags, or everything
+     * without the Site action): one request per zone instead of one per 100 tags,
+     * which on a multi-zone Free plan would sit in the deferred queue for an hour.
+     * A hard purge leaves the site cold; with the soft invalidator it is served
+     * stale while it revalidates.
+     *
+     * @see cachetags/cloudflare-bulk-purge-threshold filter.
+     */
+    const BULK_PURGE_THRESHOLD = 500;
 
     protected ?string $apiToken;
 
@@ -71,15 +85,18 @@ class CloudflareCacheInvalidator implements Invalidator
             return true;
         }
 
+        if (count($tags) > (int) apply_filters('cachetags/cloudflare-bulk-purge-threshold', self::BULK_PURGE_THRESHOLD)) {
+            return $this->flush();
+        }
+
         return $this->purge($this->tagPayloads($tags));
     }
 
     public function flush(): bool
     {
         if ($this->hasAction(Site::class)) {
-            $tags = Tag::toStrings(SiteTags::sites('any'));
-
-            return $this->clear($tags, $tags);
+            // purge(), not clear(): a threshold below the site tag count must not recurse.
+            return $this->purge($this->tagPayloads(Tag::toStrings(SiteTags::sites('any'))));
         }
 
         return $this->purge([['purge_everything' => true]]);
@@ -310,7 +327,7 @@ class CloudflareCacheInvalidator implements Invalidator
     protected function buildRequest(array $job): array
     {
         return [
-            'url' => self::API_BASE_URL.rawurlencode($job['zone']).'/purge_cache',
+            'url' => self::API_BASE_URL.rawurlencode($job['zone']).'/'.static::ENDPOINT,
             'type' => Requests::POST,
             'headers' => [
                 'Authorization' => 'Bearer '.$this->apiToken,
