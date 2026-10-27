@@ -75,7 +75,7 @@ across all sites.
 
 ## Invalidators
 
-Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer, WP Rocket and Fastly. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
+Currently it supports Kinsta Page Cache, WP Super Cache, SiteGround Optimizer, WP Rocket, Fastly and Cloudflare. You can use multiple invalidators if you eg use Fastly in front of Kinsta and want to invalidate both.
 
 **Coarse tags and bulk purges.** A coarse tag like `archive:post` can resolve to
 many stored URLs (every page that lists posts), which URL-based invalidators must
@@ -168,7 +168,44 @@ site.
 
 ### Cloudflare
 
-Cloudflare Pro plan supports [HTTP header purging](https://blog.cloudflare.com/introducing-a-powerful-way-to-purge-cache-on-cloudflare-purge-by-cache-tag/) but an invalidor doesn't exist at the moment. If you're up for it, take a look at the Fastly one as an example.
+`CloudflareCacheInvalidator` purges by [cache tag](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-tags/)
+using the `Cache-Tag` header, which the `HttpHeader` action emits comma-separated
+as Cloudflare expects. Configure it with environment variables:
+
+- `CLOUDFLARE_API_TOKEN` — an API token with the **Cache Purge** permission on the zones.
+- `CLOUDFLARE_ZONE_IDS` — comma-separated zone IDs. Tags are per zone, so a site
+  served on several domains (one zone each) lists them all, and every purge is
+  sent to every zone.
+
+Tags are sent 100 per request (Cloudflare's per-request maximum), with bounded
+concurrency. `flush()` purges everything in each zone, or the site tags when the
+`Site` action is active. A response only counts as a success on HTTP 200 with
+`"success": true`.
+
+**Rate limits.** Tag purges are limited per *account* and shared by all zones on
+the same plan ([limits](https://developers.cloudflare.com/cache/how-to/purge-cache/#hostname-tag-prefix-url-and-purge-everything-limits)):
+the Free plan allows 5 requests a minute with a burst of 25; Pro 5/s (burst 25),
+Business 10/s (burst 50). Each purge costs one request per zone per 100 tags, so a
+multi-domain site on Free runs out quickly. A rate-limited (429) purge is retried
+briefly (honouring `Retry-After`); if it is still limited, the remaining tags are
+merged into a per-zone queue (the `cachetags_cloudflare_deferred` option) and
+retried by a single WP-cron event a minute later, coalesced, until they go
+through. Make sure WP-cron runs on the site.
+
+While migrating from Fastly, run both CDNs at once by emitting both headers:
+
+```php
+(new Bootstrap)
+    ->invalidators([KinstaCacheInvalidator::class, FastlySoftCacheInvalidator::class, CloudflareCacheInvalidator::class])
+    ->httpHeader(['Surrogate-Key', 'Cache-Tag'])
+    // …
+    ->bootstrap();
+```
+
+or `'http-header' => ['Surrogate-Key', 'Cache-Tag']` in `config/cachetags.php`.
+`Cache-Tag` is joined with commas and every other header with spaces. Cloudflare
+strips `Cache-Tag` before responding to visitors; Fastly does not strip
+`Surrogate-Key` unless your VCL does.
 
 ### Fastly
 
@@ -275,7 +312,7 @@ the header yourself (and `save()` the URL for url-based purge):
 ```php
 $cacheTags->add($tags);
 $cacheTags->save($request->get_route());
-$response->header('Cache-Tag', implode(' ', $tags));
+$response->header('Cache-Tag', implode(',', $tags));
 ```
 
 Purge them from a small custom `Action` that hooks the relevant
@@ -307,11 +344,13 @@ add_filter('cachetags/rest-url-ignored-params', fn (array $params) => [...$param
 
 Cache providers cap the tag header — Fastly's `Surrogate-Key` allows 1024 bytes
 per key and 16384 bytes total, and **silently drops the offending key and every
-key after it** once a limit is reached, which would leave content stale. To stay
-safe (for both front-end pages and REST responses):
+key after it** once a limit is reached, which would leave content stale.
+Cloudflare's `Cache-Tag` is likewise capped at 16 KB in total and allows only
+printable ASCII. To stay safe (for both front-end pages and REST responses):
 
-- Tags that aren't valid single header tokens — containing whitespace/control
-  characters, or longer than the store column (191 bytes) — are dropped.
+- Tags that aren't valid single header tokens — anything but printable ASCII,
+  a space or comma (the two separators), or longer than the store column
+  (191 bytes) — are dropped.
 - When the combined header would exceed the byte budget, the per-object
   `post:`/`term:` tags are collapsed to their coarse `archive:{type}:any` /
   `taxonomy:{tax}:any` form, which is purged on any change to that post type or
