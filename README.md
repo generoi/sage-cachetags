@@ -190,9 +190,16 @@ Business 10/s (burst 50). Each purge costs one request per zone per 100 tags, so
 multi-domain site on Free runs out quickly. In WP-CLI and cron a rate-limited
 (429) purge is retried briefly (honouring `Retry-After`); a web request never
 waits, since purges run before the visitor's response is finished. Whatever is
-still limited is merged into a per-zone queue (the `cachetags_cloudflare_deferred` option) and
-retried by a single WP-cron event a minute later, coalesced, until they go
-through. Make sure WP-cron runs on the site.
+still limited goes into a per-zone `DeferredQueue` (`cachetags_deferred_cloudflare:*`
+options) and is retried by a single WP-cron event a minute later, coalesced, until
+it goes through. Make sure WP-cron runs on the site. Failures other than 429 are
+logged with `error_log`.
+
+`Genero\Sage\CacheTags\DeferredQueue` is generic, for any invalidator whose API
+rate-limits (Kinsta and SiteGround do too): `push(['key' => [...tags or URLs]])` or
+`push(['key' => true])` for purge everything, hook a retry onto `$queue->hook`,
+and call `$queue->take()` there. Each push is its own option row, so concurrent
+requests can't overwrite each other's entries.
 
 While migrating from Fastly, run both CDNs at once by emitting both headers:
 

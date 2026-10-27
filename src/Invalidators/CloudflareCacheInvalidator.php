@@ -5,6 +5,7 @@ namespace Genero\Sage\CacheTags\Invalidators;
 use Genero\Sage\CacheTags\Actions\Site;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
+use Genero\Sage\CacheTags\DeferredQueue;
 use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\SiteTags;
 use Genero\Sage\CacheTags\Util;
@@ -37,15 +38,6 @@ class CloudflareCacheInvalidator implements Invalidator
     /** Cap the 429 backoff so a shutdown-time purge can't hang for minutes. */
     const MAX_BACKOFF_SECONDS = 10;
 
-    /**
-     * Purges still rate-limited after the retries are stored here, per zone, and
-     * retried by a single cron event — Cloudflare's Free plan allows only
-     * 5 purges/minute per account, so the budget runs out on a busy site.
-     */
-    const DEFERRED_OPTION = 'cachetags_cloudflare_deferred';
-
-    const DEFERRED_HOOK = 'cachetags/cloudflare-deferred';
-
     /** Seconds until the deferred retry; the Free plan refills a token every 12s. */
     const DEFERRED_DELAY = 60;
 
@@ -60,7 +52,17 @@ class CloudflareCacheInvalidator implements Invalidator
         $this->zoneIds = array_values(array_filter(array_map('trim', explode(',', (string) Util::env('CLOUDFLARE_ZONE_IDS')))));
 
         // A static callback, so however many instances exist it's hooked once.
-        add_action(self::DEFERRED_HOOK, [static::class, 'runDeferred']);
+        add_action(static::deferred()->hook, [static::class, 'runDeferred']);
+    }
+
+    /**
+     * Purges still rate-limited after the retries, per zone, retried by one cron
+     * event — Cloudflare's Free plan allows only 5 purges/minute per account, so
+     * the budget runs out on a busy site.
+     */
+    public static function deferred(): DeferredQueue
+    {
+        return new DeferredQueue('cloudflare', self::DEFERRED_DELAY);
     }
 
     public function clear(array $urls, array $tags): bool
@@ -94,11 +96,8 @@ class CloudflareCacheInvalidator implements Invalidator
      */
     public function retryDeferred(): bool
     {
-        $queue = get_option(self::DEFERRED_OPTION, []);
-        delete_option(self::DEFERRED_OPTION);
-
         $jobs = [];
-        foreach ((array) $queue as $zone => $tags) {
+        foreach (static::deferred()->take() as $zone => $tags) {
             $payloads = $tags === true ? [['purge_everything' => true]] : $this->tagPayloads($tags);
             foreach ($payloads as $payload) {
                 $jobs[] = ['zone' => (string) $zone, 'payload' => $payload];
@@ -184,6 +183,7 @@ class CloudflareCacheInvalidator implements Invalidator
                     }
 
                     $ok = false;
+                    $this->logPurgeFailure($job['zone'], $response);
                 }
 
                 if ($retry === []) {
@@ -208,27 +208,17 @@ class CloudflareCacheInvalidator implements Invalidator
     }
 
     /**
-     * Merge rate-limited jobs into the stored per-zone queue and schedule one
-     * retry. A zone's purge_everything supersedes any queued tags.
+     * Queue rate-limited jobs for the cron retry. A zone's purge_everything
+     * supersedes any queued tags.
      *
      * @param  array<int, array{zone: string, payload: array<string, mixed>}>  $jobs
      */
     protected function defer(array $jobs): void
     {
-        $queue = (array) get_option(self::DEFERRED_OPTION, []);
-
-        foreach ($jobs as ['zone' => $zone, 'payload' => $payload]) {
-            $queued = $queue[$zone] ?? [];
-            $queue[$zone] = isset($payload['purge_everything']) || $queued === true
-                ? true
-                : array_values(array_unique([...$queued, ...$payload['tags']]));
-        }
-
-        update_option(self::DEFERRED_OPTION, $queue, false);
-
-        if (! wp_next_scheduled(self::DEFERRED_HOOK)) {
-            wp_schedule_single_event(time() + self::DEFERRED_DELAY, self::DEFERRED_HOOK);
-        }
+        static::deferred()->push(DeferredQueue::merge(array_map(
+            fn (array $job) => [$job['zone'] => isset($job['payload']['purge_everything']) ? true : $job['payload']['tags']],
+            $jobs
+        )));
     }
 
     /**
@@ -279,6 +269,22 @@ class CloudflareCacheInvalidator implements Invalidator
     protected function canWait(): bool
     {
         return (defined('WP_CLI') && WP_CLI) || wp_doing_cron();
+    }
+
+    /**
+     * Log a failed purge (anything but a 429, which is retried or deferred). A
+     * seam so it can be asserted without scraping logs.
+     */
+    protected function logPurgeFailure(string $zone, mixed $response): void
+    {
+        if ($response instanceof Response) {
+            $error = json_decode($response->body, true)['errors'][0]['message'] ?? '';
+            $detail = "HTTP {$response->status_code}".($error !== '' ? " ({$error})" : '');
+        } else {
+            $detail = $response instanceof \Throwable ? $response->getMessage() : 'no response';
+        }
+
+        error_log(sprintf('[sage-cachetags] Cloudflare purge in zone %s failed: %s', $zone, $detail));
     }
 
     /** Seam so tests don't actually sleep. */

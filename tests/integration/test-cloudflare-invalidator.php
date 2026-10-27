@@ -17,17 +17,26 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         parent::set_up();
         putenv('CLOUDFLARE_API_TOKEN=secret-token');
         putenv('CLOUDFLARE_ZONE_IDS=zone-a, zone-b');
-        delete_option(CloudflareCacheInvalidator::DEFERRED_OPTION);
-        wp_clear_scheduled_hook(CloudflareCacheInvalidator::DEFERRED_HOOK);
+        $this->clearDeferred();
     }
 
     public function tear_down(): void
     {
         putenv('CLOUDFLARE_API_TOKEN');
         putenv('CLOUDFLARE_ZONE_IDS');
-        delete_option(CloudflareCacheInvalidator::DEFERRED_OPTION);
-        wp_clear_scheduled_hook(CloudflareCacheInvalidator::DEFERRED_HOOK);
+        $this->clearDeferred();
         parent::tear_down();
+    }
+
+    private function clearDeferred(): void
+    {
+        CloudflareCacheInvalidator::deferred()->clear();
+    }
+
+    /** Seed one deferral row, as defer() would write it. */
+    private function seedDeferred(array $queue): void
+    {
+        CloudflareCacheInvalidator::deferred()->push($queue);
     }
 
     /**
@@ -44,6 +53,9 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
 
             /** Behave like WP-CLI/cron by default; false for a web request. */
             public bool $canWait = true;
+
+            /** @var string[] zones whose purge failure was logged */
+            public array $failures = [];
 
             /** @var callable */
             private $respond;
@@ -79,6 +91,11 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
             protected function canWait(): bool
             {
                 return $this->canWait;
+            }
+
+            protected function logPurgeFailure(string $zone, mixed $response): void
+            {
+                $this->failures[] = $zone;
             }
 
             /** @return array<string, array<string, mixed>> zone => decoded payloads */
@@ -169,7 +186,7 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $this->assertTrue($invalidator->clear([], ['post:1']));
         $this->assertCount(4, $invalidator->sent);
         $this->assertSame(1, $invalidator->pauses);
-        $this->assertFalse(get_option(CloudflareCacheInvalidator::DEFERRED_OPTION), 'nothing deferred');
+        $this->assertSame([], CloudflareCacheInvalidator::deferred()->all(), 'nothing deferred');
     }
 
     public function test_a_web_request_defers_a_429_without_waiting(): void
@@ -181,8 +198,8 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
 
         $this->assertSame(0, $invalidator->pauses, 'never sleeps');
         $this->assertCount(2, $invalidator->sent, 'no in-place retry');
-        $this->assertSame(['zone-a' => ['post:1'], 'zone-b' => ['post:1']], get_option(CloudflareCacheInvalidator::DEFERRED_OPTION));
-        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::DEFERRED_HOOK));
+        $this->assertSame(['zone-a' => ['post:1'], 'zone-b' => ['post:1']], CloudflareCacheInvalidator::deferred()->all());
+        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::deferred()->hook));
     }
 
     public function test_outside_cli_and_cron_the_invalidator_cannot_wait(): void
@@ -211,13 +228,13 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
 
         $this->assertSame(
             ['zone-a' => ['post:1', 'term:5', 'post:2']],
-            get_option(CloudflareCacheInvalidator::DEFERRED_OPTION),
+            CloudflareCacheInvalidator::deferred()->all(),
             'only the rate-limited zone is queued, deduped'
         );
-        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::DEFERRED_HOOK));
+        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::deferred()->hook));
         $this->assertCount(1, array_filter(
             _get_cron_array(),
-            fn ($events) => isset($events[CloudflareCacheInvalidator::DEFERRED_HOOK])
+            fn ($events) => isset($events[CloudflareCacheInvalidator::deferred()->hook])
         ), 'a single retry event');
     }
 
@@ -230,7 +247,7 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $this->assertTrue($invalidator->clear([], $tags));
 
         $this->assertCount(10 * (CloudflareCacheInvalidator::MAX_PURGE_RETRIES + 1), $invalidator->sent, 'second window never sent');
-        $queue = get_option(CloudflareCacheInvalidator::DEFERRED_OPTION);
+        $queue = CloudflareCacheInvalidator::deferred()->all();
         $this->assertCount(600, $queue['zone-a']);
         $this->assertCount(600, $queue['zone-b']);
     }
@@ -242,12 +259,55 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $invalidator->clear([], ['post:1']);
         $invalidator->flush();
 
-        $this->assertSame(['zone-a' => true, 'zone-b' => true], get_option(CloudflareCacheInvalidator::DEFERRED_OPTION));
+        $this->assertSame(['zone-a' => true, 'zone-b' => true], CloudflareCacheInvalidator::deferred()->all());
+    }
+
+    public function test_each_deferral_is_its_own_row_so_concurrent_requests_cannot_overwrite_each_other(): void
+    {
+        $invalidator = $this->invalidator(fn () => self::RATE_LIMITED);
+        $invalidator->canWait = false;
+
+        $invalidator->clear([], ['post:1']);
+        $invalidator->clear([], ['post:2']);
+
+        global $wpdb;
+        $rows = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+            $wpdb->esc_like(CloudflareCacheInvalidator::deferred()->optionPrefix).'%'
+        ));
+        $this->assertSame(2, $rows, 'appended, never read-modify-written');
+        $this->assertSame(['zone-a' => ['post:1', 'post:2'], 'zone-b' => ['post:1', 'post:2']], CloudflareCacheInvalidator::deferred()->all());
+    }
+
+    public function test_retry_deferred_keeps_a_deferral_written_while_it_runs(): void
+    {
+        $this->seedDeferred(['zone-a' => ['post:1']]);
+        // Another request defers while the retry's purge is in flight.
+        $invalidator = $this->invalidator(function () {
+            $this->seedDeferred(['zone-b' => ['post:9']]);
+
+            return self::OK;
+        });
+
+        $this->assertTrue($invalidator->retryDeferred());
+
+        $this->assertSame(['zone-b' => ['post:9']], CloudflareCacheInvalidator::deferred()->all());
+    }
+
+    public function test_a_non_429_failure_is_logged(): void
+    {
+        $invalidator = $this->invalidator(
+            fn ($request) => str_contains($request['url'], 'zone-a') ? [403, '{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}'] : self::OK
+        );
+
+        $this->assertFalse($invalidator->clear([], ['post:1']));
+
+        $this->assertSame(['zone-a'], $invalidator->failures);
     }
 
     public function test_retry_deferred_sends_the_queue_and_empties_it(): void
     {
-        update_option(CloudflareCacheInvalidator::DEFERRED_OPTION, ['zone-a' => ['post:1', 'term:5'], 'zone-b' => true]);
+        $this->seedDeferred(['zone-a' => ['post:1', 'term:5'], 'zone-b' => true]);
         $invalidator = $this->invalidator(fn () => self::OK);
 
         $this->assertTrue($invalidator->retryDeferred());
@@ -256,25 +316,25 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
             'zone-a' => [['tags' => ['post:1', 'term:5']]],
             'zone-b' => [['purge_everything' => true]],
         ], $invalidator->payloadsByZone());
-        $this->assertFalse(get_option(CloudflareCacheInvalidator::DEFERRED_OPTION));
+        $this->assertSame([], CloudflareCacheInvalidator::deferred()->all());
     }
 
     public function test_retry_deferred_requeues_what_is_still_rate_limited(): void
     {
-        update_option(CloudflareCacheInvalidator::DEFERRED_OPTION, ['zone-a' => ['post:1']]);
+        $this->seedDeferred(['zone-a' => ['post:1']]);
         $invalidator = $this->invalidator(fn () => self::RATE_LIMITED);
 
         $invalidator->retryDeferred();
 
-        $this->assertSame(['zone-a' => ['post:1']], get_option(CloudflareCacheInvalidator::DEFERRED_OPTION));
-        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::DEFERRED_HOOK));
+        $this->assertSame(['zone-a' => ['post:1']], CloudflareCacheInvalidator::deferred()->all());
+        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::deferred()->hook));
     }
 
     public function test_the_cron_hook_is_registered(): void
     {
         new CloudflareCacheInvalidator;
 
-        $this->assertNotFalse(has_action(CloudflareCacheInvalidator::DEFERRED_HOOK, [CloudflareCacheInvalidator::class, 'runDeferred']));
+        $this->assertNotFalse(has_action(CloudflareCacheInvalidator::deferred()->hook, [CloudflareCacheInvalidator::class, 'runDeferred']));
     }
 
     public function test_backoff_uses_retry_after_then_exponential_capped(): void
