@@ -183,6 +183,22 @@ concurrency. `flush()` purges everything in each zone, or the site tags when the
 `Site` action is active. A response only counts as a success on HTTP 200 with
 `"success": true`.
 
+**Soft purge.** `CloudflareSoftCacheInvalidator` uses Cloudflare's
+[invalidation](https://developers.cloudflare.com/cache/guides/invalidate-cache/)
+instead: content is kept and marked stale, and with `stale-while-revalidate` the
+next visitor is served it while Cloudflare revalidates in the background — the
+equivalent of `FastlySoftCacheInvalidator`. Cloudflare ignores
+`stale-while-revalidate` and `stale-if-error` when `s-maxage` is present, so give
+the edge its own header without it; Cloudflare uses it instead of
+`Cache-Control` and doesn't pass it on to browsers:
+
+```
+Cloudflare-CDN-Cache-Control: max-age=604800, stale-while-revalidate=2592000, stale-if-error=2592000
+```
+
+**Bulk purges.** Above 500 tags (`cachetags/cloudflare-bulk-purge-threshold`) a
+purge flushes instead — one request per zone rather than one per 100 tags.
+
 **Rate limits.** Tag purges are limited per *account* and shared by all zones on
 the same plan ([limits](https://developers.cloudflare.com/cache/how-to/purge-cache/#hostname-tag-prefix-url-and-purge-everything-limits)):
 the Free plan allows 5 requests a minute with a burst of 25; Pro 5/s (burst 25),
@@ -205,7 +221,7 @@ While migrating from Fastly, run both CDNs at once by emitting both headers:
 
 ```php
 (new Bootstrap)
-    ->invalidators([KinstaCacheInvalidator::class, FastlySoftCacheInvalidator::class, CloudflareCacheInvalidator::class])
+    ->invalidators([KinstaCacheInvalidator::class, FastlySoftCacheInvalidator::class, CloudflareSoftCacheInvalidator::class])
     ->httpHeader(['Surrogate-Key' => ' ', 'Cache-Tag' => ','])
     // …
     ->bootstrap();
