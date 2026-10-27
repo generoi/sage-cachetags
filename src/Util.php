@@ -126,7 +126,8 @@ class Util
      * Whether a value is a usable cache tag: a non-empty, single header token
      * (no whitespace or control characters) that fits the store column.
      *
-     * A tag with whitespace would split the space-delimited header, and an
+     * A tag with whitespace would split the space-delimited Surrogate-Key
+     * header, one with a comma the comma-delimited Cache-Tag header, and an
      * over-long tag both overflows the store and, on Fastly, gets dropped
      * along with every following key. Such tags are discarded.
      */
@@ -140,9 +141,9 @@ class Util
             return false;
         }
 
-        // A single header-safe token: no whitespace (would split the
-        // space-delimited header) or control characters.
-        return (bool) preg_match('/^[^\s\x00-\x1F]+$/', $tag);
+        // A single header-safe token in both separators: printable ASCII (what
+        // Cloudflare's Cache-Tag allows), no space and no comma.
+        return (bool) preg_match('/^[\x21-\x2B\x2D-\x7E]+$/', $tag);
     }
 
     /**

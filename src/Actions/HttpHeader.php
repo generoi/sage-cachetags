@@ -32,11 +32,37 @@ class HttpHeader implements Action
         }
 
         $tags = $this->cacheTags->get();
-        $header = $this->cacheTags->httpHeader;
 
-        if ($header && ! empty($tags)) {
-            $this->emit($header, implode(' ', $tags));
+        if (empty($tags)) {
+            return;
         }
+
+        foreach ($this->headers() as $header => $separator) {
+            $this->emit($header, implode($separator, $tags));
+        }
+    }
+
+    /**
+     * The configured headers mapped to their tag separator. A header name on its
+     * own (a string, or a list entry) is space-separated; map names to
+     * separators to choose, e.g. ['Surrogate-Key' => ' ', 'Cache-Tag' => ',']
+     * to feed Fastly and Cloudflare (which needs commas) at once.
+     *
+     * @return array<string, string>
+     */
+    protected function headers(): array
+    {
+        $headers = [];
+        foreach ((array) $this->cacheTags->httpHeader as $name => $separator) {
+            if (is_int($name)) {
+                [$name, $separator] = [$separator, ' '];
+            }
+            if ($name) {
+                $headers[$name] = $separator;
+            }
+        }
+
+        return $headers;
     }
 
     /**
@@ -73,11 +99,12 @@ class HttpHeader implements Action
         }
 
         $tags = $this->cacheTags->get();
-        $header = $this->cacheTags->httpHeader;
 
-        if ($header && ! empty($tags)) {
+        if (! empty($tags) && $this->headers()) {
             $headers = $response->get_headers();
-            $headers[$header] = implode(' ', $tags);
+            foreach ($this->headers() as $header => $separator) {
+                $headers[$header] = implode($separator, $tags);
+            }
             $response->set_headers($headers);
         }
 

@@ -103,4 +103,88 @@ class TestHttpHeader extends WP_UnitTestCase
 
         $this->assertSame([], $action->emitted);
     }
+
+    /**
+     * Run $test against a CacheTags instance configured with $header, restoring
+     * the shared singleton afterwards.
+     */
+    private function withHeader(string|array|null $header, callable $test): void
+    {
+        $prop = new ReflectionProperty(CacheTags::class, 'instance');
+        $prop->setAccessible(true);
+        $saved = $prop->getValue();
+        $prop->setValue(null, null);
+
+        try {
+            $test(CacheTags::make($saved->store, false, $header));
+        } finally {
+            $prop->setValue(null, $saved);
+        }
+    }
+
+    public function test_front_end_emits_every_configured_header_with_its_separator(): void
+    {
+        $this->withHeader(['Surrogate-Key' => ' ', 'Cache-Tag' => ','], function (CacheTags $cacheTags) {
+            $cacheTags->add(['post:1', 'term:5']);
+            $action = new class($cacheTags) extends HttpHeader
+            {
+                public array $emitted = [];
+
+                protected function emit(string $header, string $value): void
+                {
+                    $this->emitted[] = "{$header}: {$value}";
+                }
+            };
+
+            $action->addHttpHeader();
+
+            $this->assertSame(['Surrogate-Key: post:1 term:5', 'Cache-Tag: post:1,term:5'], $action->emitted);
+        });
+    }
+
+    public function test_rest_response_carries_every_configured_header_with_its_separator(): void
+    {
+        $this->withHeader(['Surrogate-Key' => ' ', 'Cache-Tag' => ','], function (CacheTags $cacheTags) {
+            $cacheTags->add(['post:1', 'term:5']);
+
+            $headers = (new HttpHeader($cacheTags))->restPostDispatch(
+                new WP_REST_Response(['ok' => true]),
+                null,
+                new WP_REST_Request('GET', '/wp/v2/posts'),
+            )->get_headers();
+
+            $this->assertSame('post:1 term:5', $headers['Surrogate-Key'] ?? null);
+            $this->assertSame('post:1,term:5', $headers['Cache-Tag'] ?? null);
+        });
+    }
+
+    public function test_a_single_string_header_still_works(): void
+    {
+        $this->withHeader('Surrogate-Key', function (CacheTags $cacheTags) {
+            $cacheTags->add(['post:1', 'term:5']);
+
+            $headers = (new HttpHeader($cacheTags))->restPostDispatch(
+                new WP_REST_Response(['ok' => true]),
+                null,
+                new WP_REST_Request('GET', '/wp/v2/posts'),
+            )->get_headers();
+
+            $this->assertSame(['Surrogate-Key' => 'post:1 term:5'], $headers);
+        });
+    }
+
+    public function test_headers_without_a_separator_are_space_separated(): void
+    {
+        $this->withHeader(['Surrogate-Key', 'Cache-Tag'], function (CacheTags $cacheTags) {
+            $cacheTags->add(['post:1', 'term:5']);
+
+            $headers = (new HttpHeader($cacheTags))->restPostDispatch(
+                new WP_REST_Response(['ok' => true]),
+                null,
+                new WP_REST_Request('GET', '/wp/v2/posts'),
+            )->get_headers();
+
+            $this->assertSame(['Surrogate-Key' => 'post:1 term:5', 'Cache-Tag' => 'post:1 term:5'], $headers);
+        });
+    }
 }

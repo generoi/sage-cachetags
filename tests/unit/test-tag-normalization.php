@@ -24,6 +24,15 @@ class TestTagNormalization extends WP_UnitTestCase
         $this->assertSame(['post:1', 'term:3'], $tags);
     }
 
+    public function test_drops_tags_that_are_not_cloudflare_cache_tag_tokens(): void
+    {
+        // A comma would split Cloudflare's comma-separated Cache-Tag header, and
+        // it only accepts printable ASCII.
+        $tags = Util::normalizeTags(['post:1', 'my:a,b', 'term:ä', "post:\x7F", 'term:3']);
+
+        $this->assertSame(['post:1', 'term:3'], $tags);
+    }
+
     public function test_drops_over_long_tags(): void
     {
         $tags = Util::normalizeTags(['post:1', 'x:'.str_repeat('a', 200)]);

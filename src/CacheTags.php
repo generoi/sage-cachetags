@@ -16,6 +16,8 @@ class CacheTags
      * Default ceiling for the combined tag header in bytes. Matches Fastly's
      * Surrogate-Key total limit (16 KB); reaching it makes Fastly drop the
      * offending key and every key after it, so we collapse before then.
+     * Cloudflare's Cache-Tag has the same 16 KB cap, and its comma separator is
+     * one byte like the space, so one budget fits both headers.
      */
     const FILTER_MAX_HEADER_BYTES = 'cachetags/max-header-bytes';
 
@@ -48,7 +50,8 @@ class CacheTags
     protected function __construct(
         public readonly Store $store,
         public readonly bool $debug = false,
-        public readonly ?string $httpHeader = 'Cache-Tag',
+        /** @var string|array<int|string, string>|null Header name(s), optionally mapped to a separator */
+        public readonly string|array|null $httpHeader = 'Cache-Tag',
         /** @var Invalidator[] */
         public readonly array $invalidators = [],
     ) {}
@@ -64,7 +67,7 @@ class CacheTags
     public static function make(
         Store $store,
         bool $debug = false,
-        ?string $httpHeader = 'Cache-Tag',
+        string|array|null $httpHeader = 'Cache-Tag',
         /** @var Invalidator[] */
         array $invalidators = [],
     ): CacheTags {

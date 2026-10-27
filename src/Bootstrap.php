@@ -44,7 +44,7 @@ class Bootstrap
 
     public function __construct(
         ?bool $debug = null,
-        protected ?string $httpHeader = 'Cache-Tag',
+        protected string|array|null $httpHeader = 'Cache-Tag',
         protected bool $disable = false,
         protected string|Store $store = WordpressDbStore::class,
         protected array $invalidators = [],
@@ -98,9 +98,14 @@ class Bootstrap
     }
 
     /**
-     * Set HTTP header name.
+     * Set the tag header name, or several to emit at once. Tags are
+     * space-separated unless a separator is given per header, e.g.
+     * ['Surrogate-Key' => ' ', 'Cache-Tag' => ','] while moving from Fastly to
+     * Cloudflare.
+     *
+     * @param  string|array<int|string, string>|null  $header
      */
-    public function httpHeader(?string $header): static
+    public function httpHeader(string|array|null $header): static
     {
         $this->httpHeader = $header;
 
