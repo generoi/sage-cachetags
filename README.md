@@ -187,9 +187,10 @@ concurrency. `flush()` purges everything in each zone, or the site tags when the
 the same plan ([limits](https://developers.cloudflare.com/cache/how-to/purge-cache/#hostname-tag-prefix-url-and-purge-everything-limits)):
 the Free plan allows 5 requests a minute with a burst of 25; Pro 5/s (burst 25),
 Business 10/s (burst 50). Each purge costs one request per zone per 100 tags, so a
-multi-domain site on Free runs out quickly. A rate-limited (429) purge is retried
-briefly (honouring `Retry-After`); if it is still limited, the remaining tags are
-merged into a per-zone queue (the `cachetags_cloudflare_deferred` option) and
+multi-domain site on Free runs out quickly. In WP-CLI and cron a rate-limited
+(429) purge is retried briefly (honouring `Retry-After`); a web request never
+waits, since purges run before the visitor's response is finished. Whatever is
+still limited is merged into a per-zone queue (the `cachetags_cloudflare_deferred` option) and
 retried by a single WP-cron event a minute later, coalesced, until they go
 through. Make sure WP-cron runs on the site.
 

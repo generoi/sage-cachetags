@@ -42,6 +42,9 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
 
             public int $pauses = 0;
 
+            /** Behave like WP-CLI/cron by default; false for a web request. */
+            public bool $canWait = true;
+
             /** @var callable */
             private $respond;
 
@@ -71,6 +74,11 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
             protected function pauseBeforeRetry(int $seconds): void
             {
                 $this->pauses++; // don't actually sleep in tests
+            }
+
+            protected function canWait(): bool
+            {
+                return $this->canWait;
             }
 
             /** @return array<string, array<string, mixed>> zone => decoded payloads */
@@ -162,6 +170,30 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $this->assertCount(4, $invalidator->sent);
         $this->assertSame(1, $invalidator->pauses);
         $this->assertFalse(get_option(CloudflareCacheInvalidator::DEFERRED_OPTION), 'nothing deferred');
+    }
+
+    public function test_a_web_request_defers_a_429_without_waiting(): void
+    {
+        $invalidator = $this->invalidator(fn ($request, $n) => $n <= 2 ? self::RATE_LIMITED : self::OK);
+        $invalidator->canWait = false;
+
+        $this->assertTrue($invalidator->clear([], ['post:1']));
+
+        $this->assertSame(0, $invalidator->pauses, 'never sleeps');
+        $this->assertCount(2, $invalidator->sent, 'no in-place retry');
+        $this->assertSame(['zone-a' => ['post:1'], 'zone-b' => ['post:1']], get_option(CloudflareCacheInvalidator::DEFERRED_OPTION));
+        $this->assertNotFalse(wp_next_scheduled(CloudflareCacheInvalidator::DEFERRED_HOOK));
+    }
+
+    public function test_outside_cli_and_cron_the_invalidator_cannot_wait(): void
+    {
+        $canWait = (new ReflectionMethod(CloudflareCacheInvalidator::class, 'canWait'));
+
+        $this->assertFalse($canWait->invoke(new CloudflareCacheInvalidator));
+
+        add_filter('wp_doing_cron', '__return_true');
+        $this->assertTrue($canWait->invoke(new CloudflareCacheInvalidator));
+        remove_filter('wp_doing_cron', '__return_true');
     }
 
     public function test_an_exhausted_rate_limit_defers_the_tags_to_one_cron_retry(): void

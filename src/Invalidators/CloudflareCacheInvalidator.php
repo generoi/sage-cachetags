@@ -28,7 +28,10 @@ class CloudflareCacheInvalidator implements Invalidator
     /** Cap how many purge requests are in flight at once. */
     const MAX_CONCURRENT_PURGES = 10;
 
-    /** Retry a rate-limited (429) purge this many times before deferring it. */
+    /**
+     * Retry a rate-limited (429) purge this many times before deferring it. Only
+     * in WP-CLI and cron; a web request defers straight away (see canWait()).
+     */
     const MAX_PURGE_RETRIES = 2;
 
     /** Cap the 429 backoff so a shutdown-time purge can't hang for minutes. */
@@ -187,7 +190,7 @@ class CloudflareCacheInvalidator implements Invalidator
                     break;
                 }
 
-                if ($attempt >= self::MAX_PURGE_RETRIES) {
+                if (! $this->canWait() || $attempt >= self::MAX_PURGE_RETRIES) {
                     array_push($deferred, ...$retry);
                     break;
                 }
@@ -266,6 +269,16 @@ class CloudflareCacheInvalidator implements Invalidator
         }
 
         return max(1, min(self::MAX_BACKOFF_SECONDS, (int) $wait));
+    }
+
+    /**
+     * Whether a 429 may be retried in place. Purges run on shutdown, before the
+     * response is finished, so sleeping in a web request would hold up the
+     * visitor (e.g. a checkout that changed stock); there the cron retry takes it.
+     */
+    protected function canWait(): bool
+    {
+        return (defined('WP_CLI') && WP_CLI) || wp_doing_cron();
     }
 
     /** Seam so tests don't actually sleep. */
