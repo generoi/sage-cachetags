@@ -95,7 +95,7 @@ class DeferredQueue
         global $wpdb;
 
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s",
+            "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_id",
             $wpdb->esc_like($this->optionPrefix).'%'
         ));
 
