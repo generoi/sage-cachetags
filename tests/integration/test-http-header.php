@@ -14,9 +14,11 @@ class TestHttpHeader extends WP_UnitTestCase
     private function resetTags(): CacheTags
     {
         $cacheTags = CacheTags::getInstance();
-        $ref = new ReflectionProperty($cacheTags, 'cacheTags');
-        $ref->setAccessible(true);
-        $ref->setValue($cacheTags, []);
+        foreach (['cacheTags', 'boundedTags'] as $property) {
+            $ref = new ReflectionProperty($cacheTags, $property);
+            $ref->setAccessible(true);
+            $ref->setValue($cacheTags, $property === 'boundedTags' ? null : []);
+        }
 
         return $cacheTags;
     }
