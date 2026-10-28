@@ -14,9 +14,11 @@ class TestHttpHeader extends WP_UnitTestCase
     private function resetTags(): CacheTags
     {
         $cacheTags = CacheTags::getInstance();
-        $ref = new ReflectionProperty($cacheTags, 'cacheTags');
-        $ref->setAccessible(true);
-        $ref->setValue($cacheTags, []);
+        foreach (['cacheTags', 'boundedTags'] as $property) {
+            $ref = new ReflectionProperty($cacheTags, $property);
+            $ref->setAccessible(true);
+            $ref->setValue($cacheTags, $property === 'boundedTags' ? null : []);
+        }
 
         return $cacheTags;
     }
@@ -66,11 +68,75 @@ class TestHttpHeader extends WP_UnitTestCase
         {
             public array $emitted = [];
 
+            public array $removed = [];
+
             protected function emit(string $header, string $value): void
             {
                 $this->emitted[] = "{$header}: {$value}";
             }
+
+            protected function remove(string $header): void
+            {
+                $this->removed[] = $header;
+            }
         };
+    }
+
+    public function test_placeholder_sends_the_tags_known_before_rendering(): void
+    {
+        $this->resetTags()->add(['site:1']);
+        $action = $this->capturingAction();
+
+        $action->addPlaceholderHttpHeader();
+
+        $this->assertSame(['Cache-Tag: site:1'], $action->emitted);
+    }
+
+    public function test_placeholder_skips_a_non_cacheable_request(): void
+    {
+        $this->resetTags()->add(['site:1']);
+        add_filter('cachetags/cacheable', '__return_false');
+        $action = $this->capturingAction();
+
+        $action->addPlaceholderHttpHeader();
+
+        $this->assertSame([], $action->emitted);
+    }
+
+    public function test_footer_replaces_the_placeholder_with_the_full_tags(): void
+    {
+        $cacheTags = $this->resetTags();
+        $cacheTags->add(['site:1']);
+        $action = $this->capturingAction();
+
+        $action->addPlaceholderHttpHeader();
+        $cacheTags->add(['post:1']);
+        $action->addHttpHeader();
+
+        $this->assertSame(['Cache-Tag: site:1', 'Cache-Tag: site:1 post:1'], $action->emitted, 'header() replaces same-name headers');
+        $this->assertSame([], $action->removed);
+    }
+
+    public function test_footer_removes_the_placeholder_when_the_render_made_it_uncacheable(): void
+    {
+        $this->resetTags()->add(['site:1']);
+        $action = $this->capturingAction();
+
+        $action->addPlaceholderHttpHeader();
+        add_filter('cachetags/cacheable', '__return_false');
+        $action->addHttpHeader();
+
+        $this->assertSame(['Cache-Tag'], $action->removed);
+    }
+
+    public function test_footer_removes_the_header_when_there_are_no_tags(): void
+    {
+        $this->resetTags();
+        $action = $this->capturingAction();
+
+        $action->addHttpHeader();
+
+        $this->assertSame(['Cache-Tag'], $action->removed);
     }
 
     public function test_front_end_emits_the_header_on_a_cacheable_request(): void

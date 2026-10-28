@@ -21,25 +21,50 @@ class HttpHeader implements Action
         // Core registers wp_ob_end_flush_all() as a shutdown action
         ob_start();
 
+        \add_action('template_redirect', [$this, 'addPlaceholderHttpHeader'], PHP_INT_MAX);
         \add_action('wp_footer', [$this, 'addHttpHeader']);
         \add_filter('rest_post_dispatch', [$this, 'restPostDispatch'], 10, 3);
     }
 
+    /**
+     * Send the tags known before rendering (the site tag, with the Site action)
+     * so a page whose render dies before wp_footer — a fatal after output, an
+     * exit() mid-template — is still purgeable by a flush rather than cached
+     * untagged until it expires. addHttpHeader() replaces or removes it.
+     */
+    public function addPlaceholderHttpHeader(): void
+    {
+        if (Util::isCacheableRequest()) {
+            $this->emitTags();
+        }
+    }
+
     public function addHttpHeader(): void
     {
-        if (! Util::isCacheableRequest()) {
-            return;
+        // Decided during the render (a form, the cart): drop the placeholder too.
+        if (! Util::isCacheableRequest() || ! $this->emitTags()) {
+            foreach (array_keys($this->headers()) as $header) {
+                $this->remove($header);
+            }
         }
+    }
 
+    /**
+     * Emit the current tags in every configured header; false when there are none.
+     */
+    protected function emitTags(): bool
+    {
         $tags = $this->cacheTags->get();
 
         if (empty($tags)) {
-            return;
+            return false;
         }
 
         foreach ($this->headers() as $header => $separator) {
             $this->emit($header, implode($separator, $tags));
         }
+
+        return true;
     }
 
     /**
@@ -73,6 +98,11 @@ class HttpHeader implements Action
     protected function emit(string $header, string $value): void
     {
         header(sprintf('%s: %s', $header, $value));
+    }
+
+    protected function remove(string $header): void
+    {
+        header_remove($header);
     }
 
     /**
