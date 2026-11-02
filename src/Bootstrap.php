@@ -315,7 +315,12 @@ class Bootstrap
     public function saveCacheTags(): void
     {
         if (Util::isCacheableRequest()) {
-            $this->cacheTags->save(Util::currentUrl());
+            // WordPress sends no-store on a 404, so no URL-based purge has anything
+            // to clear, and every path a scanner probes would otherwise leave rows.
+            // The tag header stays, for a tag-based edge that holds 404s anyway.
+            if (! is_404()) {
+                $this->cacheTags->save(Util::currentUrl());
+            }
         } elseif (! defined('DONOTCACHEPAGE')) {
             // Make the non-cacheable verdict (preview, logged-in, forms, cart,
             // …) actionable: page caches (WP Super Cache, Batcache, the theme
