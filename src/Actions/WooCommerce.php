@@ -7,9 +7,29 @@ use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\WooCommerceTags;
 use WP_Block;
+use WP_Post;
 
 class WooCommerce implements Action
 {
+    /**
+     * Written meta props that can't change which products a listing selects or how
+     * it orders them. Anything not named here purges the listings, so a new prop
+     * over-purges rather than going stale.
+     */
+    const NON_LISTING_META_PROPS = [
+        'sku', 'global_unique_id', 'tax_status', 'tax_class', 'manage_stock',
+        'stock_quantity', 'backorders', 'low_stock_amount', 'sold_individually',
+        'weight', 'length', 'width', 'height', 'upsell_ids', 'cross_sell_ids',
+        'purchase_note', 'default_attributes', 'virtual', 'downloadable',
+        'shipping_class_id', 'downloads', 'image_id', 'gallery_image_ids',
+        'download_limit', 'download_expiry', 'cogs_value',
+    ];
+
+    /**
+     * Post fields a listing can order by. They aren't reported as written meta.
+     */
+    const LISTING_POST_PROPS = ['name', 'menu_order', 'date_created'];
+
     /**
      * Set when a login/register/lost-password form renders on the page (these
      * carry per-session nonces, so the page must not be publicly cached).
@@ -35,25 +55,120 @@ class WooCommerce implements Action
         // update (no transition_post_status), so Core never purges product pages
         // on stock reductions from orders, scheduled sales, REST/CRUD price
         // edits, or variation changes. Hook WC's own product-change actions.
-        \add_action('woocommerce_update_product', [$this, 'onProductChange']);
-        \add_action('woocommerce_update_product_variation', [$this, 'onProductChange']);
+        \add_action('woocommerce_product_read', [$this, 'onProductRead']);
+        \add_action('woocommerce_before_product_object_save', [$this, 'onBeforeProductSave']);
+        \add_action('woocommerce_product_object_updated_props', [$this, 'onProductPropsUpdated'], 10, 2);
+        \add_action('post_updated', [$this, 'onProductPostUpdated'], 10, 3);
+        \add_action('woocommerce_update_product', [$this, 'onProductSave']);
+        \add_action('woocommerce_update_product_variation', [$this, 'onProductSave']);
         \add_action('woocommerce_product_set_stock_status', [$this, 'onProductChange']);
         \add_action('woocommerce_variation_set_stock_status', [$this, 'onProductChange']);
         \add_action('woocommerce_product_set_stock', [$this, 'onProductObjectChange']);
         \add_action('woocommerce_variation_set_stock', [$this, 'onProductObjectChange']);
+        \add_action('set_object_terms', [$this, 'onProductTermsSet'], 10, 6);
     }
 
     /**
-     * Purge a product (and the listings that show it) on a price/stock/sale
-     * change. Accepts a product id (most WC product actions pass one first).
+     * Tag every product loaded while rendering. WooCommerce loads one for each
+     * post in a loop, so this covers listing cards in any theme, and a change to a
+     * product reaches the pages showing it through `post:{id}`. Imports and other
+     * bulk work load thousands of products and render nothing, so they're skipped.
      */
+    public function onProductRead($productId): void
+    {
+        if (is_admin() || wp_doing_cron() || (defined('WP_CLI') && WP_CLI)) {
+            return;
+        }
+
+        $this->cacheTags->add(CoreTags::posts((int) $productId));
+    }
+
     /**
-     * A general save or a stock-status flip (in↔out) changes the listing card,
-     * so purge the product page AND the listings.
+     * The wp-admin form saves the title and date through wp_update_post, so they
+     * never show up in the product's changes.
+     */
+    public function onProductPostUpdated(int $postId, WP_Post $after, WP_Post $before): void
+    {
+        if ($after->post_type !== 'product') {
+            return;
+        }
+
+        if ($after->post_title !== $before->post_title || $after->post_date !== $before->post_date || $after->menu_order !== $before->menu_order) {
+            $this->cacheTags->clear(CoreTags::archive('product'));
+        }
+    }
+
+    /**
+     * Listings show a product through its own tag, so a save purges that. Pages
+     * over the header budget collapse their post tags to the coarse `:any` tag.
+     */
+    public function onProductSave($productId): void
+    {
+        $this->clearProduct((int) $productId, false);
+        $this->cacheTags->clear(CoreTags::anyArchive('product'));
+    }
+
+    /**
+     * A listing the product isn't on yet only needs purging if the save can change
+     * which products it selects or how it orders them. WooCommerce reports only the
+     * meta it actually wrote, after applying sale dates to the price. Get_changes()
+     * can't be used for this: an admin save always lists attributes and dates.
+     *
+     * @param  mixed  $product  WC_Product
+     * @param  string[]  $updatedProps
+     */
+    public function onProductPropsUpdated($product, array $updatedProps): void
+    {
+        if (array_diff($updatedProps, self::NON_LISTING_META_PROPS)) {
+            $this->cacheTags->clear(CoreTags::archive('product'));
+        }
+    }
+
+    /**
+     * Runs before the save, which resets the changes.
+     *
+     * @param  mixed  $product  WC_Product
+     */
+    public function onBeforeProductSave($product): void
+    {
+        if ($product->get_id() && array_intersect_key($product->get_changes(), array_flip(self::LISTING_POST_PROPS))) {
+            $this->cacheTags->clear(CoreTags::archive('product'));
+        }
+    }
+
+    /**
+     * A stock-status flip (in↔out) changes the card and can add or remove the
+     * product from a listing. Accepts a product id (most WC product actions pass
+     * one first).
      */
     public function onProductChange($productId): void
     {
         $this->clearProduct((int) $productId, true);
+    }
+
+    /**
+     * A product moving between terms joins or leaves listings it isn't tagged on
+     * yet. WooCommerce re-sets a product's terms on every save, so only an actual
+     * change counts.
+     *
+     * @param  array<int|string>  $terms
+     * @param  int[]  $taxonomyIds
+     * @param  int[]  $oldTaxonomyIds
+     */
+    public function onProductTermsSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append, array $oldTaxonomyIds): void
+    {
+        if (get_post_type($objectId) !== 'product') {
+            return;
+        }
+
+        $new = array_map('intval', $taxonomyIds);
+        $old = array_map('intval', $oldTaxonomyIds);
+        sort($new);
+        sort($old);
+
+        if ($new !== $old) {
+            $this->clearProduct($objectId, true);
+        }
     }
 
     /**

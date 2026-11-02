@@ -586,7 +586,8 @@ When WooCommerce, Polylang or Gravity Forms is active, its action is enabled
 automatically — you don't need to list it in `action`:
 
 - **WooCommerce** keeps cart/checkout/account out of the shared cache and purges a
-  product (plus its archives) on price/stock/status changes.
+  product (plus its archives where listings can change) on price/stock/status
+  changes.
 - **Polylang** makes archive tags language-specific (`archive:post:fi`) so a change
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete.
@@ -594,6 +595,12 @@ automatically — you don't need to list it in `action`:
   form's pages when it changes. It tags file-upload form pages `nonce`; the
   always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
   those before the nonce expires.
+
+The WooCommerce action tags every product loaded while rendering, so a page showing
+a product is purged through its `post:{id}`. `archive:product` is only cleared when
+a change can alter which products a listing selects or their order: publish,
+unpublish, stock status, terms, or a save changing a prop like price or name (see
+`WooCommerce::NON_LISTING_META_PROPS`).
 
 To manage the action list entirely yourself, turn detection off:
 
