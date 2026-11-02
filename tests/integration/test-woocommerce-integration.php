@@ -180,6 +180,8 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
 
         $this->assertNotFalse(has_action('woocommerce_product_read', [$action, 'onProductRead']));
         $this->assertNotFalse(has_action('woocommerce_before_product_object_save', [$action, 'onBeforeProductSave']));
+        $this->assertNotFalse(has_action('woocommerce_product_object_updated_props', [$action, 'onProductPropsUpdated']));
+        $this->assertNotFalse(has_action('post_updated', [$action, 'onProductPostUpdated']));
         $this->assertNotFalse(has_action('woocommerce_update_product', [$action, 'onProductSave']));
         $this->assertNotFalse(has_action('woocommerce_product_set_stock_status', [$action, 'onProductChange']));
         $this->assertNotFalse(has_action('set_object_terms', [$action, 'onProductTermsSet']));
@@ -261,6 +263,41 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         wc_get_product($product->get_id());
 
         $this->assertContains('post:'.$product->get_id(), $cacheTags->get());
+    }
+
+    public function test_loading_a_product_in_admin_does_not_tag_it(): void
+    {
+        $product = $this->publishedProduct();
+        $this->action()->bind();
+        $cacheTags = $this->resetTags();
+        set_current_screen('edit-post');
+
+        wc_get_product($product->get_id());
+        set_current_screen('front');
+
+        $this->assertNotContains('post:'.$product->get_id(), $cacheTags->get());
+    }
+
+    public function test_a_title_edit_through_wp_update_post_purges_the_listings(): void
+    {
+        $product = $this->publishedProduct();
+        $this->action()->bind();
+        $this->resetPurge();
+
+        wp_update_post(['ID' => $product->get_id(), 'post_title' => 'Renamed in wp-admin']);
+
+        $this->assertContains('archive:product', $this->purgeTags(), 'a listing can order by title');
+    }
+
+    public function test_a_content_edit_through_wp_update_post_leaves_the_listings(): void
+    {
+        $product = $this->publishedProduct();
+        $this->action()->bind();
+        $this->resetPurge();
+
+        wp_update_post(['ID' => $product->get_id(), 'post_content' => 'Changed']);
+
+        $this->assertNotContains('archive:product', $this->purgeTags());
     }
 
     public function test_a_real_description_save_leaves_the_listings(): void

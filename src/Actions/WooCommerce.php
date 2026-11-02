@@ -7,6 +7,7 @@ use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\WooCommerceTags;
 use WP_Block;
+use WP_Post;
 
 class WooCommerce implements Action
 {
@@ -57,6 +58,7 @@ class WooCommerce implements Action
         \add_action('woocommerce_product_read', [$this, 'onProductRead']);
         \add_action('woocommerce_before_product_object_save', [$this, 'onBeforeProductSave']);
         \add_action('woocommerce_product_object_updated_props', [$this, 'onProductPropsUpdated'], 10, 2);
+        \add_action('post_updated', [$this, 'onProductPostUpdated'], 10, 3);
         \add_action('woocommerce_update_product', [$this, 'onProductSave']);
         \add_action('woocommerce_update_product_variation', [$this, 'onProductSave']);
         \add_action('woocommerce_product_set_stock_status', [$this, 'onProductChange']);
@@ -69,11 +71,31 @@ class WooCommerce implements Action
     /**
      * Tag every product loaded while rendering. WooCommerce loads one for each
      * post in a loop, so this covers listing cards in any theme, and a change to a
-     * product reaches the pages showing it through `post:{id}`.
+     * product reaches the pages showing it through `post:{id}`. Imports and other
+     * bulk work load thousands of products and render nothing, so they're skipped.
      */
     public function onProductRead($productId): void
     {
+        if (is_admin() || wp_doing_cron() || (defined('WP_CLI') && WP_CLI)) {
+            return;
+        }
+
         $this->cacheTags->add(CoreTags::posts((int) $productId));
+    }
+
+    /**
+     * The wp-admin form saves the title and date through wp_update_post, so they
+     * never show up in the product's changes.
+     */
+    public function onProductPostUpdated(int $postId, WP_Post $after, WP_Post $before): void
+    {
+        if ($after->post_type !== 'product') {
+            return;
+        }
+
+        if ($after->post_title !== $before->post_title || $after->post_date !== $before->post_date || $after->menu_order !== $before->menu_order) {
+            $this->cacheTags->clear(CoreTags::archive('product'));
+        }
     }
 
     /**
