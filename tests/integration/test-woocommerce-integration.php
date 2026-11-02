@@ -178,6 +178,8 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         $action = $this->action();
         $action->bind();
 
+        $this->assertNotFalse(has_action('woocommerce_product_read', [$action, 'onProductRead']));
+        $this->assertNotFalse(has_action('woocommerce_before_product_object_save', [$action, 'onBeforeProductSave']));
         $this->assertNotFalse(has_action('woocommerce_update_product', [$action, 'onProductSave']));
         $this->assertNotFalse(has_action('woocommerce_product_set_stock_status', [$action, 'onProductChange']));
         $this->assertNotFalse(has_action('set_object_terms', [$action, 'onProductTermsSet']));
@@ -197,43 +199,16 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         $this->assertContains('archive:product', $tags, 'shop/category listings');
     }
 
-    public function test_a_save_purges_the_listings_by_default(): void
+    public function test_a_save_purges_the_product_and_collapsed_pages(): void
     {
         $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
         $this->resetPurge();
 
         $this->action()->onProductSave($productId);
-
-        $tags = $this->purgeTags();
-        $this->assertContains("post:{$productId}", $tags);
-        $this->assertContains('archive:product', $tags, 'a theme may not tag its listing cards');
-    }
-
-    public function test_a_save_can_opt_out_of_purging_the_listings(): void
-    {
-        $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
-        $this->resetPurge();
-
-        add_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
-        $this->action()->onProductSave($productId);
-        remove_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
 
         $tags = $this->purgeTags();
         $this->assertContains("post:{$productId}", $tags, 'listed cards are purged through this tag');
         $this->assertContains('archive:product:any', $tags, 'pages that collapsed their post tags');
-        $this->assertNotContains('archive:product', $tags);
-    }
-
-    public function test_a_stock_status_flip_still_purges_the_listings_when_opted_out(): void
-    {
-        $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
-        $this->resetPurge();
-
-        add_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
-        $this->action()->onProductChange($productId);
-        remove_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
-
-        $this->assertContains('archive:product', $this->purgeTags(), 'it can rejoin a listing');
     }
 
     public function test_a_term_change_purges_the_listings(): void
@@ -277,14 +252,24 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         return $product;
     }
 
-    public function test_a_real_price_save_leaves_the_listings_when_opted_out(): void
+    public function test_loading_a_product_tags_it(): void
     {
         $product = $this->publishedProduct();
         $this->action()->bind();
-        add_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
+        $cacheTags = $this->resetTags();
+
+        wc_get_product($product->get_id());
+
+        $this->assertContains('post:'.$product->get_id(), $cacheTags->get());
+    }
+
+    public function test_a_real_description_save_leaves_the_listings(): void
+    {
+        $product = $this->publishedProduct();
+        $this->action()->bind();
         $this->resetPurge();
 
-        $product->set_regular_price('20');
+        $product->set_description('Changed');
         $product->save();
 
         $tags = $this->purgeTags();
@@ -292,12 +277,84 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         $this->assertNotContains('archive:product', $tags, 'WC re-setting the same terms is not a change');
     }
 
-    public function test_a_real_category_move_purges_the_listings_when_opted_out(): void
+    public function test_resubmitting_the_admin_form_unchanged_leaves_the_listings(): void
+    {
+        $attribute = new WC_Product_Attribute;
+        $attribute->set_name('Material');
+        $attribute->set_options(['Gold']);
+
+        $product = $this->publishedProduct();
+        $product->set_sale_price('5');
+        $product->set_date_on_sale_from('2030-01-01');
+        $product->set_date_on_sale_to('2030-02-01');
+        $product->set_attributes([$attribute]);
+        $product->save();
+
+        $this->action()->bind();
+        $this->resetPurge();
+
+        $product = wc_get_product($product->get_id());
+        $product->set_props([
+            'regular_price' => '10',
+            'sale_price' => '5',
+            'date_on_sale_from' => '2030-01-01',
+            'date_on_sale_to' => '2030-02-01',
+            'attributes' => array_map(fn ($a) => clone $a, $product->get_attributes('edit')),
+            'featured' => $product->get_featured('edit'),
+            'catalog_visibility' => $product->get_catalog_visibility('edit'),
+            'menu_order' => $product->get_menu_order('edit'),
+        ]);
+        $changes = array_keys($product->get_changes());
+        $product->save();
+
+        $this->assertNotContains('archive:product', $this->purgeTags(), 'changed: '.implode(', ', $changes));
+    }
+
+    public function test_a_real_rename_purges_the_listings(): void
+    {
+        $product = $this->publishedProduct();
+        $this->action()->bind();
+        $this->resetPurge();
+
+        $product->set_name('Renamed');
+        $product->save();
+
+        $this->assertContains('archive:product', $this->purgeTags(), 'a listing can order by title');
+    }
+
+    public function test_a_real_sale_date_change_purges_the_listings(): void
+    {
+        $product = $this->publishedProduct();
+        $product->set_sale_price('5');
+        $product->set_date_on_sale_from('2030-01-01');
+        $product->save();
+        $this->action()->bind();
+        $this->resetPurge();
+
+        $product = wc_get_product($product->get_id());
+        $product->set_date_on_sale_from('2020-01-01');
+        $product->save();
+
+        $this->assertContains('archive:product', $this->purgeTags(), 'it starts the sale, changing the price');
+    }
+
+    public function test_a_real_price_save_purges_the_listings(): void
+    {
+        $product = $this->publishedProduct();
+        $this->action()->bind();
+        $this->resetPurge();
+
+        $product->set_regular_price('20');
+        $product->save();
+
+        $this->assertContains('archive:product', $this->purgeTags(), 'a listing can select or order by price');
+    }
+
+    public function test_a_real_category_move_purges_the_listings(): void
     {
         $product = $this->publishedProduct();
         $term = self::factory()->term->create(['taxonomy' => 'product_cat']);
         $this->action()->bind();
-        add_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
         $this->resetPurge();
 
         $product->set_category_ids([$term]);

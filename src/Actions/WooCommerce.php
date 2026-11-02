@@ -11,6 +11,25 @@ use WP_Block;
 class WooCommerce implements Action
 {
     /**
+     * Written meta props that can't change which products a listing selects or how
+     * it orders them. Anything not named here purges the listings, so a new prop
+     * over-purges rather than going stale.
+     */
+    const NON_LISTING_META_PROPS = [
+        'sku', 'global_unique_id', 'tax_status', 'tax_class', 'manage_stock',
+        'stock_quantity', 'backorders', 'low_stock_amount', 'sold_individually',
+        'weight', 'length', 'width', 'height', 'upsell_ids', 'cross_sell_ids',
+        'purchase_note', 'default_attributes', 'virtual', 'downloadable',
+        'shipping_class_id', 'downloads', 'image_id', 'gallery_image_ids',
+        'download_limit', 'download_expiry', 'cogs_value',
+    ];
+
+    /**
+     * Post fields a listing can order by. They aren't reported as written meta.
+     */
+    const LISTING_POST_PROPS = ['name', 'menu_order', 'date_created'];
+
+    /**
      * Set when a login/register/lost-password form renders on the page (these
      * carry per-session nonces, so the page must not be publicly cached).
      */
@@ -35,6 +54,9 @@ class WooCommerce implements Action
         // update (no transition_post_status), so Core never purges product pages
         // on stock reductions from orders, scheduled sales, REST/CRUD price
         // edits, or variation changes. Hook WC's own product-change actions.
+        \add_action('woocommerce_product_read', [$this, 'onProductRead']);
+        \add_action('woocommerce_before_product_object_save', [$this, 'onBeforeProductSave']);
+        \add_action('woocommerce_product_object_updated_props', [$this, 'onProductPropsUpdated'], 10, 2);
         \add_action('woocommerce_update_product', [$this, 'onProductSave']);
         \add_action('woocommerce_update_product_variation', [$this, 'onProductSave']);
         \add_action('woocommerce_product_set_stock_status', [$this, 'onProductChange']);
@@ -45,22 +67,51 @@ class WooCommerce implements Action
     }
 
     /**
-     * A general save changes the listing card, so purge the product page AND the
-     * listings. A theme that tags every card it renders with its `post:{id}` can
-     * opt out: those cards are already purged through their own tag, and only
-     * membership changes (see below) still need the listings cleared.
+     * Tag every product loaded while rendering. WooCommerce loads one for each
+     * post in a loop, so this covers listing cards in any theme, and a change to a
+     * product reaches the pages showing it through `post:{id}`.
+     */
+    public function onProductRead($productId): void
+    {
+        $this->cacheTags->add(CoreTags::posts((int) $productId));
+    }
+
+    /**
+     * Listings show a product through its own tag, so a save purges that. Pages
+     * over the header budget collapse their post tags to the coarse `:any` tag.
      */
     public function onProductSave($productId): void
     {
-        if (apply_filters('cachetags/woocommerce-save-purges-listings', true)) {
-            $this->clearProduct((int) $productId, true);
-
-            return;
-        }
-
         $this->clearProduct((int) $productId, false);
-        // Pages over the header budget collapse their post tags to this coarse tag.
         $this->cacheTags->clear(CoreTags::anyArchive('product'));
+    }
+
+    /**
+     * A listing the product isn't on yet only needs purging if the save can change
+     * which products it selects or how it orders them. WooCommerce reports only the
+     * meta it actually wrote, after applying sale dates to the price. Get_changes()
+     * can't be used for this: an admin save always lists attributes and dates.
+     *
+     * @param  mixed  $product  WC_Product
+     * @param  string[]  $updatedProps
+     */
+    public function onProductPropsUpdated($product, array $updatedProps): void
+    {
+        if (array_diff($updatedProps, self::NON_LISTING_META_PROPS)) {
+            $this->cacheTags->clear(CoreTags::archive('product'));
+        }
+    }
+
+    /**
+     * Runs before the save, which resets the changes.
+     *
+     * @param  mixed  $product  WC_Product
+     */
+    public function onBeforeProductSave($product): void
+    {
+        if ($product->get_id() && array_intersect_key($product->get_changes(), array_flip(self::LISTING_POST_PROPS))) {
+            $this->cacheTags->clear(CoreTags::archive('product'));
+        }
     }
 
     /**
