@@ -45,6 +45,31 @@ class TestBootstrap extends WP_UnitTestCase
         return $prop;
     }
 
+    public function test_a_rendered_page_is_stored(): void
+    {
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
+        $cacheTags = $bootstrap->bootstrap();
+        $this->go_to(home_url('/'));
+        $cacheTags->add('stored-page');
+
+        $bootstrap->saveCacheTags();
+
+        $this->assertNotEmpty($cacheTags->store->get(['stored-page']));
+    }
+
+    public function test_a_404_is_not_stored(): void
+    {
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
+        $cacheTags = $bootstrap->bootstrap();
+        $this->go_to(home_url('/'));
+        $GLOBALS['wp_query']->set_404();
+        $cacheTags->add('stored-404');
+
+        $bootstrap->saveCacheTags();
+
+        $this->assertEmpty($cacheTags->store->get(['stored-404']));
+    }
+
     public function test_resolves_store_and_invalidators_from_class_names(): void
     {
         $cacheTags = (new Bootstrap)
