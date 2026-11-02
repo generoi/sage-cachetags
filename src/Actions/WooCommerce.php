@@ -35,25 +35,67 @@ class WooCommerce implements Action
         // update (no transition_post_status), so Core never purges product pages
         // on stock reductions from orders, scheduled sales, REST/CRUD price
         // edits, or variation changes. Hook WC's own product-change actions.
-        \add_action('woocommerce_update_product', [$this, 'onProductChange']);
-        \add_action('woocommerce_update_product_variation', [$this, 'onProductChange']);
+        \add_action('woocommerce_update_product', [$this, 'onProductSave']);
+        \add_action('woocommerce_update_product_variation', [$this, 'onProductSave']);
         \add_action('woocommerce_product_set_stock_status', [$this, 'onProductChange']);
         \add_action('woocommerce_variation_set_stock_status', [$this, 'onProductChange']);
         \add_action('woocommerce_product_set_stock', [$this, 'onProductObjectChange']);
         \add_action('woocommerce_variation_set_stock', [$this, 'onProductObjectChange']);
+        \add_action('set_object_terms', [$this, 'onProductTermsSet'], 10, 6);
     }
 
     /**
-     * Purge a product (and the listings that show it) on a price/stock/sale
-     * change. Accepts a product id (most WC product actions pass one first).
+     * A general save changes the listing card, so purge the product page AND the
+     * listings. A theme that tags every card it renders with its `post:{id}` can
+     * opt out: those cards are already purged through their own tag, and only
+     * membership changes (see below) still need the listings cleared.
      */
+    public function onProductSave($productId): void
+    {
+        if (apply_filters('cachetags/woocommerce-save-purges-listings', true)) {
+            $this->clearProduct((int) $productId, true);
+
+            return;
+        }
+
+        $this->clearProduct((int) $productId, false);
+        // Pages over the header budget collapse their post tags to this coarse tag.
+        $this->cacheTags->clear(CoreTags::anyArchive('product'));
+    }
+
     /**
-     * A general save or a stock-status flip (in↔out) changes the listing card,
-     * so purge the product page AND the listings.
+     * A stock-status flip (in↔out) changes the card and can add or remove the
+     * product from a listing. Accepts a product id (most WC product actions pass
+     * one first).
      */
     public function onProductChange($productId): void
     {
         $this->clearProduct((int) $productId, true);
+    }
+
+    /**
+     * A product moving between terms joins or leaves listings it isn't tagged on
+     * yet. WooCommerce re-sets a product's terms on every save, so only an actual
+     * change counts.
+     *
+     * @param  array<int|string>  $terms
+     * @param  int[]  $taxonomyIds
+     * @param  int[]  $oldTaxonomyIds
+     */
+    public function onProductTermsSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append, array $oldTaxonomyIds): void
+    {
+        if (get_post_type($objectId) !== 'product') {
+            return;
+        }
+
+        $new = array_map('intval', $taxonomyIds);
+        $old = array_map('intval', $oldTaxonomyIds);
+        sort($new);
+        sort($old);
+
+        if ($new !== $old) {
+            $this->clearProduct($objectId, true);
+        }
     }
 
     /**

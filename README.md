@@ -595,6 +595,19 @@ automatically — you don't need to list it in `action`:
   always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
   those before the nonce expires.
 
+By default every product save purges `archive:product`, because a listing may
+render a product's card without tagging it. If every listing in your theme tags
+the cards it renders with their `post:{id}`, those pages are purged through that
+tag, so the archive only needs clearing when a listing's membership can change
+(publish/unpublish, stock status, terms):
+
+```php
+add_filter('cachetags/woocommerce-save-purges-listings', '__return_false');
+```
+
+Don't opt out if a cached listing's membership or order depends on something else
+a save can change, such as price or sale status.
+
 To manage the action list entirely yourself, turn detection off:
 
 ```php
