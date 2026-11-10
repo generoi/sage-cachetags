@@ -38,12 +38,13 @@ class Gravityform implements Action
 
         $this->cacheTags->add(GravityformTags::forms($form['id']));
 
-        // Every form expires in a cached page: 3.0+ embeds a state token that
-        // goes stale after 48h (then the honeypot and choice-field validation
-        // reject every submission), and 2.9.24+ file uploads use a nonce.
-        $this->cacheTags->add(Tag::nonce());
-
         foreach ($form['fields'] as $field) {
+            // 2.9.24+ uses a nonce for file uploads. GF 3's state token, on
+            // every form, is the project's to outlive its edge TTL (README).
+            if ($field['type'] === 'fileupload') {
+                $this->cacheTags->add(Tag::nonce());
+            }
+
             $this->collectPrepopulateParams($field);
         }
 

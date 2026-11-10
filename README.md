@@ -478,7 +478,7 @@ Two ways to handle a page that bakes a nonce into its HTML:
 1. **Tag it `nonce`.** The page is then purged every 12 hours, before any embedded
    nonce can expire. The `Nonce` action runs that cron and is enabled by default,
    so you only need to add the tag where the nonce renders (the `Gravityform`
-   action already does this for every form):
+   action already does this for file-upload forms):
 
    ```php
    // e.g. a product page that prints a WooCommerce Store API nonce for add-to-cart
@@ -501,6 +501,22 @@ Two ways to handle a page that bakes a nonce into its HTML:
 Note that modern WooCommerce (10.7+) refetches the Store API nonce client-side
 before a write, so the sitewide Store API nonce is no longer a staleness risk on
 its own — only nonces that are actually *used as rendered* need this treatment.
+
+### Gravity Forms state token
+
+Gravity Forms 3 embeds a timestamped state token in **every** form, valid for
+48 hours. Served from a cache older than that, the honeypot and state-validated
+fields (choices, consent, name, address, …) reject every submission; with the
+honeypot set to *abort*, silently, behind a confirmation message.
+
+Purging every form page isn't the fix, since a form in the footer is on every
+page. Only the timestamp ages, so instead raise the lifespan past your edge
+cache's max TTL (a cached page hands every visitor the same token anyway):
+
+```php
+// Edge caches pages for up to 7 days.
+add_filter('gform_state_lifespan', fn () => 8 * DAY_IN_SECONDS);
+```
 
 ## Traits for use with roots/sage
 
@@ -592,11 +608,11 @@ automatically — you don't need to list it in `action`:
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete.
 - **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
-  form's pages when it changes. It tags every form page `nonce`, because GF 3's
-  state token goes stale after 48h (the honeypot and choice-field validation
-  then reject every submission) and file uploads use a nonce; the always-on
-  [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges those
-  pages before either expires.
+  form's pages when it changes. It tags file-upload form pages `nonce`; the
+  always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
+  those before the nonce expires. GF 3's state token on every form expires
+  separately and is left to the project; see
+  [Gravity Forms state token](#gravity-forms-state-token).
 
 The WooCommerce action tags every product loaded while rendering, so a page showing
 a product is purged through its `post:{id}`. `archive:product` is only cleared when

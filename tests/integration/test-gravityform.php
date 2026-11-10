@@ -57,17 +57,31 @@ class TestGravityform extends WP_UnitTestCase
         $this->assertFalse((new Gravityform(CacheTags::getInstance()))->addGravityformCacheTags(false));
     }
 
-    public function test_rendering_any_form_adds_the_form_and_nonce_tags(): void
+    public function test_rendering_tags_the_form_and_a_fileupload_adds_the_nonce_tag(): void
     {
         $cacheTags = $this->resetTags();
 
         $this->render([
-            ['type' => 'text', 'allowsPrepopulate' => false],
+            ['type' => 'fileupload', 'allowsPrepopulate' => false],
         ]);
 
         $tags = $cacheTags->get();
         $this->assertContains('gform:1', $tags);
-        $this->assertContains('nonce', $tags, 'the GF 3 state token expires after 48h on every form');
+        $this->assertContains('nonce', $tags, 'file uploads use a per-session nonce');
+    }
+
+    public function test_a_form_without_uploads_is_not_tagged_nonce(): void
+    {
+        $cacheTags = $this->resetTags();
+
+        $this->render([
+            ['type' => 'email', 'allowsPrepopulate' => false],
+            ['type' => 'consent', 'allowsPrepopulate' => false],
+        ]);
+
+        $tags = $cacheTags->get();
+        $this->assertContains('gform:1', $tags);
+        $this->assertNotContains('nonce', $tags, 'a footer newsletter form must not purge every page twice a day');
     }
 
     public function test_on_save_clears_an_existing_form_but_not_a_brand_new_one(): void
