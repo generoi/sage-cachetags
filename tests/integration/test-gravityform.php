@@ -49,15 +49,6 @@ class TestGravityform extends WP_UnitTestCase
         $this->assertNotFalse(has_filter('gform_pre_render', [$action, 'addGravityformCacheTags']));
         $this->assertNotFalse(has_action('gform_after_save_form', [$action, 'onSaveForm']));
         $this->assertNotFalse(has_filter('cachetags/cacheable', [$action, 'isCacheable']));
-        $this->assertNotFalse(has_filter('gform_state_lifespan', [$action, 'stateLifespan']));
-    }
-
-    public function test_state_lifespan_outlives_the_edge_cache_but_keeps_a_longer_one(): void
-    {
-        $action = new Gravityform(CacheTags::getInstance());
-
-        $this->assertSame(Gravityform::STATE_LIFESPAN, $action->stateLifespan(2 * DAY_IN_SECONDS), 'GF 3 default of 48h is raised');
-        $this->assertSame(60 * DAY_IN_SECONDS, $action->stateLifespan((string) (60 * DAY_IN_SECONDS)), 'a longer lifespan from another filter is kept');
     }
 
     public function test_a_non_array_form_is_passed_through_untouched(): void

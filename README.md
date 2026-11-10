@@ -502,6 +502,22 @@ Note that modern WooCommerce (10.7+) refetches the Store API nonce client-side
 before a write, so the sitewide Store API nonce is no longer a staleness risk on
 its own — only nonces that are actually *used as rendered* need this treatment.
 
+### Gravity Forms state token
+
+Gravity Forms 3 embeds a timestamped state token in **every** form, valid for
+48 hours. Served from a cache older than that, the honeypot and state-validated
+fields (choices, consent, name, address, …) reject every submission; with the
+honeypot set to *abort*, silently, behind a confirmation message.
+
+Purging every form page isn't the fix, since a form in the footer is on every
+page. Only the timestamp ages, so instead raise the lifespan past your edge
+cache's max TTL (a cached page hands every visitor the same token anyway):
+
+```php
+// Edge caches pages for up to 7 days.
+add_filter('gform_state_lifespan', fn () => 8 * DAY_IN_SECONDS);
+```
+
 ## Traits for use with roots/sage
 
 ### Composers
@@ -592,13 +608,11 @@ automatically — you don't need to list it in `action`:
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete.
 - **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
-  form's pages when it changes. It raises GF 3's state-token lifespan
-  (`gform_state_lifespan`) from 48h to 31 days, past the edge cache's TTL: a
-  stale token makes the honeypot and state-validated fields (choices, consent,
-  name, address, …) reject every submission. File-upload form pages also carry
-  a WP nonce, so those are tagged `nonce` and the always-on
-  [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges them
-  before it expires.
+  form's pages when it changes. It tags file-upload form pages `nonce`; the
+  always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
+  those before the nonce expires. GF 3's state token on every form expires
+  separately and is left to the project; see
+  [Gravity Forms state token](#gravity-forms-state-token).
 
 The WooCommerce action tags every product loaded while rendering, so a page showing
 a product is purged through its `post:{id}`. `archive:product` is only cleared when
