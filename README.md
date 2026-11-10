@@ -478,7 +478,7 @@ Two ways to handle a page that bakes a nonce into its HTML:
 1. **Tag it `nonce`.** The page is then purged every 12 hours, before any embedded
    nonce can expire. The `Nonce` action runs that cron and is enabled by default,
    so you only need to add the tag where the nonce renders (the `Gravityform`
-   action already does this for file-upload forms):
+   action already does this for every form):
 
    ```php
    // e.g. a product page that prints a WooCommerce Store API nonce for add-to-cart
@@ -592,9 +592,11 @@ automatically — you don't need to list it in `action`:
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete.
 - **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
-  form's pages when it changes. It tags file-upload form pages `nonce`; the
-  always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
-  those before the nonce expires.
+  form's pages when it changes. It tags every form page `nonce`, because GF 3's
+  state token goes stale after 48h (the honeypot and choice-field validation
+  then reject every submission) and file uploads use a nonce; the always-on
+  [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges those
+  pages before either expires.
 
 The WooCommerce action tags every product loaded while rendering, so a page showing
 a product is purged through its `post:{id}`. `archive:product` is only cleared when
