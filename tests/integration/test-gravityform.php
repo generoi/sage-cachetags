@@ -49,6 +49,15 @@ class TestGravityform extends WP_UnitTestCase
         $this->assertNotFalse(has_filter('gform_pre_render', [$action, 'addGravityformCacheTags']));
         $this->assertNotFalse(has_action('gform_after_save_form', [$action, 'onSaveForm']));
         $this->assertNotFalse(has_filter('cachetags/cacheable', [$action, 'isCacheable']));
+        $this->assertNotFalse(has_filter('gform_state_lifespan', [$action, 'stateLifespan']));
+    }
+
+    public function test_state_lifespan_outlives_the_edge_cache_but_keeps_a_longer_one(): void
+    {
+        $action = new Gravityform(CacheTags::getInstance());
+
+        $this->assertSame(Gravityform::STATE_LIFESPAN, $action->stateLifespan(2 * DAY_IN_SECONDS), 'GF 3 default of 48h is raised');
+        $this->assertSame(60 * DAY_IN_SECONDS, $action->stateLifespan((string) (60 * DAY_IN_SECONDS)), 'a longer lifespan from another filter is kept');
     }
 
     public function test_a_non_array_form_is_passed_through_untouched(): void
@@ -57,17 +66,31 @@ class TestGravityform extends WP_UnitTestCase
         $this->assertFalse((new Gravityform(CacheTags::getInstance()))->addGravityformCacheTags(false));
     }
 
-    public function test_rendering_any_form_adds_the_form_and_nonce_tags(): void
+    public function test_rendering_tags_the_form_and_a_fileupload_adds_the_nonce_tag(): void
     {
         $cacheTags = $this->resetTags();
 
         $this->render([
-            ['type' => 'text', 'allowsPrepopulate' => false],
+            ['type' => 'fileupload', 'allowsPrepopulate' => false],
         ]);
 
         $tags = $cacheTags->get();
         $this->assertContains('gform:1', $tags);
-        $this->assertContains('nonce', $tags, 'the GF 3 state token expires after 48h on every form');
+        $this->assertContains('nonce', $tags, 'file uploads use a per-session nonce');
+    }
+
+    public function test_a_form_without_uploads_is_not_tagged_nonce(): void
+    {
+        $cacheTags = $this->resetTags();
+
+        $this->render([
+            ['type' => 'email', 'allowsPrepopulate' => false],
+            ['type' => 'consent', 'allowsPrepopulate' => false],
+        ]);
+
+        $tags = $cacheTags->get();
+        $this->assertContains('gform:1', $tags);
+        $this->assertNotContains('nonce', $tags, 'a footer newsletter form must not purge every page twice a day');
     }
 
     public function test_on_save_clears_an_existing_form_but_not_a_brand_new_one(): void

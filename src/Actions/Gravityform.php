@@ -10,6 +10,15 @@ use Genero\Sage\CacheTags\Tags\GravityformTags;
 class Gravityform implements Action
 {
     /**
+     * How long a rendered form's state token stays valid. Gravity Forms 3
+     * defaults to 48h, after which the honeypot and state-validated fields
+     * (choices, consent, name, address, …) reject every submission from a page
+     * cached longer than that. Outlive the ~30d edge TTL instead of purging
+     * every form page; a cached page hands everyone the same token anyway.
+     */
+    public const STATE_LIFESPAN = 31 * DAY_IN_SECONDS;
+
+    /**
      * Field parameter names that prepopulate dynamically from the query string,
      * collected as forms render.
      *
@@ -24,6 +33,15 @@ class Gravityform implements Action
         \add_filter('gform_pre_render', [$this, 'addGravityformCacheTags']);
         \add_action('gform_after_save_form', [$this, 'onSaveForm'], 10, 2);
         \add_filter('cachetags/cacheable', [$this, 'isCacheable']);
+        \add_filter('gform_state_lifespan', [$this, 'stateLifespan']);
+    }
+
+    /**
+     * @param  int|string  $lifespan  Seconds, from GF or an earlier filter.
+     */
+    public function stateLifespan($lifespan): int
+    {
+        return max((int) $lifespan, self::STATE_LIFESPAN);
     }
 
     /**
@@ -38,12 +56,13 @@ class Gravityform implements Action
 
         $this->cacheTags->add(GravityformTags::forms($form['id']));
 
-        // Every form expires in a cached page: 3.0+ embeds a state token that
-        // goes stale after 48h (then the honeypot and choice-field validation
-        // reject every submission), and 2.9.24+ file uploads use a nonce.
-        $this->cacheTags->add(Tag::nonce());
-
         foreach ($form['fields'] as $field) {
+            // 2.9.24+ uses a nonce for file uploads; the state token is kept
+            // alive by stateLifespan() instead, so other forms need no purge.
+            if ($field['type'] === 'fileupload') {
+                $this->cacheTags->add(Tag::nonce());
+            }
+
             $this->collectPrepopulateParams($field);
         }
 
