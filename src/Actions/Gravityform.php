@@ -38,12 +38,12 @@ class Gravityform implements Action
 
         $this->cacheTags->add(GravityformTags::forms($form['id']));
 
-        foreach ($form['fields'] as $field) {
-            // 2.9.24+ uses nonce for file uploads
-            if ($field['type'] === 'fileupload') {
-                $this->cacheTags->add(Tag::nonce());
-            }
+        // Every form expires in a cached page: 3.0+ embeds a state token that
+        // goes stale after 48h (then the honeypot and choice-field validation
+        // reject every submission), and 2.9.24+ file uploads use a nonce.
+        $this->cacheTags->add(Tag::nonce());
 
+        foreach ($form['fields'] as $field) {
             $this->collectPrepopulateParams($field);
         }
 
