@@ -234,7 +234,7 @@ class Bootstrap
                 $action instanceof Action => $action,
                 default => throw new \InvalidArgumentException('Action must implement '.Action::class),
             },
-            $this->withDetectedActions(array_filter($this->actions))
+            array_filter($this->actions)
         );
 
         // Always-on base tag (unless disabled with baseTag(null)) — bound with the
@@ -251,6 +251,28 @@ class Bootstrap
 
         foreach ($actions as $action) {
             $this->cacheTags->bindAction($action);
+        }
+
+        // Integrations are regular plugins. Acorn, and so the theme's cachetags,
+        // can boot from a must-use plugin before they load, so detect them once
+        // every plugin has.
+        if (did_action('plugins_loaded')) {
+            $this->bindDetectedActions();
+        } else {
+            add_action('plugins_loaded', [$this, 'bindDetectedActions'], 0);
+        }
+    }
+
+    /**
+     * Bind the integration actions detected by withDetectedActions() that the
+     * configuration doesn't already list.
+     */
+    public function bindDetectedActions(): void
+    {
+        $configured = array_filter($this->actions);
+
+        foreach (array_slice($this->withDetectedActions($configured), count($configured)) as $action) {
+            $this->cacheTags->bindAction(new $action($this->cacheTags));
         }
     }
 

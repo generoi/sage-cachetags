@@ -346,4 +346,41 @@ class TestBootstrap extends WP_UnitTestCase
 
         $this->assertSame(1, count(array_filter($result, fn ($action) => $action === WooCommerce::class)));
     }
+
+    // Acorn can boot (and bootstrap cachetags) from a must-use plugin, before
+    // WooCommerce/Polylang load; detection then waits for plugins_loaded.
+    public function test_detection_waits_for_plugins_loaded_when_bootstrapped_early(): void
+    {
+        global $wp_actions;
+        $fired = $wp_actions['plugins_loaded'] ?? null;
+        unset($wp_actions['plugins_loaded']);
+
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([Core::class]);
+
+        try {
+            $cacheTags = $bootstrap->bootstrap();
+
+            $this->assertFalse($cacheTags->hasAction(WooCommerce::class), 'not bound before plugins load');
+            $this->assertSame(0, has_action('plugins_loaded', [$bootstrap, 'bindDetectedActions']));
+
+            $bootstrap->bindDetectedActions();
+
+            $this->assertTrue($cacheTags->hasAction(WooCommerce::class));
+            $this->assertTrue($cacheTags->hasAction(Polylang::class));
+        } finally {
+            remove_action('plugins_loaded', [$bootstrap, 'bindDetectedActions'], 0);
+            if ($fired !== null) {
+                $wp_actions['plugins_loaded'] = $fired;
+            }
+        }
+    }
+
+    public function test_detected_actions_bind_at_bootstrap_once_plugins_are_loaded(): void
+    {
+        $cacheTags = (new Bootstrap)->store(TransientStore::class)->actions([Core::class])->bootstrap();
+
+        $this->assertTrue($cacheTags->hasAction(WooCommerce::class));
+        $this->assertTrue($cacheTags->hasAction(Polylang::class));
+        $this->assertFalse($cacheTags->hasAction(Gravityform::class), 'Gravity Forms is not loaded in the test env');
+    }
 }
