@@ -156,6 +156,12 @@ final class Tag implements \Stringable
         return new self($this->type, $this->id, $this->qualifier, [...$this->scopes, [$dimension, $value]], $this->raw);
     }
 
+    /** The same tag without its scopes, e.g. site:5:nonce → nonce. */
+    public function unscoped(): self
+    {
+        return new self($this->type, $this->id, $this->qualifier, [], $this->raw);
+    }
+
     public function isRaw(): bool
     {
         return $this->raw !== null;

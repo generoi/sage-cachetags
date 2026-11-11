@@ -2,11 +2,17 @@
 
 namespace Genero\Sage\CacheTags\Invalidators;
 
+use Genero\Sage\CacheTags\Util;
+
 /**
  * Invalidate instead of purge — Cloudflare's soft purge. Cached content is kept
  * and marked stale, so with stale-while-revalidate in the edge's cache headers
  * the next visitor gets it immediately while Cloudflare revalidates in the
  * background. Same selectors and rate limits as a purge.
+ *
+ * A purge that includes a hard-purge tag (by default `nonce`, see
+ * Util::needsHardPurge()) is sent as a real purge, so no one is served the
+ * stale page. A rate-limited purge deferred to cron is retried as a soft one.
  *
  * Cloudflare ignores stale-while-revalidate when s-maxage is present, so send
  * the edge its own header without it, e.g.
@@ -17,4 +23,23 @@ namespace Genero\Sage\CacheTags\Invalidators;
 class CloudflareSoftCacheInvalidator extends CloudflareCacheInvalidator
 {
     const ENDPOINT = 'invalidate_cache';
+
+    /** Set while a purge that must not serve stale is being sent. */
+    protected bool $hard = false;
+
+    public function clear(array $urls, array $tags): bool
+    {
+        $this->hard = Util::needsHardPurge($tags);
+
+        try {
+            return parent::clear($urls, $tags);
+        } finally {
+            $this->hard = false;
+        }
+    }
+
+    protected function endpoint(): string
+    {
+        return $this->hard ? parent::ENDPOINT : static::ENDPOINT;
+    }
 }

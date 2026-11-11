@@ -195,4 +195,15 @@ class TestFastlyInvalidator extends WP_UnitTestCase
         $this->assertCount(1, $this->requests);
         $this->assertSame('1', $this->requests[0]['args']['headers']['fastly-soft-purge'] ?? null);
     }
+
+    public function test_soft_invalidator_purges_nonce_tags_hard(): void
+    {
+        $invalidator = new FastlySoftCacheInvalidator;
+
+        $invalidator->clear([], ['site:5:nonce']);
+        $this->assertArrayNotHasKey('fastly-soft-purge', $this->requests[0]['args']['headers']);
+
+        $invalidator->clear([], ['post:1']);
+        $this->assertSame('1', $this->requests[1]['args']['headers']['fastly-soft-purge'] ?? null, 'the next purge is soft again');
+    }
 }

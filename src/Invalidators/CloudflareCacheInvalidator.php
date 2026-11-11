@@ -324,10 +324,16 @@ class CloudflareCacheInvalidator implements Invalidator
      * @param  array{zone: string, payload: array<string, mixed>}  $job
      * @return array<string, mixed>
      */
+    /** The API endpoint purges go to; the soft invalidator switches it per purge. */
+    protected function endpoint(): string
+    {
+        return static::ENDPOINT;
+    }
+
     protected function buildRequest(array $job): array
     {
         return [
-            'url' => self::API_BASE_URL.rawurlencode($job['zone']).'/'.static::ENDPOINT,
+            'url' => self::API_BASE_URL.rawurlencode($job['zone']).'/'.$this->endpoint(),
             'type' => Requests::POST,
             'headers' => [
                 'Authorization' => 'Bearer '.$this->apiToken,
