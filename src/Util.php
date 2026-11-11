@@ -7,6 +7,35 @@ use WP_REST_Request;
 class Util
 {
     /**
+     * Whether a purge includes a tag whose pages must never be served stale, so
+     * a soft invalidator purges it hard instead. By default only the nonce tag:
+     * a soft purge keeps serving the old page until someone revalidates it, and
+     * on a quiet page that can be days after its nonce expired.
+     *
+     * Scopes are ignored, so `nonce` also matches `site:5:nonce`.
+     *
+     * @see cachetags/hard-purge-tags filter: add a site's own tags, or return []
+     *      to soft-purge everything.
+     *
+     * @param  array<string|Tag>  $tags
+     */
+    public static function needsHardPurge(array $tags): bool
+    {
+        $hard = array_map(
+            fn ($tag) => (string) Tag::from($tag)->unscoped(),
+            (array) apply_filters('cachetags/hard-purge-tags', [Tag::nonce()])
+        );
+
+        foreach ($tags as $tag) {
+            if (in_array((string) Tag::from($tag)->unscoped(), $hard, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Whether a REST response may be publicly cached, and so safe to tag,
      * store and emit a Cache-Tag header for.
      *

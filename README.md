@@ -491,6 +491,20 @@ Two ways to handle a page that bakes a nonce into its HTML:
 
    Remove `Nonce::class` from the `action` config to opt out of the cron.
 
+   The soft invalidators (`CloudflareSoftCacheInvalidator`,
+   `FastlySoftCacheInvalidator`) purge `nonce` **hard**: a soft purge would keep
+   serving the old page, and its expired nonce, to the first visitor after it,
+   which on a quiet page can be days later. Tag your own pages that must never be
+   served stale the same way, or opt out:
+
+   ```php
+   add_filter('cachetags/hard-purge-tags', fn (array $tags) => [...$tags, 'gform:5']);
+   add_filter('cachetags/hard-purge-tags', '__return_empty_array'); // soft-purge everything
+   ```
+
+   A purge that includes one of these tags goes hard as a whole. One that is
+   rate-limited and deferred to cron is retried soft.
+
 2. **Mark it non-cacheable** when the page also shows genuinely real-time data
    (e.g. live availability), where a 12h refresh isn't enough:
 

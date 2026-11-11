@@ -163,6 +163,55 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $this->assertSame('{"tags":["post:1"]}', $request['data'], 'same body as a purge');
     }
 
+    /** A soft invalidator that answers OK and records which endpoint each request hit. */
+    private function softInvalidator(): CloudflareSoftCacheInvalidator
+    {
+        return new class extends CloudflareSoftCacheInvalidator
+        {
+            /** @var string[] */
+            public array $endpoints = [];
+
+            protected function requestMultiple(array $requests): array
+            {
+                return array_map(function (array $request) {
+                    $this->endpoints[] = basename($request['url']);
+                    $response = new Response;
+                    $response->status_code = 200;
+                    $response->body = TestCloudflareInvalidator::OK[1];
+
+                    return $response;
+                }, $requests);
+            }
+        };
+    }
+
+    public function test_the_soft_invalidator_purges_nonce_tags_hard(): void
+    {
+        $invalidator = $this->softInvalidator();
+
+        $this->assertTrue($invalidator->clear([], ['nonce']));
+        $this->assertTrue($invalidator->clear([], ['site:5:nonce']));
+        $this->assertSame(array_fill(0, 4, 'purge_cache'), $invalidator->endpoints, 'scoped or not, both zones');
+
+        $invalidator->endpoints = [];
+        $invalidator->clear([], ['post:1']);
+        $this->assertSame(['invalidate_cache', 'invalidate_cache'], $invalidator->endpoints, 'the next purge is soft again');
+    }
+
+    public function test_the_hard_purge_tags_are_filterable(): void
+    {
+        $invalidator = $this->softInvalidator();
+
+        add_filter('cachetags/hard-purge-tags', fn (array $tags) => [...$tags, 'gform:5']);
+        $invalidator->clear([], ['post:1', 'gform:5']);
+        $this->assertSame(['purge_cache', 'purge_cache'], $invalidator->endpoints, 'a site tag, mixed with others: the whole purge is hard');
+
+        $invalidator->endpoints = [];
+        add_filter('cachetags/hard-purge-tags', '__return_empty_array', 20);
+        $invalidator->clear([], ['nonce']);
+        $this->assertSame(['invalidate_cache', 'invalidate_cache'], $invalidator->endpoints, 'opted out');
+    }
+
     public function test_a_purge_above_the_bulk_threshold_flushes_instead(): void
     {
         $invalidator = $this->invalidator(fn () => self::OK);
