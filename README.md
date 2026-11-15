@@ -709,6 +709,9 @@ wp acorn cachetags:status --url=https://example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp acorn cachetags:prune --older-than=30d
+
+# Request the pages purges queued (see Warming the cache)
+wp acorn cachetags:warm
 ```
 
 **Standalone:**
@@ -732,6 +735,9 @@ wp cachetags status --url=https://example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp cachetags prune --older-than=30d
+
+# Request the pages purges queued (see Warming the cache)
+wp cachetags warm
 ```
 
 `status` answers "what's bloating the store / why was this purged so widely" — a
@@ -757,6 +763,46 @@ million-row) table to the latest schema by dropping and recreating it — avoidi
 a slow, locking `ALTER` — and flushes the edge so nothing is left stale while the
 store refills. Run it in a low-traffic window; the cold cache warms as pages
 re-render.
+
+## Warming the cache
+
+A purged page is rendered again by whoever asks for it next: a visitor, or a
+crawler walking every page, which can take a site down when the cache is cold.
+The warmer re-requests purged pages from the server itself first, at a pace a
+single visitor would cause.
+
+List `WarmInvalidator` after the invalidator that purges, and run the command
+from the server's crontab:
+
+```php
+'invalidator' => [
+    KinstaGroupCacheInvalidator::class,
+    \Genero\Sage\CacheTags\Invalidators\WarmInvalidator::class,
+],
+```
+
+```sh
+* * * * * cd /path/to/site/web && ../vendor/bin/wp cachetags warm --quiet
+# Weekly, before the cache expires: every page the store holds
+0 4 * * 0 cd /path/to/site/web && ../vendor/bin/wp cachetags warm --all --seconds=3000 --quiet
+```
+
+- A purge queues its URLs; a flush queues every URL the store holds. Each waits
+  30 seconds, so the purge has reached the cache before it's requested again.
+- Each run requests queued pages one at a time (`--pause`, default 0.2s) for
+  `--seconds` (default 50) as an anonymous visitor: no cookies, no login.
+- A run **stops when the site answers 429 or 503**, so warming never competes
+  with real traffic: a rate limiter or host in front of PHP decides when the
+  site is too busy. The rest waits for the next run.
+- Only plain pages are warmed. URLs with a query string (search, facets,
+  campaign links) are skipped, and so are REST, admin and login URLs. Skip more
+  with path patterns in the config's `warm-skip`, e.g. `'#^/search/#'` or
+  `'#/page/\d{2,}/#'`, or the `cachetags/warm/skip` filter (`$skip, $url`).
+- `cachetags/warm/request-headers` sets the headers each request sends, e.g. for
+  something in front of PHP to recognise the warmer.
+
+The queue lives in an option, capped at 20,000 URLs. It's best effort: a URL
+lost to two purges landing at once is simply cached by its next visitor.
 
 ## API
 

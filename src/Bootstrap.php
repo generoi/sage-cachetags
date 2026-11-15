@@ -53,6 +53,8 @@ class Bootstrap
         protected bool $autoDetectActions = true,
         protected ?string $baseTag = 'page',
         protected ?string $pruneOlderThan = '30d',
+        /** @var string[] Path patterns the warmer skips (see Warmer) */
+        protected array $warmSkip = [],
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -157,10 +159,24 @@ class Bootstrap
     }
 
     /**
+     * Set the path patterns (regular expressions) the warmer leaves unwarmed,
+     * e.g. ['#^/search/#']. URLs with a query string are always skipped.
+     *
+     * @param  string[]  $patterns
+     */
+    public function warmSkip(array $patterns): static
+    {
+        $this->warmSkip = $patterns;
+
+        return $this;
+    }
+
+    /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
     {
+        Warmer::$skip = $this->warmSkip;
         $store = $this->resolve($this->store, Store::class);
 
         $this->cacheTags = CacheTags::make(
@@ -224,6 +240,7 @@ class Bootstrap
         \WP_CLI::add_command('cachetags clear', WpCli\ClearCommand::class);
         \WP_CLI::add_command('cachetags status', WpCli\StatusCommand::class);
         \WP_CLI::add_command('cachetags prune', WpCli\PruneCommand::class);
+        \WP_CLI::add_command('cachetags warm', WpCli\WarmCommand::class);
     }
 
     protected function bindActions(): void

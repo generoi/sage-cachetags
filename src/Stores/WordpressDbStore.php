@@ -4,10 +4,11 @@ namespace Genero\Sage\CacheTags\Stores;
 
 use DateTimeInterface;
 use Genero\Sage\CacheTags\Contracts\InspectableStore;
+use Genero\Sage\CacheTags\Contracts\ListableStore;
 use Genero\Sage\CacheTags\Contracts\PrunableStore;
 use Genero\Sage\CacheTags\Contracts\Store;
 
-class WordpressDbStore implements InspectableStore, PrunableStore, Store
+class WordpressDbStore implements InspectableStore, ListableStore, PrunableStore, Store
 {
     /**
      * @param  string[]  $tags
@@ -137,6 +138,18 @@ class WordpressDbStore implements InspectableStore, PrunableStore, Store
         } while ($deleted === $batch);
 
         return $removed;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function urls(int $limit): array
+    {
+        global $wpdb;
+
+        return $wpdb->get_col($wpdb->prepare("
+            SELECT DISTINCT url FROM `{$wpdb->prefix}cache_tags` LIMIT %d
+        ", max(1, $limit)));
     }
 
     /**
