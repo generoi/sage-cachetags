@@ -7,6 +7,7 @@ use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
 use Genero\Sage\CacheTags\Console\PruneCommand;
 use Genero\Sage\CacheTags\Console\StatusCommand;
+use Genero\Sage\CacheTags\Console\WarmCommand;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Illuminate\Support\ServiceProvider;
 
@@ -36,6 +37,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             ClearCommand::class,
             StatusCommand::class,
             PruneCommand::class,
+            WarmCommand::class,
         ]);
     }
 
@@ -53,6 +55,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             autoDetectActions: $config->get('cachetags.auto-detect-actions', true),
             baseTag: $config->get('cachetags.base-tag', 'page'),
             pruneOlderThan: $config->get('cachetags.prune-older-than', '30d'),
+            warmSkip: $config->get('cachetags.warm-skip', []),
         );
 
         return $bootstrap;

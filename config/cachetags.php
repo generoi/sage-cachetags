@@ -16,6 +16,20 @@ return [
     'store' => WordpressDbStore::class,
     'invalidator' => [
         SuperCacheInvalidator::class,
+
+        // Queue purged pages to be re-requested by `wp cachetags warm` from the
+        // server's crontab, so the cache holds them again before a visitor or
+        // a crawler has to wait for the render. List it after the invalidator
+        // that purges.
+        // \Genero\Sage\CacheTags\Invalidators\WarmInvalidator::class,
+    ],
+
+    // Path patterns the warmer leaves unwarmed, e.g. a search page's path or
+    // deep pagination. URLs with a query string (search, facets) are always
+    // skipped, and so are REST, admin and login URLs.
+    'warm-skip' => [
+        // '#^/search/#',
+        // '#/page/\d{2,}/#',
     ],
 
     // The WooCommerce, Polylang and Gravity Forms actions are auto-enabled when
