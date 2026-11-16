@@ -53,7 +53,12 @@ New purges to expect:
   pages of every translation in the group, since their language switchers link
   to it. A content or title edit purges only its own language.
 - Changing a linked post's title, slug, parent or status, or a linked term's
-  name, slug or parent, purges the menus linking to it.
+  name, slug or parent, purges the menus linking to it, and assigning a menu
+  location (even one that was empty) purges the pages rendering it.
+
+Still needing a manual flush: child pages under a renamed parent, Polylang's
+direct-SQL parent sync, a Polylang language slug change and WXR imports (see
+"Known limits" in the README).
 
 ## 3.0
 

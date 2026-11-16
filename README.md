@@ -439,6 +439,22 @@ its `polylang` option) clears `menu-location:{location}`. All languages share a
 location's tag, so reassigning one language's menu purges the location's pages
 in every language.
 
+### Known limits (flush manually)
+
+These change what pages show without the hooks the purges listen to, so flush
+(`wp cachetags clear page`, or `flush`) after them:
+
+- **Child pages under a renamed or moved parent.** A child's URL changes with
+  its parent's slug or parent, but only the parent's own tags are cleared:
+  menus and Polylang language switchers linking to the child stay stale.
+- **Polylang synchronisation.** Polylang writes synchronised post and term
+  parents with direct SQL, so neither the menu nor the translation purges see
+  the change.
+- **Polylang language slug changes.** Every URL in that language changes.
+- **WXR imports** (Tools → Import) write posts, terms and menus in bulk, partly
+  without the save hooks.
+- **The navigation block's overlay template part** isn't tagged.
+
 Site-identity blocks (`core/site-title`, `core/site-tagline`, `core/site-logo`)
 are tagged with an `option:{name}` tag and purged when that option changes.
 Adjust which options are tracked with the `cachetags/options` filter:
