@@ -50,9 +50,9 @@ class BaseTag implements Action
         $clear = match ($post->post_type) {
             // Opening the block editor inserts an empty published stub when the
             // theme has none (WP_Theme_JSON_Resolver); it changes nothing.
-            'wp_global_styles' => ! ($oldStatus === 'new' && $this->isEmptyGlobalStyles($post)),
+            'wp_global_styles' => $this->isForActiveTheme($post) && ! ($oldStatus === 'new' && $this->isEmptyGlobalStyles($post)),
             // Customizer → Additional CSS, inlined into every page.
-            'custom_css' => true,
+            'custom_css' => $this->isForActiveTheme($post),
             'wp_template' => $newStatus !== $oldStatus && $this->changesTemplateResolution($post),
             default => false,
         };
@@ -69,9 +69,28 @@ class BaseTag implements Action
             return;
         }
 
-        if (in_array($post->post_type, ['wp_global_styles', 'custom_css'], true) || ($post->post_type === 'wp_template' && $this->changesTemplateResolution($post))) {
+        $clear = match ($post->post_type) {
+            'wp_global_styles', 'custom_css' => $this->isForActiveTheme($post),
+            'wp_template' => $this->changesTemplateResolution($post),
+            default => false,
+        };
+
+        if ($clear) {
             $this->cacheTags->clear($this->tag);
         }
+    }
+
+    /**
+     * Global styles and Additional CSS are stored per theme; saving another
+     * theme's (a Customizer or Site Editor preview of it) changes no page.
+     * Global styles carry a wp_theme term, Additional CSS the stylesheet as its
+     * post_name.
+     */
+    protected function isForActiveTheme(WP_Post $post): bool
+    {
+        return $post->post_type === 'custom_css'
+            ? $post->post_name === get_stylesheet()
+            : CoreTags::blockTemplateTheme($post) === get_stylesheet();
     }
 
     /**
@@ -88,8 +107,8 @@ class BaseTag implements Action
     /**
      * Whether a template of the active theme appearing or disappearing changes
      * which template pages resolve to: one in the template hierarchy that no
-     * theme file backs. A `wp-custom-template-*` template only renders for the
-     * posts assigned to it, and assigning one purges that post.
+     * theme file or plugin backs. A `wp-custom-template-*` template only renders
+     * for the posts assigned to it, and assigning one purges that post.
      */
     protected function changesTemplateResolution(WP_Post $post): bool
     {
@@ -98,6 +117,23 @@ class BaseTag implements Action
 
         return $theme === get_stylesheet()
             && ! str_starts_with($slug, 'wp-custom-template-')
-            && ! get_block_file_template("{$theme}//{$slug}", 'wp_template');
+            && ! get_block_file_template("{$theme}//{$slug}", 'wp_template')
+            && ! $this->isPluginTemplate($slug);
+    }
+
+    /**
+     * A template a plugin provides already renders under its slug, so its
+     * customisation replaces it under the same key (Core's `template:` tag)
+     * rather than changing resolution. WooCommerce registers its templates
+     * with register_block_template() but serves its product taxonomy templates
+     * (taxonomy-product_cat, …) itself.
+     */
+    protected function isPluginTemplate(string $slug): bool
+    {
+        if (class_exists('WP_Block_Templates_Registry') && method_exists('WP_Block_Templates_Registry', 'get_by_slug') && \WP_Block_Templates_Registry::get_instance()->get_by_slug($slug)) {
+            return true;
+        }
+
+        return class_exists('WooCommerce') && str_starts_with($slug, 'taxonomy-product_');
     }
 }

@@ -55,6 +55,69 @@ class TestBaseTag extends RestTestCase
         $this->assertContains('page', $this->queuedPurgeTags(), 'delete');
     }
 
+    // Another theme's styles (a Site Editor or Customizer preview) change no page.
+    public function test_saving_another_themes_styles_or_css_does_not_clear_the_base_tag(): void
+    {
+        $this->resetCacheTags();
+        wp_update_custom_css_post('body { color: red; }', ['stylesheet' => 'not-the-active-theme']);
+        $this->assertNotContains('page', $this->queuedPurgeTags(), 'Additional CSS');
+
+        // wp_get_themes() also lists wp-phpunit's test-data themes, which
+        // wp_get_theme() doesn't resolve on its own.
+        $other = null;
+        foreach (array_keys(wp_get_themes()) as $stylesheet) {
+            if ($stylesheet !== get_stylesheet() && wp_get_theme($stylesheet)->exists()) {
+                $other = $stylesheet;
+                break;
+            }
+        }
+        if ($other === null) {
+            $this->markTestSkipped('Only one theme is installed.');
+        }
+        $postId = self::factory()->post->create(['post_type' => 'wp_global_styles', 'post_status' => 'draft']);
+        wp_set_object_terms($postId, $other, 'wp_theme');
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_status' => 'publish', 'post_content' => '{"version": 3, "isGlobalStylesUserThemeJSON": true, "styles": {"color": {"text": "red"}}}']);
+        $this->assertNotContains('page', $this->queuedPurgeTags(), 'global styles');
+    }
+
+    // A plugin's template already renders under its own key, so customising it
+    // changes no template resolution.
+    public function test_customising_a_plugin_template_does_not_clear_the_base_tag(): void
+    {
+        if (! function_exists('register_block_template')) {
+            $this->markTestSkipped('register_block_template() needs WordPress 6.7.');
+        }
+        register_block_template('cachetags//single-cachetags-registered', ['title' => 'Registered', 'content' => '<!-- wp:paragraph --><p>Plugin</p><!-- /wp:paragraph -->']);
+        $this->resetCacheTags();
+
+        try {
+            $this->sitePostWithoutReset('wp_template', 'single-cachetags-registered');
+        } finally {
+            unregister_block_template('cachetags//single-cachetags-registered');
+        }
+
+        $this->assertNotContains('page', $this->queuedPurgeTags());
+    }
+
+    // WooCommerce serves its product taxonomy templates itself.
+    public function test_customising_a_woocommerce_taxonomy_template_does_not_clear_the_base_tag(): void
+    {
+        if (! class_exists('WooCommerce')) {
+            $this->markTestSkipped('WooCommerce is not installed in this environment.');
+        }
+        $this->resetCacheTags();
+
+        $this->sitePostWithoutReset('wp_template', 'taxonomy-product_cat');
+
+        $this->assertNotContains('page', $this->queuedPurgeTags());
+    }
+
+    private function sitePostWithoutReset(string $postType, string $slug): int
+    {
+        return self::factory()->post->create(['post_type' => $postType, 'post_status' => 'publish', 'post_name' => $slug]);
+    }
+
     // Opening the block editor inserts this stub when the theme has no user
     // styles; it must not purge the whole site.
     public function test_the_empty_global_styles_stub_core_creates_clears_nothing(): void
