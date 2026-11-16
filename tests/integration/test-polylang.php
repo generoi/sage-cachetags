@@ -234,17 +234,27 @@ class TestPolylang extends WP_UnitTestCase
     }
 
     // Unlinking only rewrites the group's description; the relationship stays.
+    // The member still in the group is purged through the group tag its page
+    // carries, the one leaving through its own.
     public function test_unlinking_a_translation_purges_both_pages(): void
     {
         [$en, $fi] = $this->translatedPosts();
+        $group = $this->groupTag($en, 'post_translations');
         $this->action()->init();
         $this->resetPurgeTags();
 
         pll_save_post_translations(['en' => $en]);
 
         $tags = $this->queuedPurgeTags();
-        $this->assertContains("post:{$en}", $tags);
+        $this->assertContains($group, $tags);
         $this->assertContains("post:{$fi}", $tags);
+    }
+
+    private function groupTag(int $objectId, string $taxonomy): string
+    {
+        $groups = wp_get_object_terms($objectId, $taxonomy, ['fields' => 'ids']);
+
+        return 'translations:'.reset($groups);
     }
 
     public function test_linking_term_translations_purges_both_term_pages(): void
@@ -259,8 +269,11 @@ class TestPolylang extends WP_UnitTestCase
 
         pll_save_term_translations(['en' => $en, 'fi' => $fi]);
 
+        // A member already in the group is purged through the group tag its page
+        // carries (Polylang may have given the English term a group of its
+        // own), a member joining through its own term page tag.
         $tags = $this->queuedPurgeTags();
-        $this->assertContains("term:{$en}:full", $tags);
+        $this->assertContains($this->groupTag($en, 'term_translations'), $tags);
         $this->assertContains("term:{$fi}:full", $tags);
     }
 
@@ -272,51 +285,62 @@ class TestPolylang extends WP_UnitTestCase
         $this->resetPurgeTags();
 
         wp_update_post(['ID' => $en, 'post_content' => 'New body']);
+        // A switcher shows the translation's URL, not its title.
+        wp_update_post(['ID' => $en, 'post_title' => 'Retitled']);
 
         $tags = $this->queuedPurgeTags();
-        $this->assertNotContains("post:{$en}:url", $tags);
+        $this->assertNotContains($this->groupTag($en, 'post_translations'), $tags);
         $this->assertNotContains("post:{$fi}", $tags);
-        $this->assertNotContains("post:{$fi}:url", $tags);
     }
 
     public function test_changing_a_translations_url_purges_the_pages_linking_to_it(): void
     {
         [$en] = $this->translatedPosts();
+        $group = $this->groupTag($en, 'post_translations');
         $this->action()->init();
         $this->resetPurgeTags();
 
         wp_update_post(['ID' => $en, 'post_name' => 'renamed-slug']);
-        $this->assertContains("post:{$en}:url", $this->queuedPurgeTags(), 'slug');
+        $this->assertContains($group, $this->queuedPurgeTags(), 'slug');
 
         $this->resetPurgeTags();
         wp_update_post(['ID' => $en, 'post_status' => 'draft']);
-        $this->assertContains("post:{$en}:url", $this->queuedPurgeTags(), 'unpublished');
+        $this->assertContains($group, $this->queuedPurgeTags(), 'unpublished');
     }
 
     // wp_publish_post() fires transition_post_status but never post_updated.
     public function test_publishing_a_scheduled_translation_purges_the_pages_linking_to_it(): void
     {
-        [$en] = $this->translatedPosts();
-        wp_update_post(['ID' => $en, 'post_status' => 'future', 'post_date' => gmdate('Y-m-d H:i:s', time() + DAY_IN_SECONDS)]);
+        $this->ensureFinnish();
+        $en = self::factory()->post->create([
+            'post_status' => 'future',
+            'post_date' => gmdate('Y-m-d H:i:s', time() + DAY_IN_SECONDS),
+        ]);
+        $fi = self::factory()->post->create(['post_status' => 'publish']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi, 'fi');
+        pll_save_post_translations(['en' => $en, 'fi' => $fi]);
+        $this->assertSame('future', get_post_status($en));
         $this->action()->init();
         $this->resetPurgeTags();
 
         wp_publish_post($en);
 
-        $this->assertContains("post:{$en}:url", $this->queuedPurgeTags());
+        $this->assertContains($this->groupTag($en, 'post_translations'), $this->queuedPurgeTags());
     }
 
     public function test_changing_a_term_translations_slug_purges_the_pages_linking_to_it(): void
     {
         [$en] = $this->translatedTerms();
+        $group = $this->groupTag($en, 'term_translations');
         $this->action()->init();
         $this->resetPurgeTags();
 
-        wp_update_term($en, 'category', ['description' => 'Only the description']);
-        $this->assertNotContains("term:{$en}:url", $this->queuedPurgeTags(), 'description');
+        wp_update_term($en, 'category', ['description' => 'Only the description', 'name' => 'Renamed']);
+        $this->assertNotContains($group, $this->queuedPurgeTags(), 'description and name');
 
         wp_update_term($en, 'category', ['slug' => 'renamed-term']);
-        $this->assertContains("term:{$en}:url", $this->queuedPurgeTags(), 'slug');
+        $this->assertContains($group, $this->queuedPurgeTags(), 'slug');
     }
 
     /**
@@ -469,7 +493,8 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains("term:{$fiTerm}:full", $this->queuedPurgeTags());
     }
 
-    public function test_a_singular_page_is_tagged_with_its_translations_urls(): void
+    // One tag for the group, however many languages it links to.
+    public function test_a_singular_page_is_tagged_with_its_translation_group(): void
     {
         [$en, $fi] = $this->translatedPosts();
         $this->go_to(add_query_arg('p', $en, home_url('/')));
@@ -478,11 +503,11 @@ class TestPolylang extends WP_UnitTestCase
         $this->action()->addTranslationTags();
 
         $tags = $cacheTags->get();
-        $this->assertContains("post:{$fi}:url", $tags);
+        $this->assertSame([$this->groupTag($en, 'post_translations')], $this->translationTags($tags));
         $this->assertNotContains("post:{$fi}", $tags, 'a content edit of the translation must not purge this page');
     }
 
-    public function test_a_term_archive_is_tagged_with_its_translations_urls(): void
+    public function test_a_term_archive_is_tagged_with_its_translation_group(): void
     {
         [$en, $fi] = $this->translatedTerms();
         $postId = self::factory()->post->create(['post_status' => 'publish']);
@@ -493,8 +518,17 @@ class TestPolylang extends WP_UnitTestCase
         $this->action()->addTranslationTags();
 
         $tags = $cacheTags->get();
-        $this->assertContains("term:{$fi}:url", $tags);
+        $this->assertSame([$this->groupTag($en, 'term_translations')], $this->translationTags($tags));
         $this->assertNotContains("term:{$fi}", $tags);
+    }
+
+    /**
+     * @param  string[]  $tags
+     * @return string[]
+     */
+    private function translationTags(array $tags): array
+    {
+        return array_values(array_filter($tags, fn ($tag) => str_starts_with($tag, 'translations:')));
     }
 
     // H2: the lang: tag must be registered before the priority-10 save/header

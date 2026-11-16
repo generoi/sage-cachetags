@@ -47,10 +47,11 @@ New purges to expect:
   with `'base-tag' => null` those purge nothing. A theme action that purged on
   these saves (or flushed the whole cache) can be removed. Pages rendered before
   the upgrade don't carry the new tags yet, so flush once after deploying.
-- With Polylang, linking or unlinking a translation purges the pages of every
-  translation in the group, and changing a translation's title, slug, parent or
-  status purges the other translations' pages (their language switchers link
-  to it). A content-only edit purges only its own language.
+- With Polylang, post and term pages carry a `translations:{group}` tag:
+  linking or unlinking a translation, or changing a translation's URL (slug,
+  parent, status, the date with a date-based permalink structure), purges the
+  pages of every translation in the group, since their language switchers link
+  to it. A content or title edit purges only its own language.
 - Changing a linked post's title, slug, parent or status, or a linked term's
   name, slug or parent, purges the menus linking to it.
 

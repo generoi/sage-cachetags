@@ -13,10 +13,10 @@ use WP_Term;
 class Polylang implements Action
 {
     /**
-     * Qualifier of the tag a page carries for each translation its language
-     * switcher links to, cleared only when that translation's URL changes.
+     * Type of the tag a page carries for its translation group (the members
+     * its language switcher links to): `translations:{group term id}`.
      */
-    const URL_QUALIFIER = 'url';
+    const GROUP_TAG = 'translations';
 
     /**
      * Separator of a translated template part's language suffix, as in
@@ -90,52 +90,64 @@ class Polylang implements Action
     }
 
     /**
-     * Tag a post or term page with the URL of each translation its language
-     * switcher links to: `post:{id}:url` / `term:{id}:url`. These are cleared
-     * only when that translation's URL changes, not on every save of it, so a
-     * content edit of one translation doesn't purge the others.
+     * Tag a post or term page with its translation group,
+     * `translations:{group term id}`: its language switcher links to every
+     * member. One tag per page however many languages, cleared only when a
+     * member's URL changes or the group does, so a content edit of one
+     * translation doesn't purge the others.
      */
     public function addTranslationTags(): void
     {
         $object = \get_queried_object();
 
         if (is_singular() && $object instanceof WP_Post) {
-            $translations = array_diff(pll_get_post_translations($object->ID), [$object->ID]);
-            $this->cacheTags->add(array_map(fn ($id) => Tag::post((int) $id)->qualify(self::URL_QUALIFIER), array_values($translations)));
+            $this->cacheTags->add($this->groupTags($object->ID, 'post_translations'));
         } elseif ((is_category() || is_tag() || is_tax()) && $object instanceof WP_Term) {
-            $translations = array_diff(pll_get_term_translations($object->term_id), [$object->term_id]);
-            $this->cacheTags->add(array_map(fn ($id) => Tag::term((int) $id)->qualify(self::URL_QUALIFIER), array_values($translations)));
+            $this->cacheTags->add($this->groupTags($object->term_id, 'term_translations'));
         }
     }
 
     /**
-     * A translated post's title, slug, parent or status changed (Core's
-     * linkFieldsChanged), so the switchers linking to it are stale.
+     * A translated post's URL changed, so the switchers linking to it are
+     * stale. Only the fields its permalink is built from count — not the title,
+     * which a switcher doesn't show.
      */
     public function onPostUpdated(int $postId, WP_Post $after, WP_Post $before): void
     {
-        if (Core::linkFieldsChanged($after, $before)) {
-            $this->clearPostUrl($after);
+        $fields = ['post_name', 'post_parent', 'post_status'];
+        if (preg_match('/%(year|monthnum|day|hour|minute|second)%/', (string) get_option('permalink_structure'))) {
+            $fields[] = 'post_date';
         }
-    }
 
-    public function onScheduledPublish(string $newStatus, string $oldStatus, WP_Post $post): void
-    {
-        if ($oldStatus === 'future' && $newStatus === 'publish') {
-            $this->clearPostUrl($post);
-        }
-    }
+        foreach ($fields as $field) {
+            if ($after->$field !== $before->$field) {
+                $this->clearPostGroup($after);
 
-    protected function clearPostUrl(WP_Post $post): void
-    {
-        if (CoreTags::isCacheablePostType($post->post_type) && pll_is_translated_post_type($post->post_type)) {
-            $this->cacheTags->clear(Tag::post($post->ID)->qualify(self::URL_QUALIFIER));
+                return;
+            }
         }
     }
 
     /**
-     * Before wp_update_term(): snapshot a translated term's link fields, or a
-     * translation group's members.
+     * wp_publish_post() (scheduled posts) never fires post_updated.
+     */
+    public function onScheduledPublish(string $newStatus, string $oldStatus, WP_Post $post): void
+    {
+        if ($oldStatus === 'future' && $newStatus === 'publish') {
+            $this->clearPostGroup($post);
+        }
+    }
+
+    protected function clearPostGroup(WP_Post $post): void
+    {
+        if (CoreTags::isCacheablePostType($post->post_type) && pll_is_translated_post_type($post->post_type)) {
+            $this->cacheTags->clear($this->groupTags($post->ID, 'post_translations'));
+        }
+    }
+
+    /**
+     * Before wp_update_term(): snapshot a translated term's URL fields (slug,
+     * parent), or a translation group's members.
      */
     public function onTermEdit(int $termId, string $taxonomy): void
     {
@@ -147,7 +159,7 @@ class Polylang implements Action
         if ($this->isTranslationGroup($taxonomy)) {
             $this->beforeEdit[$termId] = $this->groupMembers($term);
         } elseif (CoreTags::isCacheableTaxonomy($taxonomy) && pll_is_translated_taxonomy($taxonomy)) {
-            $this->beforeEdit[$termId] = Core::termLinkFields($term);
+            $this->beforeEdit[$termId] = [$term->slug, (int) $term->parent];
         }
     }
 
@@ -165,9 +177,9 @@ class Polylang implements Action
         }
 
         if ($this->isTranslationGroup($taxonomy)) {
-            $this->clearGroupChange($taxonomy, $before, $this->groupMembers($term));
-        } elseif ($before !== Core::termLinkFields($term)) {
-            $this->cacheTags->clear(Tag::term($termId)->qualify(self::URL_QUALIFIER));
+            $this->clearGroupChange($taxonomy, $termId, $before, $this->groupMembers($term));
+        } elseif ($before !== [$term->slug, (int) $term->parent]) {
+            $this->cacheTags->clear($this->groupTags($termId, 'term_translations'));
         }
     }
 
@@ -175,7 +187,7 @@ class Polylang implements Action
     {
         $term = get_term($termId, $taxonomy);
         if ($this->isTranslationGroup($taxonomy) && $term instanceof WP_Term) {
-            $this->clearGroupChange($taxonomy, [], $this->groupMembers($term));
+            $this->clearGroupChange($taxonomy, $termId, [], $this->groupMembers($term));
         }
     }
 
@@ -185,7 +197,7 @@ class Polylang implements Action
     public function onTranslationGroupDeleted(int $termId, int $termTaxonomyId, string $taxonomy, $deletedTerm): void
     {
         if ($this->isTranslationGroup($taxonomy) && $deletedTerm instanceof WP_Term) {
-            $this->clearGroupChange($taxonomy, $this->groupMembers($deletedTerm), []);
+            $this->clearGroupChange($taxonomy, $termId, $this->groupMembers($deletedTerm), []);
         }
     }
 
@@ -193,12 +205,14 @@ class Polylang implements Action
      * Polylang links and unlinks translations by rewriting the group term's
      * description (lang => id) — unlinking leaves the relationship in place, so
      * set_object_terms alone would miss it. When the group changes, every
-     * member's switcher does: purge the pages of old and new members.
+     * member's switcher does: the members still in it carry the group tag, and
+     * the ones joining or leaving are purged by their own tags, since their
+     * pages carry another group's tag or none.
      *
      * @param  array<string, int>  $before
      * @param  array<string, int>  $after
      */
-    protected function clearGroupChange(string $taxonomy, array $before, array $after): void
+    protected function clearGroupChange(string $taxonomy, int $groupId, array $before, array $after): void
     {
         ksort($before);
         ksort($after);
@@ -206,11 +220,27 @@ class Polylang implements Action
             return;
         }
 
-        $members = array_values(array_unique([...array_values($before), ...array_values($after)]));
+        $changed = array_values(array_unique([
+            ...array_diff($before, $after),
+            ...array_diff($after, $before),
+        ]));
 
-        $this->cacheTags->clear($taxonomy === 'post_translations'
-            ? CoreTags::posts($members)
-            : CoreTags::termPages($members));
+        $this->cacheTags->clear([
+            Tag::of(self::GROUP_TAG, $groupId),
+            ...($taxonomy === 'post_translations' ? CoreTags::posts($changed) : CoreTags::termPages($changed)),
+        ]);
+    }
+
+    /**
+     * The `translations:{group}` tag of a post's or term's translation group.
+     *
+     * @return Tag[]
+     */
+    protected function groupTags(int $objectId, string $taxonomy): array
+    {
+        $groups = wp_get_object_terms($objectId, $taxonomy, ['fields' => 'ids']);
+
+        return is_array($groups) && $groups ? [Tag::of(self::GROUP_TAG, (int) reset($groups))] : [];
     }
 
     /**
