@@ -713,8 +713,9 @@ they render, keyed by theme and slug: `template:{theme}//{slug}` and
 `block_template_part('footer')` are covered. Because the key isn't a post id,
 the theme file, its first customisation and "Clear customizations" (which
 force-deletes the post) all purge the same pages. Publishing, updating,
-trashing or deleting a published `wp_template` / `wp_template_part` clears its
-key. A theme action that purged on these saves (or flushed the whole cache) can
+trashing or deleting a `wp_template` / `wp_template_part` that is or was
+published, draft or auto-draft clears its key (`block_template_part()` renders
+drafts too). A theme action that purged on these saves (or flushed the whole cache) can
 be removed.
 
 With Polylang, a template part's key is qualified with the page's language

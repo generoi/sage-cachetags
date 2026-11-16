@@ -17,6 +17,14 @@ class Core implements Action
 {
     use TracksAddedTermRelationships;
 
+    /**
+     * Statuses a template (part) renders publicly in: get_block_template()
+     * (block_template_part()) also returns drafts and auto-drafts. The
+     * core/template-part block only renders published parts, so this
+     * over-purges a little for those.
+     */
+    const RENDERED_TEMPLATE_STATUSES = ['publish', 'draft', 'auto-draft'];
+
     /** Post ids already tagged from a block this request, to avoid re-adding the
      * same post:{id} for every inner block carrying the postId context. */
     protected array $taggedBlockPosts = [];
@@ -449,7 +457,8 @@ class Core implements Action
      */
     public function onBlockTemplateStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
     {
-        if (($newStatus === 'publish' || $oldStatus === 'publish') && $this->isBlockTemplatePostType($post->post_type)) {
+        $rendered = self::RENDERED_TEMPLATE_STATUSES;
+        if ((in_array($newStatus, $rendered, true) || in_array($oldStatus, $rendered, true)) && $this->isBlockTemplatePostType($post->post_type)) {
             $this->cacheTags->clear($this->blockTemplatePurgeTags($post));
         }
     }
@@ -461,7 +470,7 @@ class Core implements Action
     public function onBlockTemplateDelete(int $postId): void
     {
         $post = get_post($postId);
-        if ($post instanceof WP_Post && $post->post_status === 'publish' && $this->isBlockTemplatePostType($post->post_type)) {
+        if ($post instanceof WP_Post && in_array($post->post_status, self::RENDERED_TEMPLATE_STATUSES, true) && $this->isBlockTemplatePostType($post->post_type)) {
             $this->cacheTags->clear($this->blockTemplatePurgeTags($post));
         }
     }

@@ -147,16 +147,33 @@ class TestBlockTemplates extends RestTestCase
         $this->assertContains($this->key('single', 'template'), $this->queuedPurgeTags());
     }
 
-    public function test_draft_template_parts_clear_nothing_and_others_keep_their_keys(): void
+    // block_template_part() renders draft parts too (get_block_template()
+    // queries drafts and auto-drafts), so saving one purges its pages.
+    public function test_saving_a_draft_template_part_clears_its_key(): void
     {
         $draft = $this->templatePart('footer', 'draft');
         $this->templatePart('header');
 
+        ob_start();
+        block_template_part('footer');
+        $html = ob_get_clean();
+        $this->assertStringContainsString('Footer', $html, 'a draft part renders publicly');
+
+        $this->resetCacheTags();
         wp_update_post(['ID' => $draft, 'post_content' => 'Still a draft']);
 
         $tags = $this->queuedPurgeTags();
-        $this->assertNotContains($this->key('footer'), $tags);
+        $this->assertContains($this->key('footer'), $tags);
         $this->assertNotContains($this->key('header'), $tags, 'only the saved part');
+    }
+
+    public function test_a_template_part_in_a_status_that_does_not_render_clears_nothing(): void
+    {
+        $pending = $this->templatePart('footer', 'pending');
+
+        wp_update_post(['ID' => $pending, 'post_content' => 'Pending']);
+
+        $this->assertNotContains($this->key('footer'), $this->queuedPurgeTags());
     }
 
     private function templatePartWithoutReset(string $slug): int
