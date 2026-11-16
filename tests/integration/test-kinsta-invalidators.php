@@ -36,6 +36,58 @@ class TestKinstaInvalidators extends WP_UnitTestCase
         ], $list);
     }
 
+    // A group purge of a language home ("/sv/") would empty that whole language.
+    public function test_group_invalidator_purges_exact_urls_exactly(): void
+    {
+        add_filter(KinstaGroupCacheInvalidator::FILTER_EXACT_URLS, fn ($urls) => [...$urls, 'https://example.com/sv/', '/fi/']);
+
+        $list = (new KinstaGroupCacheInvalidator)->purgeList([
+            'sv' => 'https://example.com/sv/',
+            'sv-page' => 'https://example.com/sv/produkter/',
+            'fi' => 'https://other.example/fi',
+            'sv-other-host' => 'https://other.example/sv/',
+        ]);
+
+        $this->assertSame([
+            'single|sv' => 'example.com/sv/',
+            // Beneath a language home stays a prefix purge.
+            'group|sv-page' => 'example.com/sv/produkter/',
+            // A host-less path matches on any host, with or without the slash.
+            'single|fi' => 'other.example/fi',
+            // A full URL only matches its own host.
+            'group|sv-other-host' => 'other.example/sv/',
+        ], $list);
+    }
+
+    public function test_exact_urls_default_to_the_site_and_language_homes(): void
+    {
+        $urls = (new KinstaGroupCacheInvalidator)->exactUrls();
+
+        $this->assertContains(home_url('/'), $urls);
+        if (function_exists('pll_languages_list')) {
+            foreach (pll_languages_list() as $language) {
+                $this->assertContains(pll_home_url($language), $urls, "{$language} home");
+            }
+        }
+    }
+
+    public function test_a_language_home_is_purged_exactly_with_polylang(): void
+    {
+        if (! function_exists('pll_home_url') || ! function_exists('PLL') || ! PLL() || ! isset(PLL()->model)) {
+            $this->markTestSkipped('Polylang is not installed in this environment.');
+        }
+        $model = PLL()->model;
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'rtl' => 0, 'term_group' => 1, 'flag' => 'fi']);
+            $model->clean_languages_cache();
+        }
+
+        $home = pll_home_url('fi');
+        $list = (new KinstaGroupCacheInvalidator)->purgeList(['fi' => $home]);
+
+        $this->assertSame(['single|fi'], array_keys($list));
+    }
+
     public function test_group_invalidator_disables_query_string_storage(): void
     {
         new KinstaGroupCacheInvalidator;

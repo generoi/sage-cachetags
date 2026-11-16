@@ -164,7 +164,13 @@ Two invalidators, differing in how Kinsta resolves the purge:
 
 Add one of them to the `invalidator` list in `config/cachetags.php`. The site
 root (`/`) is always purged exactly, so a group purge never flushes the whole
-site.
+site. So is each Polylang language home (`pll_home_url()`, e.g. `/sv/`), which
+would otherwise empty that whole language. Add other URLs whose prefix covers
+much of the site — a full URL matches its own host only, a path any host:
+
+```php
+add_filter('cachetags/kinsta-exact-urls', fn (array $urls) => [...$urls, home_url('/shop/')]);
+```
 
 ### Cloudflare
 
