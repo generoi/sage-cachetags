@@ -8,6 +8,7 @@ use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\PolylangTags;
 use WP_Post;
+use WP_Term;
 
 class Polylang implements Action
 {
@@ -31,6 +32,11 @@ class Polylang implements Action
         // left stale.
         \add_action('before_delete_post', [$this, 'onPostDelete'], 9);
         \add_action('template_redirect', [$this, 'addLanguageTag']);
+        \add_action('template_redirect', [$this, 'addTranslationTags']);
+        // Linking translations writes the non-public post_translations /
+        // term_translations taxonomy, which Core ignores.
+        \add_action('pll_save_post', [$this, 'onSavePost'], 10, 3);
+        \add_action('pll_save_term', [$this, 'onSaveTerm'], 10, 3);
         // Priority 9 (not the default 10) so the lang: tag is added before
         // Bootstrap::saveCacheTagsRest and HttpHeader::restPostDispatch consume
         // the tag set at priority 10 — matching RestApi::tagResponse.
@@ -43,6 +49,56 @@ class Polylang implements Action
     public function addLanguageTag(): void
     {
         $this->cacheTags->add(PolylangTags::language());
+    }
+
+    /**
+     * Tag a post or term page with its translations, which its language
+     * switcher links to, so a translation's slug change or unpublish purges it.
+     *
+     * Post and term tags aren't language-qualified (filterArchiveTags only
+     * qualifies archive tags), so these match what a translation's save clears.
+     */
+    public function addTranslationTags(): void
+    {
+        $object = \get_queried_object();
+
+        if (is_singular() && $object instanceof WP_Post) {
+            $translations = array_diff(pll_get_post_translations($object->ID), [$object->ID]);
+            $this->cacheTags->add(CoreTags::posts(array_values($translations)));
+        } elseif ((is_category() || is_tag() || is_tax()) && $object instanceof WP_Term) {
+            $translations = array_diff(pll_get_term_translations($object->term_id), [$object->term_id]);
+            $this->cacheTags->add(CoreTags::terms(array_values($translations)));
+        }
+    }
+
+    /**
+     * A post's translations link to it from their language switchers. Saving
+     * it (which is also when translations are linked or unlinked) clears them,
+     * as a newly linked translation's page doesn't carry this post's tag yet.
+     *
+     * @param  array<string, int>  $translations  Language slug => post id, including this post.
+     */
+    public function onSavePost(int $postId, WP_Post $post, array $translations): void
+    {
+        if (! CoreTags::isCacheablePostType($post->post_type)) {
+            return;
+        }
+
+        $this->cacheTags->clear(CoreTags::posts(array_values(array_diff($translations, [$postId]))));
+    }
+
+    /**
+     * The term equivalent of onSavePost().
+     *
+     * @param  array<string, int>  $translations  Language slug => term id, including this term.
+     */
+    public function onSaveTerm(int $termId, string $taxonomy, array $translations): void
+    {
+        if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
+            return;
+        }
+
+        $this->cacheTags->clear(CoreTags::terms(array_values(array_diff($translations, [$termId]))));
     }
 
     /**

@@ -160,6 +160,110 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains('archive:post:en', Tag::toStrings($purge->getValue($cacheTags)));
     }
 
+    private function ensureFinnish(): void
+    {
+        $model = PLL()->model;
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'rtl' => 0, 'term_group' => 1, 'flag' => 'fi']);
+            $model->clean_languages_cache();
+        }
+    }
+
+    /**
+     * @return array{0: int, 1: int} English and Finnish post ids, linked.
+     */
+    private function translatedPosts(): array
+    {
+        $this->ensureFinnish();
+        $en = self::factory()->post->create(['post_status' => 'publish']);
+        $fi = self::factory()->post->create(['post_status' => 'publish']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi, 'fi');
+        pll_save_post_translations(['en' => $en, 'fi' => $fi]);
+
+        return [$en, $fi];
+    }
+
+    private function queuedPurgeTags(): array
+    {
+        $cacheTags = CacheTags::getInstance();
+        $purge = new ReflectionProperty($cacheTags, 'purgeTags');
+        $purge->setAccessible(true);
+
+        return Tag::toStrings($purge->getValue($cacheTags));
+    }
+
+    private function resetPurgeTags(): void
+    {
+        $cacheTags = CacheTags::getInstance();
+        $purge = new ReflectionProperty($cacheTags, 'purgeTags');
+        $purge->setAccessible(true);
+        $purge->setValue($cacheTags, []);
+    }
+
+    // Linking a translation writes the non-public post_translations taxonomy,
+    // which Core ignores; the other translations' switchers link to this post.
+    public function test_saving_a_post_clears_its_translations(): void
+    {
+        [$en, $fi] = $this->translatedPosts();
+        $action = $this->action();
+        $action->init();
+        $this->resetPurgeTags();
+
+        do_action('pll_save_post', $en, get_post($en), pll_get_post_translations($en));
+
+        $this->assertContains("post:{$fi}", $this->queuedPurgeTags());
+    }
+
+    public function test_saving_a_term_clears_its_translations(): void
+    {
+        $this->ensureFinnish();
+        $en = self::factory()->category->create();
+        $fi = self::factory()->category->create();
+        pll_set_term_language($en, 'en');
+        pll_set_term_language($fi, 'fi');
+        pll_save_term_translations(['en' => $en, 'fi' => $fi]);
+        $action = $this->action();
+        $action->init();
+        $this->resetPurgeTags();
+
+        do_action('pll_save_term', $en, 'category', pll_get_term_translations($en));
+
+        $this->assertContains("term:{$fi}", $this->queuedPurgeTags());
+    }
+
+    // A slug change on one translation purges the pages linking to it.
+    public function test_a_singular_page_is_tagged_with_its_translations(): void
+    {
+        [$en, $fi] = $this->translatedPosts();
+        $this->go_to(add_query_arg('p', $en, home_url('/')));
+        $cacheTags = $this->resetTags();
+
+        $this->action()->addTranslationTags();
+
+        $tags = $cacheTags->get();
+        $this->assertContains("post:{$fi}", $tags);
+        $this->assertNotContains("post:{$fi}:fi", $tags, 'post tags are not language-qualified');
+    }
+
+    public function test_a_term_archive_is_tagged_with_its_translations(): void
+    {
+        $this->ensureFinnish();
+        $en = self::factory()->category->create();
+        $fi = self::factory()->category->create();
+        pll_set_term_language($en, 'en');
+        pll_set_term_language($fi, 'fi');
+        pll_save_term_translations(['en' => $en, 'fi' => $fi]);
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        wp_set_object_terms($postId, [$en], 'category');
+        $this->go_to(add_query_arg('cat', $en, home_url('/')));
+        $cacheTags = $this->resetTags();
+
+        $this->action()->addTranslationTags();
+
+        $this->assertContains("term:{$fi}", $cacheTags->get());
+    }
+
     // H2: the lang: tag must be registered before the priority-10 save/header
     // consumers (RestApi uses 9 for the same reason).
     public function test_rest_language_tag_is_registered_before_the_save_consumers(): void
