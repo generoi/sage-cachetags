@@ -75,6 +75,34 @@ class TestStoreUrl extends WP_UnitTestCase
         $this->assertStringNotContainsString('ref', $url);
     }
 
+    public function test_a_query_string_is_dropped_only_when_storage_would_drop_it(): void
+    {
+        $_GET = ['s' => 'shoes'];
+        $this->assertFalse(Util::isQueryStringDropped(), 'stored with its query string');
+
+        add_filter('cachetags/store-query-string', '__return_false');
+        $this->assertTrue(Util::isQueryStringDropped(), 'storage off');
+
+        $_GET = [];
+        $this->assertFalse(Util::isQueryStringDropped(), 'no query string');
+    }
+
+    // Tracking params render the same page, so they still map to the bare URL.
+    public function test_ignored_params_alone_are_not_a_dropped_query_string(): void
+    {
+        add_filter('cachetags/store-query-string', '__return_false');
+        $_GET = ['utm_source' => 'newsletter', 'gclid' => 'x'];
+
+        $this->assertFalse(Util::isQueryStringDropped());
+    }
+
+    public function test_an_overlong_query_string_is_dropped(): void
+    {
+        $_GET = ['q' => str_repeat('a', 300)];
+
+        $this->assertTrue(Util::isQueryStringDropped());
+    }
+
     public function test_overlong_query_string_falls_back_to_the_path(): void
     {
         $_GET = ['q' => str_repeat('a', 300)];

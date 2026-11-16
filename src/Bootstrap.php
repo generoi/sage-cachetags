@@ -357,7 +357,9 @@ class Bootstrap
             // WordPress sends no-store on a 404, so no URL-based purge has anything
             // to clear, and every path a scanner probes would otherwise leave rows.
             // The tag header stays, for a tag-based edge that holds 404s anyway.
-            if (! is_404()) {
+            // A render whose query string the stored URL would drop isn't stored
+            // either (see Util::isQueryStringDropped); its header stays too.
+            if (! is_404() && ! Util::isQueryStringDropped()) {
                 $this->cacheTags->save(Util::currentUrl());
             }
         } elseif (! defined('DONOTCACHEPAGE')) {

@@ -226,6 +226,27 @@ class Util
     }
 
     /**
+     * Whether the current request has a query string that currentUrl() drops:
+     * query-string storage is off, or the full URL overflows the url column.
+     *
+     * Storing such a render would attribute its tags to the bare URL — every
+     * `/?s=…` search to the front page, which then collects every result's
+     * tags and is purged by all of them — while the edge cached it, if at all,
+     * under the query-string URL, which a purge of the bare URL doesn't reach
+     * (on Kinsta query-string URLs aren't cached). So it isn't stored.
+     *
+     * Ignored params (`cachetags/url-ignored-params`: utm_*, gclid, …) don't
+     * count: `/?utm_source=x` renders the same page as `/` and still maps to it.
+     */
+    public static function isQueryStringDropped(): bool
+    {
+        $ignored = apply_filters('cachetags/url-ignored-params', self::IGNORED_URL_PARAMS);
+
+        return array_diff_key($_GET, array_flip($ignored)) !== []
+            && ! str_contains(self::currentUrl(), '?');
+    }
+
+    /**
      * Get environment variable, using any env() function in scope if available, otherwise getenv().
      */
     public static function env(string $key): ?string

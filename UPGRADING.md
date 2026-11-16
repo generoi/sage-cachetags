@@ -10,6 +10,15 @@ No code changes are needed. These behaviours change:
   menu turned into a 500 on every page, where `wp_nav_menu()` or Navi would just
   render nothing. Code that relied on the exception to catch a typo'd slug
   should check `wp_get_nav_menu_object()` itself.
+- **Query-string renders aren't stored under the bare URL.** With
+  `cachetags/store-query-string` off (which `KinstaGroupCacheInvalidator` sets),
+  or a query string too long for the store column, a front-end render with a
+  query string saves no store rows. Before, `/?s=x` was stored as `/`, so the
+  front page collected every search result's tags and was purged by all of
+  them. Kinsta doesn't cache query-string URLs, so nothing purgeable is lost.
+  Params in `cachetags/url-ignored-params` (`utm_*`, `gclid`, …) still map to the
+  bare URL. The tag header is unchanged. The extra tags already stored on `/`
+  go with its next purge, which forgets every tag of a purged URL.
 
 ## 3.0
 

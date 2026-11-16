@@ -98,8 +98,8 @@ irrelevant, which makes it the best fit for high-frequency editorial sites.
 Front-end pages are stored under the **actual requested URL** (including its query
 string), so a URL-based purge matches the variant a page cache keyed on. A default
 set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
-`_`) is stripped and the rest sorted; keys longer than the `varchar(191)` column
-fall back to the path.
+`_`) is stripped and the rest sorted; a request whose key would be longer than
+the `varchar(191)` column isn't stored (see below).
 
 On a **query-bypass** edge — Fastly (purges by `Surrogate-Key`, ignores the URL)
 or Kinsta (query-string URLs bypass the cache entirely) — those query-string rows
@@ -111,6 +111,14 @@ storing the path only:
 ```php
 add_filter('cachetags/store-query-string', '__return_false');
 ```
+
+With query-string storage off (as `KinstaGroupCacheInvalidator` sets it), a
+render with a query string is **not stored at all**, rather than stored under
+the bare URL: `/?s=x` would otherwise give the front page every search result's
+tags, and purge it on every one of them. The same goes for a query string too
+long for the store column. Params in the ignored list (`utm_*`, `gclid`, …)
+don't count, so `/?utm_source=x` still maps to `/`. The tag header is sent
+either way.
 
 **To match a URL-keyed edge that does cache query strings** (SiteGround, or Kinsta
 configured to cache GET params) the strip list must equal that edge's — and that's
