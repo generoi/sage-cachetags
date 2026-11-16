@@ -659,6 +659,14 @@ wp cachetags clear page
 Rename it or turn it off with `'base-tag' => null` (config) / `->baseTag(null)`
 (bootstrap).
 
+Site Editor content renders into every page — template parts
+(`block_template_part('footer')`), templates and the inlined global styles — so
+publishing, updating, trashing or resetting a published `wp_template_part`,
+`wp_template` or `wp_global_styles` clears the base tag. With the base tag
+turned off, nothing purges on those saves; flush the cache yourself after
+editing them. A theme action that already does this (e.g. a hand-rolled
+`TemplateParts` action) can be removed.
+
 When Polylang is active, every page is also tagged with its language, so you can
 clear all content in one language:
 
