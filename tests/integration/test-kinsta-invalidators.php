@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Invalidators\KinstaCacheInvalidator;
 use Genero\Sage\CacheTags\Invalidators\KinstaGroupCacheInvalidator;
+use Genero\Sage\CacheTags\Util;
 
 /**
  * @covers \Genero\Sage\CacheTags\Invalidators\KinstaCacheInvalidator
@@ -115,6 +116,28 @@ class TestKinstaInvalidators extends WP_UnitTestCase
         } finally {
             restore_current_blog();
         }
+    }
+
+    // Kinsta serves these from the bare URL's entry; other edges (SiteGround,
+    // WP Rocket, Super Cache) cache ?ref= as its own key, so only Kinsta adds them.
+    public function test_kinsta_invalidators_ignore_the_params_kinstas_edge_leaves_out_of_its_key(): void
+    {
+        $this->assertNotContains('ref', Util::IGNORED_URL_PARAMS, 'not ignored for every edge');
+        $this->assertNotContains('ref', apply_filters('cachetags/url-ignored-params', Util::IGNORED_URL_PARAMS));
+
+        new KinstaCacheInvalidator;
+
+        $ignored = apply_filters('cachetags/url-ignored-params', Util::IGNORED_URL_PARAMS);
+        foreach (['_ga', 'mc_cid', 'mc_eid', 'ref', 'utm_source'] as $param) {
+            $this->assertContains($param, $ignored, $param);
+        }
+    }
+
+    public function test_the_group_invalidator_ignores_them_too(): void
+    {
+        new KinstaGroupCacheInvalidator;
+
+        $this->assertContains('mc_cid', apply_filters('cachetags/url-ignored-params', Util::IGNORED_URL_PARAMS));
     }
 
     public function test_group_invalidator_disables_query_string_storage(): void

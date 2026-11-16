@@ -98,9 +98,11 @@ irrelevant, which makes it the best fit for high-frequency editorial sites.
 Front-end pages are stored under the **actual requested URL** (including its query
 string), so a URL-based purge matches the variant a page cache keyed on. A default
 set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
-`_`, and `_ga`/`mc_cid`/`mc_eid`/`ref`, which Kinsta's edge leaves out of its
-cache key) is stripped and the rest sorted; a key longer than the
-`varchar(191)` column falls back to the path.
+`_`) is stripped and the rest sorted; a key longer than the `varchar(191)`
+column falls back to the path. The Kinsta invalidators also strip `_ga`,
+`mc_cid`, `mc_eid` and `ref`, which Kinsta's edge leaves out of its cache key and
+serves from the bare URL's entry; edges that cache them as their own key
+(SiteGround, WP Rocket, Super Cache) keep them.
 
 On a **query-bypass** edge — Fastly (purges by `Surrogate-Key`, ignores the URL)
 or Kinsta (a query-string URL bypasses the cache, except for the params it leaves

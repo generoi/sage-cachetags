@@ -31,6 +31,7 @@ class KinstaGroupCacheInvalidator extends KinstaCacheInvalidator
 
     public function __construct()
     {
+        parent::__construct();
         \add_filter('cachetags/store-query-string', '__return_false');
     }
 

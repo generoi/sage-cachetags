@@ -189,11 +189,6 @@ class Util
         // Campaign / click trackers (Google, Microsoft, Facebook, GA linker).
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
         'gclid', 'gad_source', 'gbraid', 'wbraid', 'dclid', 'fbclid', 'msclkid', '_gl',
-        // Kinsta's edge leaves these out of its cache key and serves the request
-        // from the bare URL's entry (probed on a live site, as it does utm_*,
-        // fbclid and dclid). A render with one seeds that entry, so it must be
-        // stored under the bare URL to be purgeable.
-        '_ga', 'mc_cid', 'mc_eid', 'ref',
         // Volatile WordPress per-request params.
         '_wpnonce', '_',
     ];

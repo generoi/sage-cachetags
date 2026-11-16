@@ -19,7 +19,9 @@ No code changes are needed. These behaviours change:
   and was purged by all of them; Kinsta doesn't cache those URLs. Every other
   param still maps to the bare URL as in 3.2, so an unlisted tracking param
   keeps the bare URL purgeable. If a theme param changes the render (`?view=`),
-  add it to `cachetags/render-params`. The tag header is unchanged. The extra
+  add it to `cachetags/render-params`. With a Kinsta invalidator, `_ga`,
+  `mc_cid`, `mc_eid` and `ref` are also stripped from the stored URL (Kinsta
+  serves them from the bare URL's entry). The tag header is unchanged. The extra
   tags already stored on `/` go with its next purge, which forgets every tag of
   a purged URL.
 - **`cachetags:status` takes the URL as an argument:**
