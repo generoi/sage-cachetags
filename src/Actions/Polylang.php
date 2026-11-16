@@ -295,10 +295,10 @@ class Polylang implements Action
         foreach (array_keys($before + $after) as $location) {
             $old = array_map('intval', (array) ($before[$location] ?? []));
             $new = array_map('intval', (array) ($after[$location] ?? []));
-            ksort($old);
-            ksort($new);
-            if (array_filter($old) !== array_filter($new)) {
-                $tags[] = CoreTags::menuLocation((string) $location);
+            foreach (array_keys($old + $new) as $language) {
+                if (($old[$language] ?? 0) !== ($new[$language] ?? 0)) {
+                    $tags[] = CoreTags::menuLocation((string) $location)->qualify((string) $language);
+                }
             }
         }
         $this->cacheTags->clear($tags);
@@ -448,6 +448,11 @@ class Polylang implements Action
      * match none of the stored `archive:{type}:{lang}` entries and the
      * translated listings would never clear (the herrfors alert-banner bug).
      *
+     * A bare `menu-location:{location}` is qualified the same way: each
+     * language assigns its own menu to a location, so reassigning one
+     * language's menu (compareMenuLocations clears `:{lang}`) purges only that
+     * language's pages.
+     *
      * @param  array<string|Tag>  $tags
      * @return Tag[]
      */
@@ -461,10 +466,9 @@ class Polylang implements Action
             $parsed = Tag::from($tag);
             // Only a bare archive:{type} (no language/any qualifier, no site
             // scope) — matching the previous count===2 string check exactly.
-            $isBareTranslatedArchive = $parsed->type === 'archive'
-                && $parsed->qualifier === null
+            $isBareTranslatedArchive = $parsed->qualifier === null
                 && $parsed->scopes === []
-                && pll_is_translated_post_type($parsed->id);
+                && (($parsed->type === 'archive' && pll_is_translated_post_type($parsed->id)) || $parsed->type === 'menu-location');
 
             if ($isBareTranslatedArchive && $languages) {
                 foreach ($languages as $language) {

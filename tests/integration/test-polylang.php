@@ -3,6 +3,7 @@
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Tag;
+use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\PolylangTags;
 
 /**
@@ -414,11 +415,29 @@ class TestPolylang extends WP_UnitTestCase
         // Only the Finnish menu changes; the theme mod itself keeps primary => $en.
         $this->saveLocationsScreen(['primary' => $en, 'primary___fi' => $other]);
 
-        $this->assertContains('menu-location:primary', $this->queuedPurgeTags());
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains('menu-location:primary:fi', $tags);
+        $this->assertNotContains('menu-location:primary:en', $tags, 'only the language that changed');
 
         $this->resetPurgeTags();
         $this->saveLocationsScreen(['primary' => $en, 'primary___fi' => $other]);
-        $this->assertNotContains('menu-location:primary', $this->queuedPurgeTags(), 'nothing changed');
+        $this->assertNotContains('menu-location:primary:fi', $this->queuedPurgeTags(), 'nothing changed');
+    }
+
+    // Each language renders its own menu in a location, so the page's location
+    // tag carries its language.
+    public function test_a_menu_location_is_tagged_with_the_pages_language(): void
+    {
+        $this->ensureFinnish();
+        $this->action()->init();
+        PLL()->curlang = PLL()->model->get_language('fi');
+        $cacheTags = $this->resetTags();
+
+        $cacheTags->add(CoreTags::navigation('primary'));
+
+        $tags = $cacheTags->get();
+        $this->assertContains('menu-location:primary:fi', $tags);
+        $this->assertNotContains('menu-location:primary', $tags);
     }
 
     private function templatePartKey(string $slug, ?string $language = null): string
