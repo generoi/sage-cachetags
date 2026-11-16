@@ -36,6 +36,12 @@ class Core implements Action
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
         \add_filter('wp_nav_menu_args', [$this, 'addNavMenuCacheTags']);
+        // block_template_part() goes through get_block_template(); the
+        // core/template-part block doesn't (tagged in addBlockCacheTags).
+        \add_filter('get_block_template', [$this, 'addTemplatePartCacheTags'], 10, 3);
+        \add_filter('template_include', [$this, 'addBlockTemplateCacheTags'], PHP_INT_MAX);
+        \add_action('transition_post_status', [$this, 'onBlockTemplateStatusTransition'], 10, 3);
+        \add_action('before_delete_post', [$this, 'onBlockTemplateDelete']);
 
         // Clear caches
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
@@ -223,6 +229,14 @@ class Core implements Action
                     $tags[] = CoreTags::terms(get_the_terms($postId, $attributes['term']));
                 }
                 break;
+            case 'core/template-part':
+                // Core renders a part only from the active theme, from its post
+                // or else its file; either way the key is theme + slug.
+                $theme = $attributes['theme'] ?? get_stylesheet();
+                if (! empty($attributes['slug']) && $theme === get_stylesheet()) {
+                    $tags[] = $this->blockTemplateTags("{$theme}//{$attributes['slug']}", 'wp_template_part');
+                }
+                break;
         }
 
         $this->cacheTags->add($tags);
@@ -379,6 +393,99 @@ class Core implements Action
     protected function isEmbeddedPostType(string $postType): bool
     {
         return in_array($postType, ['wp_block', 'wp_navigation'], true);
+    }
+
+    /**
+     * Tag a template part rendered with block_template_part(), which resolves
+     * it through get_block_template() (also when it falls back to the theme
+     * file, and also when there is none yet, so its first customisation still
+     * purges the page).
+     *
+     * @param  \WP_Block_Template|null  $template
+     * @return \WP_Block_Template|null
+     */
+    public function addTemplatePartCacheTags($template, string $id, string $templateType)
+    {
+        if ($templateType === 'wp_template_part' && ! is_admin()) {
+            $this->cacheTags->add($this->blockTemplateTags($id, $templateType));
+        }
+
+        return $template;
+    }
+
+    /**
+     * Tag the block template the page resolved to (locate_block_template() sets
+     * its `{theme}//{slug}` id before template_include).
+     */
+    public function addBlockTemplateCacheTags($template)
+    {
+        global $_wp_current_template_id;
+
+        if (is_string($_wp_current_template_id) && $_wp_current_template_id !== '') {
+            $this->cacheTags->add($this->blockTemplateTags($_wp_current_template_id, 'wp_template'));
+        }
+
+        return $template;
+    }
+
+    /**
+     * Publishing, updating, trashing or unpublishing a template or template part
+     * clears its key: the pages rendering it, whether from this post or the
+     * theme file it overrides.
+     */
+    public function onBlockTemplateStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
+    {
+        if (($newStatus === 'publish' || $oldStatus === 'publish') && $this->isBlockTemplatePostType($post->post_type)) {
+            $this->cacheTags->clear($this->blockTemplatePurgeTags($post));
+        }
+    }
+
+    /**
+     * "Clear customizations" force-deletes the post (no status transition), and
+     * pages fall back to the theme file under the same key.
+     */
+    public function onBlockTemplateDelete(int $postId): void
+    {
+        $post = get_post($postId);
+        if ($post instanceof WP_Post && $post->post_status === 'publish' && $this->isBlockTemplatePostType($post->post_type)) {
+            $this->cacheTags->clear($this->blockTemplatePurgeTags($post));
+        }
+    }
+
+    protected function isBlockTemplatePostType(string $postType): bool
+    {
+        return in_array($postType, ['wp_template', 'wp_template_part'], true);
+    }
+
+    /**
+     * The tags a page rendering a template (part) carries. Filtered by the
+     * Polylang action to qualify a part with the page's language.
+     *
+     * @return Tag[]
+     */
+    protected function blockTemplateTags(string $id, string $templateType): array
+    {
+        return Tag::fromMany((array) apply_filters('cachetags/block-template-tags', CoreTags::blockTemplate($id, $templateType), $id, $templateType));
+    }
+
+    /**
+     * The tags to clear when a template (part) post changes. Filtered by the
+     * Polylang action to map a translated part's post to its languages.
+     *
+     * @return Tag[]
+     */
+    protected function blockTemplatePurgeTags(WP_Post $post): array
+    {
+        $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
+        $theme = is_array($themes) && $themes ? (string) reset($themes) : get_stylesheet();
+        // Trashing renames the post to {slug}__trashed before the transition,
+        // keeping the slug it rendered under in _wp_desired_post_slug.
+        $slug = $post->post_status === 'trash'
+            ? (get_post_meta($post->ID, '_wp_desired_post_slug', true) ?: preg_replace('/__trashed$/', '', $post->post_name))
+            : $post->post_name;
+        $tags = CoreTags::blockTemplate("{$theme}//{$slug}", $post->post_type);
+
+        return Tag::fromMany((array) apply_filters('cachetags/block-template-purge-tags', $tags, $post, $theme, $slug));
     }
 
     /**

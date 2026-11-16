@@ -346,6 +346,90 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains('menu:12', $this->queuedPurgeTags());
     }
 
+    private function templatePartKey(string $slug, ?string $language = null): string
+    {
+        return 'template-part:'.get_stylesheet()."//{$slug}".($language ? ":{$language}" : '');
+    }
+
+    private function templatePartPost(string $slug): int
+    {
+        $postId = wp_insert_post([
+            'post_type' => 'wp_template_part',
+            'post_status' => 'publish',
+            'post_name' => $slug,
+            'post_title' => $slug,
+        ]);
+        wp_set_object_terms($postId, get_stylesheet(), 'wp_theme');
+
+        return $postId;
+    }
+
+    // Polylang Pro resolves footer___fi on Finnish pages, falling back to the
+    // default language's footer, so the page's key carries its language.
+    public function test_a_template_part_is_tagged_with_the_pages_language(): void
+    {
+        $this->ensureFinnish();
+        $this->action()->init();
+        PLL()->curlang = PLL()->model->get_language('fi');
+        $cacheTags = $this->resetTags();
+
+        do_blocks('<!-- wp:template-part {"slug":"footer"} /-->');
+
+        $tags = $cacheTags->get();
+        $this->assertContains($this->templatePartKey('footer', 'fi'), $tags);
+        $this->assertNotContains($this->templatePartKey('footer'), $tags);
+    }
+
+    public function test_saving_a_translated_template_part_purges_only_its_language(): void
+    {
+        $this->ensureFinnish();
+        $this->action()->init();
+        $this->resetPurgeTags();
+
+        $postId = $this->templatePartPost('footer___fi');
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains($this->templatePartKey('footer', 'fi'), $tags, 'adding a translation');
+        $this->assertNotContains($this->templatePartKey('footer', 'en'), $tags);
+
+        $this->resetPurgeTags();
+        wp_delete_post($postId, true);
+        $this->assertContains($this->templatePartKey('footer', 'fi'), $this->queuedPurgeTags(), 'removing it falls back to the default');
+
+        // Trashing renames the post to header___fi__trashed first.
+        $postId = $this->templatePartPost('header___fi');
+        $this->resetPurgeTags();
+        wp_trash_post($postId);
+        $this->assertContains($this->templatePartKey('header', 'fi'), $this->queuedPurgeTags(), 'trashing a translation');
+    }
+
+    public function test_saving_the_default_template_part_purges_languages_falling_back_to_it(): void
+    {
+        $this->ensureFinnish();
+        $this->action()->init();
+        $this->resetPurgeTags();
+
+        $this->templatePartPost('footer');
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains($this->templatePartKey('footer', 'en'), $tags, 'the default language');
+        $this->assertContains($this->templatePartKey('footer', 'fi'), $tags, 'fi has no translation, so it falls back');
+    }
+
+    public function test_saving_the_default_template_part_leaves_translated_languages(): void
+    {
+        $this->ensureFinnish();
+        $this->templatePartPost('footer___fi');
+        $this->action()->init();
+        $this->resetPurgeTags();
+
+        $this->templatePartPost('footer');
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains($this->templatePartKey('footer', 'en'), $tags);
+        $this->assertNotContains($this->templatePartKey('footer', 'fi'), $tags, 'fi renders its own translation');
+    }
+
     public function test_a_singular_page_is_tagged_with_its_translations_urls(): void
     {
         [$en, $fi] = $this->translatedPosts();

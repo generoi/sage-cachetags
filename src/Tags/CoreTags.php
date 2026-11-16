@@ -163,6 +163,23 @@ class CoreTags
     }
 
     /**
+     * Return cache tags for a block template or template part by its id
+     * (`{theme}//{slug}`): `template:…` / `template-part:…`. Keyed by theme and
+     * slug, not post id, so the theme file, its first customisation and a reset
+     * back to the file all share one tag.
+     *
+     * @return Tag[]
+     */
+    public static function blockTemplate(string $id, string $templateType = 'wp_template_part'): array
+    {
+        if (! str_contains($id, '//')) {
+            return [];
+        }
+
+        return [Tag::of($templateType === 'wp_template' ? 'template' : 'template-part', $id)];
+    }
+
+    /**
      * Return cache tags for the current queried object.
      *
      * @param  WP_Post|WP_Term|WP_Post_Type|null  $object

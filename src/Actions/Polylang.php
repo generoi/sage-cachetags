@@ -19,6 +19,12 @@ class Polylang implements Action
     const URL_QUALIFIER = 'url';
 
     /**
+     * Separator of a translated template part's language suffix, as in
+     * Polylang Pro's PLL_FSE_Template_Slug::SEPARATOR (footer___sv).
+     */
+    const TEMPLATE_SLUG_SEPARATOR = '___';
+
+    /**
      * Snapshots taken on edit_terms, compared on edited_term: a translated
      * term's link fields, or a translation group's members.
      *
@@ -58,6 +64,8 @@ class Polylang implements Action
         // wp_publish_post() (scheduled posts) doesn't fire post_updated.
         \add_action('transition_post_status', [$this, 'onScheduledPublish'], 10, 3);
         \add_action('updated_option', [$this, 'onMenuLocationsUpdate'], 10, 3);
+        \add_filter('cachetags/block-template-tags', [$this, 'filterBlockTemplateTags'], 10, 3);
+        \add_filter('cachetags/block-template-purge-tags', [$this, 'filterBlockTemplatePurgeTags'], 10, 4);
         // Priority 9 (not the default 10) so the lang: tag is added before
         // Bootstrap::saveCacheTagsRest and HttpHeader::restPostDispatch consume
         // the tag set at priority 10 — matching RestApi::tagResponse.
@@ -230,6 +238,90 @@ class Polylang implements Action
         }
 
         $this->cacheTags->clear($tags);
+    }
+
+    /**
+     * A template part renders per language: Polylang Pro stores a translation
+     * as its own post, slug `{slug}___{lang}` (PLL_FSE_Template_Slug), and on a
+     * non-default language page resolves `{slug}___{lang}` first, then the
+     * default language's `{slug}`, then the theme file. So the page's tag is
+     * qualified with its language.
+     *
+     * @param  Tag[]  $tags
+     * @return Tag[]
+     */
+    public function filterBlockTemplateTags(array $tags, string $id, string $templateType): array
+    {
+        $language = pll_current_language();
+        if ($templateType !== 'wp_template_part' || ! $language) {
+            return $tags;
+        }
+
+        return array_map(fn ($tag) => Tag::from($tag)->qualify($language), $tags);
+    }
+
+    /**
+     * Map a saved template part post to the languages that render it: a
+     * `{slug}___{lang}` translation to that language; the default-language
+     * `{slug}` to the default language and every language without a published
+     * translation of its own (they fall back to it), plus the bare tag for a page
+     * rendered without a language. Adding or removing a translation changes
+     * what its language renders, and clears it the same way.
+     *
+     * @param  Tag[]  $tags
+     * @return Tag[]
+     */
+    public function filterBlockTemplatePurgeTags(array $tags, WP_Post $post, string $theme, string $slug): array
+    {
+        $languages = function_exists('pll_languages_list') ? pll_languages_list() : [];
+        if ($post->post_type !== 'wp_template_part' || ! $languages) {
+            return $tags;
+        }
+
+        foreach ($languages as $language) {
+            $suffix = self::TEMPLATE_SLUG_SEPARATOR.$language;
+            if (str_ends_with($slug, $suffix) && strlen($slug) > strlen($suffix)) {
+                return array_map(
+                    fn ($tag) => $tag->qualify($language),
+                    CoreTags::blockTemplate("{$theme}//".substr($slug, 0, -strlen($suffix)), 'wp_template_part')
+                );
+            }
+        }
+
+        $translated = $this->translatedTemplatePartSlugs($slug, $theme, $languages);
+        $default = pll_default_language();
+        $result = $tags;
+        foreach ($languages as $language) {
+            if ($language === $default || ! in_array($slug.self::TEMPLATE_SLUG_SEPARATOR.$language, $translated, true)) {
+                foreach ($tags as $tag) {
+                    $result[] = Tag::from($tag)->qualify($language);
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * The published `{slug}___{lang}` translations of a template part.
+     *
+     * @param  string[]  $languages
+     * @return string[]
+     */
+    protected function translatedTemplatePartSlugs(string $slug, string $theme, array $languages): array
+    {
+        $query = new \WP_Query([
+            'post_type' => 'wp_template_part',
+            'post_status' => 'publish',
+            'post_name__in' => array_map(fn ($language) => $slug.self::TEMPLATE_SLUG_SEPARATOR.$language, $languages),
+            'tax_query' => [['taxonomy' => 'wp_theme', 'field' => 'name', 'terms' => $theme]],
+            // Every language's post, not only the current one's.
+            'lang' => '',
+            'posts_per_page' => count($languages),
+            'no_found_rows' => true,
+        ]);
+
+        return array_map(fn (WP_Post $post) => $post->post_name, $query->posts);
     }
 
     protected function isTranslationGroup(string $taxonomy): bool

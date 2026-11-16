@@ -31,9 +31,13 @@ No code changes are needed. These behaviours change:
 
 New purges to expect:
 
-- Saving a published template part, template or global styles clears the base
-  tag (`page`), so every page. A theme action that did this (or flushed the
-  whole cache) can be removed. With `'base-tag' => null` nothing purges.
+- Saving, trashing or resetting a published template or template part purges
+  the pages rendering it (`template:` / `template-part:{theme}//{slug}`, per
+  language with Polylang). Saving global styles, or adding or removing a
+  template no theme file backs, clears the base tag (`page`), so every page;
+  with `'base-tag' => null` those purge nothing. A theme action that purged on
+  these saves (or flushed the whole cache) can be removed. Pages rendered before
+  the upgrade don't carry the new tags yet, so flush once after deploying.
 - With Polylang, linking or unlinking a translation purges the pages of every
   translation in the group, and changing a translation's title, slug, parent or
   status purges the other translations' pages (their language switchers link

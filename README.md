@@ -695,13 +695,30 @@ wp cachetags clear page
 Rename it or turn it off with `'base-tag' => null` (config) / `->baseTag(null)`
 (bootstrap).
 
-Site Editor content renders into every page — template parts
-(`block_template_part('footer')`), templates and the inlined global styles — so
-publishing, updating, trashing or resetting a published `wp_template_part`,
-`wp_template` or `wp_global_styles` clears the base tag. With the base tag
-turned off, nothing purges on those saves; flush the cache yourself after
-editing them. A theme action that already does this (e.g. a hand-rolled
-`TemplateParts` action) can be removed.
+### Site Editor content
+
+Pages are tagged with the block template they resolve to and the template parts
+they render, keyed by theme and slug: `template:{theme}//{slug}` and
+`template-part:{theme}//{slug}`. Both the `core/template-part` block and PHP
+`block_template_part('footer')` are covered. Because the key isn't a post id,
+the theme file, its first customisation and "Clear customizations" (which
+force-deletes the post) all purge the same pages. Publishing, updating,
+trashing or deleting a published `wp_template` / `wp_template_part` clears its
+key. A theme action that purged on these saves (or flushed the whole cache) can
+be removed.
+
+With Polylang, a template part's key is qualified with the page's language
+(`template-part:{theme}//footer:sv`). Polylang Pro stores a translated part as
+its own post (`footer___sv`) and falls back to the default language's part, so
+saving `footer___sv` purges only Swedish pages, saving `footer` purges the
+default language and every language without its own translation, and adding or
+removing a translation purges that language.
+
+The inlined global styles render on every page, so saving `wp_global_styles`
+clears the base tag (except the empty stub the block editor creates for a theme
+without user styles). So does adding or removing a template no theme file backs,
+since that changes which template pages resolve to. With the base tag turned
+off, nothing purges on those saves.
 
 When Polylang is active, every page is also tagged with its language, so you can
 clear all content in one language:

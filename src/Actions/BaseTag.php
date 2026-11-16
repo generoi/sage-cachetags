@@ -12,19 +12,15 @@ use WP_Post;
  * never carry it) stay cached. Wired by Bootstrap with the configured tag name;
  * disable by setting the base tag to null.
  *
- * Site Editor content (template parts, templates, global styles) is rendered
- * into every page, so a change to it clears the base tag. With the base tag
- * disabled nothing purges on those saves.
+ * Global styles are inlined into every page, so a change to them clears the
+ * base tag. So does a template appearing or disappearing that has no theme file:
+ * it changes which template pages resolve to, and those pages carry another
+ * template's tag. Other template and template part saves purge only the pages
+ * rendering them (Core's `template:` / `template-part:` tags). With the base
+ * tag disabled nothing purges on these saves.
  */
 class BaseTag implements Action
 {
-    /**
-     * Post types the Site Editor saves that render on every page: a header or
-     * footer template part, a template, the inlined global stylesheet. They are
-     * _builtin and not public, so Core never purges on them.
-     */
-    const SITE_WIDE_POST_TYPES = ['wp_template_part', 'wp_template', 'wp_global_styles'];
-
     public function __construct(protected CacheTags $cacheTags, protected string $tag = 'page') {}
 
     public function bind(): void
@@ -33,8 +29,8 @@ class BaseTag implements Action
         \add_action('rest_api_init', [$this, 'addBaseTag']);
 
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
-        // "Clear customizations" force-deletes the post to fall back to the
-        // theme file, which skips transition_post_status.
+        // A reset ("Clear customizations") force-deletes the post, which skips
+        // transition_post_status.
         \add_action('before_delete_post', [$this, 'onPostDelete'], 10, 2);
     }
 
@@ -43,23 +39,25 @@ class BaseTag implements Action
         $this->cacheTags->add($this->tag);
     }
 
-    /**
-     * A site-wide post is published, updated or unpublished (trashed).
-     */
     public function onPostStatusTransition(string $newStatus, string $oldStatus, WP_Post $post): void
     {
         if ($newStatus !== 'publish' && $oldStatus !== 'publish') {
             return;
         }
 
-        if (in_array($post->post_type, self::SITE_WIDE_POST_TYPES, true)) {
+        $clear = match ($post->post_type) {
+            // Opening the block editor inserts an empty published stub when the
+            // theme has none (WP_Theme_JSON_Resolver); it changes nothing.
+            'wp_global_styles' => ! ($oldStatus === 'new' && $this->isEmptyGlobalStyles($post)),
+            'wp_template' => $newStatus !== $oldStatus && $this->isTemplateWithoutFile($post),
+            default => false,
+        };
+
+        if ($clear) {
             $this->cacheTags->clear($this->tag);
         }
     }
 
-    /**
-     * A published site-wide post is deleted, e.g. reset to the theme's file.
-     */
     public function onPostDelete(int $postId, ?WP_Post $post = null): void
     {
         $post ??= get_post($postId);
@@ -67,8 +65,30 @@ class BaseTag implements Action
             return;
         }
 
-        if (in_array($post->post_type, self::SITE_WIDE_POST_TYPES, true)) {
+        if ($post->post_type === 'wp_global_styles' || ($post->post_type === 'wp_template' && $this->isTemplateWithoutFile($post))) {
             $this->cacheTags->clear($this->tag);
         }
+    }
+
+    /**
+     * The `{"version": N, "isGlobalStylesUserThemeJSON": true}` stub core
+     * creates for a theme with no user styles yet.
+     */
+    protected function isEmptyGlobalStyles(WP_Post $post): bool
+    {
+        $styles = json_decode($post->post_content, true);
+
+        return is_array($styles) && array_diff(array_keys($styles), ['version', 'isGlobalStylesUserThemeJSON']) === [];
+    }
+
+    /**
+     * A custom template of the active theme that no theme file backs.
+     */
+    protected function isTemplateWithoutFile(WP_Post $post): bool
+    {
+        $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
+        $theme = is_array($themes) && $themes ? (string) reset($themes) : get_stylesheet();
+
+        return $theme === get_stylesheet() && ! get_block_file_template("{$theme}//{$post->post_name}", 'wp_template');
     }
 }
