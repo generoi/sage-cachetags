@@ -763,10 +763,26 @@ class Core implements Action
 
     public function onMenuLinkedTermEdit(int $termId, string $taxonomy): void
     {
+        if (! $this->taxonomyCanBeInMenus($taxonomy)) {
+            return;
+        }
+
         $term = get_term($termId, $taxonomy);
         if ($term instanceof WP_Term) {
             $this->termsBeforeEdit[$termId] = self::termLinkFields($term);
         }
+    }
+
+    /**
+     * Only taxonomies offered in the menu editor can have items linking to
+     * them, so internal ones (Polylang's translation groups, rewritten on every
+     * relink; nav_menu itself) skip the lookup.
+     */
+    protected function taxonomyCanBeInMenus(string $taxonomy): bool
+    {
+        $object = get_taxonomy($taxonomy);
+
+        return $object !== false && ! empty($object->show_in_nav_menus);
     }
 
     /**
@@ -792,7 +808,9 @@ class Core implements Action
      */
     public function onMenuLinkedTermDelete(int $termId, string $taxonomy): void
     {
-        $this->cacheTags->clear($this->linkingMenus($termId, 'taxonomy', $taxonomy));
+        if ($this->taxonomyCanBeInMenus($taxonomy)) {
+            $this->cacheTags->clear($this->linkingMenus($termId, 'taxonomy', $taxonomy));
+        }
     }
 
     /**

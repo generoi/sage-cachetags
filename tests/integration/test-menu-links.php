@@ -130,6 +130,21 @@ class TestMenuLinks extends RestTestCase
         unregister_post_type('cachetags_private');
     }
 
+    // Internal taxonomies (Polylang rewrites its translation groups on every
+    // relink) skip the lookup on every edit and delete.
+    public function test_taxonomies_not_shown_in_nav_menus_skip_the_lookup(): void
+    {
+        register_taxonomy('cachetags_internal', 'post', ['public' => false, 'show_in_nav_menus' => false]);
+        $termId = self::factory()->term->create(['taxonomy' => 'cachetags_internal']);
+        $this->linkTerm($termId, 'cachetags_internal');
+
+        wp_update_term($termId, 'cachetags_internal', ['name' => 'Renamed']);
+        wp_delete_term($termId, 'cachetags_internal');
+
+        $this->assertNotContains("menu:{$this->menuId}", $this->queuedPurgeTags());
+        unregister_taxonomy('cachetags_internal');
+    }
+
     public function test_renaming_a_linked_term_clears_the_menu(): void
     {
         $termId = self::factory()->category->create();
