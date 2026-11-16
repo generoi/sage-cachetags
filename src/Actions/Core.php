@@ -64,6 +64,7 @@ class Core implements Action
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
         \add_action('wp_update_nav_menu_item', [$this, 'onMenuUpdate']);
         \add_action('post_updated', [$this, 'onMenuLinkedPostUpdate'], 10, 3);
+        \add_action('transition_post_status', [$this, 'onMenuLinkedScheduledPublish'], 10, 3);
         \add_action('before_delete_post', [$this, 'onMenuLinkedPostDelete']);
         \add_action('edit_terms', [$this, 'onMenuLinkedTermEdit'], 10, 2);
         \add_action('edited_term', [$this, 'onMenuLinkedTermEdited'], 10, 3);
@@ -130,11 +131,23 @@ class Core implements Action
      */
     public function addNavMenuCacheTags(array $args): array
     {
-        if (! empty($args['theme_location'])) {
-            $this->cacheTags->add(CoreTags::navigation($args['theme_location']));
-        } elseif (! empty($args['menu'])) {
-            $this->cacheTags->add(CoreTags::menu($args['menu']));
+        // Resolve the menu the way wp_nav_menu() does: the `menu` arg, else the
+        // theme location's menu, else — with no location — the first menu that
+        // has items, which it renders for an unknown or empty `menu`.
+        $tags = ! empty($args['menu']) ? CoreTags::menu($args['menu']) : [];
+
+        if (! $tags && ! empty($args['theme_location'])) {
+            $tags = CoreTags::navigation($args['theme_location']);
+        } elseif (! $tags) {
+            foreach (wp_get_nav_menus() as $menu) {
+                if (wp_get_nav_menu_items($menu->term_id, ['update_post_term_cache' => false])) {
+                    $tags = [Tag::menu($menu->term_id)];
+                    break;
+                }
+            }
         }
+
+        $this->cacheTags->add($tags);
 
         return $args;
     }
@@ -520,6 +533,9 @@ class Core implements Action
             'term_taxonomy_id' => $taxonomyIds,
             'hide_empty' => false,
             'fields' => 'ids',
+            // Polylang filters term queries by the current language otherwise,
+            // dropping another language's terms set on the object.
+            'lang' => '',
         ]) : [];
         if (! is_array($termIds)) {
             $termIds = [];
@@ -677,13 +693,36 @@ class Core implements Action
      */
     public function onMenuLinkedPostUpdate(int $postId, WP_Post $after, WP_Post $before): void
     {
-        if (wp_is_post_revision($postId)) {
-            return;
-        }
-
-        if (self::linkFieldsChanged($after, $before)) {
+        if ($this->canBeInMenus($after) && self::linkFieldsChanged($after, $before)) {
             $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
         }
+    }
+
+    /**
+     * Scheduled posts publish through wp_publish_post(), which never fires
+     * post_updated.
+     */
+    public function onMenuLinkedScheduledPublish(string $newStatus, string $oldStatus, WP_Post $post): void
+    {
+        if ($oldStatus === 'future' && $newStatus === 'publish' && $this->canBeInMenus($post)) {
+            $this->cacheTags->clear($this->linkingMenus($post->ID, 'post_type'));
+        }
+    }
+
+    /**
+     * Only post types offered in the menu editor can have items linking to
+     * them, so orders, attachments, menu items and revisions skip the lookup
+     * (a query per status change or delete otherwise).
+     */
+    protected function canBeInMenus(WP_Post $post): bool
+    {
+        if ($post->post_type === 'nav_menu_item') {
+            return false;
+        }
+
+        $type = get_post_type_object($post->post_type);
+
+        return $type !== null && ! empty($type->show_in_nav_menus);
     }
 
     /**
@@ -719,11 +758,10 @@ class Core implements Action
      */
     public function onMenuLinkedPostDelete(int $postId): void
     {
-        if (wp_is_post_revision($postId)) {
-            return;
+        $post = get_post($postId);
+        if ($post instanceof WP_Post && $this->canBeInMenus($post)) {
+            $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
         }
-
-        $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
     }
 
     public function onMenuLinkedTermEdit(int $termId, string $taxonomy): void

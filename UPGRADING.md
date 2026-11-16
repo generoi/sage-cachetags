@@ -28,6 +28,13 @@ No code changes are needed. These behaviours change:
   its own global flag, so `--url=<page>` printed the store-wide totals instead
   (and set WP-CLI's site URL). The Acorn command still accepts `--url` where it
   reaches it.
+- **Kinsta: language homes are no longer group-purged.**
+  `KinstaGroupCacheInvalidator` purges the site home and each Polylang language
+  home (`/sv/`) exactly, where a `group|/sv/` purge used to empty that whole
+  language. Those wide purges also hid missing tags: a page under `/sv/` that
+  carries no tag for something it shows was still cleared whenever the language
+  home was. If such pages go stale after upgrading, tag them for what they
+  show.
 
 New purges to expect:
 

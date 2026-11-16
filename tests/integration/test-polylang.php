@@ -430,6 +430,24 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertNotContains($this->templatePartKey('footer', 'fi'), $tags, 'fi renders its own translation');
     }
 
+    // Core resolves the changed term_taxonomy_ids with get_terms(), which
+    // Polylang filters by the current language unless told not to.
+    public function test_setting_another_languages_term_purges_its_archive(): void
+    {
+        $this->ensureFinnish();
+        $fiTerm = self::factory()->category->create();
+        pll_set_term_language($fiTerm, 'fi');
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        // A Finnish post, so Polylang keeps the Finnish term on it.
+        pll_set_post_language($postId, 'fi');
+        PLL()->curlang = PLL()->model->get_language('en');
+        $this->resetPurgeTags();
+
+        wp_set_object_terms($postId, [$fiTerm], 'category');
+
+        $this->assertContains("term:{$fiTerm}:full", $this->queuedPurgeTags());
+    }
+
     public function test_a_singular_page_is_tagged_with_its_translations_urls(): void
     {
         [$en, $fi] = $this->translatedPosts();

@@ -100,6 +100,36 @@ class TestMenuLinks extends RestTestCase
         $this->assertNotContains("menu:{$this->menuId}", $this->queuedPurgeTags());
     }
 
+    // wp_publish_post() fires transition_post_status but never post_updated.
+    public function test_publishing_a_scheduled_linked_post_clears_the_menu(): void
+    {
+        $postId = self::factory()->post->create([
+            'post_type' => 'page',
+            'post_status' => 'future',
+            'post_date' => gmdate('Y-m-d H:i:s', time() + DAY_IN_SECONDS),
+        ]);
+        $this->linkPost($postId);
+
+        wp_publish_post($postId);
+
+        $this->assertContains("menu:{$this->menuId}", $this->queuedPurgeTags());
+    }
+
+    // Post types the menu editor doesn't offer (orders, attachments, menu
+    // items) skip the lookup on every status change and delete.
+    public function test_post_types_not_shown_in_nav_menus_skip_the_lookup(): void
+    {
+        register_post_type('cachetags_private', ['public' => false, 'show_in_nav_menus' => false]);
+        $postId = self::factory()->post->create(['post_type' => 'cachetags_private', 'post_status' => 'publish']);
+        $this->linkPost($postId);
+
+        wp_update_post(['ID' => $postId, 'post_title' => 'Renamed']);
+        wp_delete_post($postId, true);
+
+        $this->assertNotContains("menu:{$this->menuId}", $this->queuedPurgeTags());
+        unregister_post_type('cachetags_private');
+    }
+
     public function test_renaming_a_linked_term_clears_the_menu(): void
     {
         $termId = self::factory()->category->create();

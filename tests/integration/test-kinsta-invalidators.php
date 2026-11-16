@@ -88,6 +88,35 @@ class TestKinstaInvalidators extends WP_UnitTestCase
         $this->assertSame(['single|fi'], array_keys($list));
     }
 
+    /**
+     * A switch_to_blog() loop purges several sites with one invalidator; each
+     * must use its own site's homes, not the first site's.
+     *
+     * @group multisite
+     */
+    public function test_exact_urls_are_resolved_per_site(): void
+    {
+        if (! is_multisite()) {
+            $this->markTestSkipped('Requires multisite (run via the multisite CI job).');
+        }
+
+        // The converted test network has ms_files_rewriting on, whose upload
+        // path needs the legacy UPLOADBLOGSDIR constant to create a site.
+        update_site_option('ms_files_rewriting', 0);
+        $blogId = self::factory()->blog->create(['path' => '/cachetags-sub/']);
+        $subHome = get_home_url($blogId, '/');
+        $invalidator = new KinstaGroupCacheInvalidator;
+
+        $this->assertSame(['group|sub'], array_keys($invalidator->purgeList(['sub' => $subHome])), 'a path on the main site');
+
+        switch_to_blog($blogId);
+        try {
+            $this->assertSame(['single|sub'], array_keys($invalidator->purgeList(['sub' => $subHome])), "the subsite's home");
+        } finally {
+            restore_current_blog();
+        }
+    }
+
     public function test_group_invalidator_disables_query_string_storage(): void
     {
         new KinstaGroupCacheInvalidator;

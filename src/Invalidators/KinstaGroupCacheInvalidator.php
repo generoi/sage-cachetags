@@ -22,11 +22,12 @@ class KinstaGroupCacheInvalidator extends KinstaCacheInvalidator
     const FILTER_EXACT_URLS = 'cachetags/kinsta-exact-urls';
 
     /**
-     * Normalized exact-match keys, resolved on first purge.
+     * Normalized exact-match keys per blog id, resolved on a blog's first purge
+     * (a switch_to_blog() loop purges several sites with one invalidator).
      *
-     * @var array<string, true>|null
+     * @var array<int, array<string, true>>
      */
-    protected ?array $exactUrls = null;
+    protected array $exactUrls = [];
 
     public function __construct()
     {
@@ -67,15 +68,16 @@ class KinstaGroupCacheInvalidator extends KinstaCacheInvalidator
 
     protected function isExactUrl(string $url): bool
     {
-        if ($this->exactUrls === null) {
-            $this->exactUrls = [];
+        $blogId = get_current_blog_id();
+        if (! isset($this->exactUrls[$blogId])) {
+            $this->exactUrls[$blogId] = [];
             foreach ($this->exactUrls() as $exact) {
-                $this->exactUrls[$this->exactKey($exact)] = true;
+                $this->exactUrls[$blogId][$this->exactKey($exact)] = true;
             }
         }
 
-        return isset($this->exactUrls[$this->exactKey($url)])
-            || isset($this->exactUrls[$this->exactKey((string) parse_url($url, PHP_URL_PATH))]);
+        return isset($this->exactUrls[$blogId][$this->exactKey($url)])
+            || isset($this->exactUrls[$blogId][$this->exactKey((string) parse_url($url, PHP_URL_PATH))]);
     }
 
     /**
