@@ -10,18 +10,18 @@ No code changes are needed. These behaviours change:
   menu turned into a 500 on every page, where `wp_nav_menu()` or Navi would just
   render nothing. Code that relied on the exception to catch a typo'd slug
   should check `wp_get_nav_menu_object()` itself.
-- **Query-string renders aren't stored under the bare URL.** With
+- **Searches, filters and sorts aren't stored under the bare URL.** With
   `cachetags/store-query-string` off (which `KinstaGroupCacheInvalidator` sets),
-  a front-end render with a query string saves no store rows. Before, `/?s=x`
-  was stored as `/`, so the front page collected every search result's tags and
-  was purged by all of them. Kinsta doesn't cache query-string URLs, so nothing
-  purgeable is lost. Params in `cachetags/url-ignored-params` (`utm_*`, `gclid`,
-  …) still map to the bare URL, and the list now also has `_ga`, `mc_cid`,
-  `mc_eid` and `ref`, which Kinsta's edge serves from the bare URL's entry. If
-  your edge leaves other params out of its cache key, add them to the filter,
-  or those renders seed the bare URL's entry without being stored. The tag
-  header is unchanged. The extra tags already stored on `/` go with its next
-  purge, which forgets every tag of a purged URL.
+  a render that differs from the bare URL's page — a search, a WordPress public
+  query var, or a sort/filter param in `cachetags/render-params` (`orderby`,
+  `filter_*`, `min_price`, `fwp_*`, …) — saves no store rows. Before, `/?s=x`
+  was stored as `/`, so the front page collected every search result's tags
+  and was purged by all of them; Kinsta doesn't cache those URLs. Every other
+  param still maps to the bare URL as in 3.2, so an unlisted tracking param
+  keeps the bare URL purgeable. If a theme param changes the render (`?view=`),
+  add it to `cachetags/render-params`. The tag header is unchanged. The extra
+  tags already stored on `/` go with its next purge, which forgets every tag of
+  a purged URL.
 - **`cachetags:status` takes the URL as an argument:**
   `wp acorn cachetags:status https://example.com/article/` or
   `wp cachetags status https://example.com/article/`. WP-CLI takes `--url` as

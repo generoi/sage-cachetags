@@ -231,31 +231,62 @@ class Util
     }
 
     /**
-     * Whether the current request has a query string that query-string storage
-     * being off (`cachetags/store-query-string`) drops.
-     *
-     * Storing such a render would attribute its tags to the bare URL — every
-     * `/?s=…` search to the front page, which then collects every result's
-     * tags and is purged by all of them — while the edge that storage is turned
-     * off for doesn't cache it (Kinsta bypasses query-string URLs). So it isn't
-     * stored.
-     *
-     * Ignored params (`cachetags/url-ignored-params`: utm_*, gclid, …) don't
-     * count: `/?utm_source=x` renders the same page as `/` and still maps to it.
-     *
-     * A query string too long for the url column, with storage on, still falls
-     * back to the bare URL as before: that is an edge that may cache query
-     * strings (SiteGround), and the fallback row keeps the page's tags.
+     * Query params (beyond WordPress's public query vars) known to change what a
+     * page renders, so a request with one isn't the bare URL's page. An entry
+     * ending in `_` matches as a prefix. Filter: `cachetags/render-params`.
      */
-    public static function isQueryStringDropped(): bool
+    const RENDER_PARAMS = [
+        'orderby', 'order', 'paged',
+        // WooCommerce layered nav and price/rating filters, block pagination.
+        'filter_', 'query_type_', 'min_price', 'max_price', 'rating_filter', 'product-page',
+        // FacetWP.
+        'fwp_',
+    ];
+
+    /**
+     * Whether the current render, with query-string storage off
+     * (`cachetags/store-query-string`), must not be stored under the bare URL.
+     *
+     * Storage off drops the query string, so a render is stored as the bare
+     * URL. That is wrong for one that renders differently from it — a search
+     * (`/?s=x` would give the front page every result's tags and purge it on
+     * every one of them), a public query var, a listing filter or sort — and
+     * the edge storage is turned off for doesn't cache those anyway (Kinsta
+     * bypasses them). So they aren't stored.
+     *
+     * Any other param fails toward storing: an unlisted tracking param
+     * (`_kx`, `mtm_*`, `pk_*`, `_hsenc`, `ttclid`, `igshid`, `yclid`, …) renders
+     * the bare URL's page, and the edge may serve it from the bare URL's entry,
+     * so not storing it could leave that entry unpurgeable.
+     */
+    public static function isUnstoredQueryVariant(): bool
     {
-        if (apply_filters('cachetags/store-query-string', true)) {
+        if (empty($_GET) || apply_filters('cachetags/store-query-string', true)) {
             return false;
         }
 
-        $ignored = apply_filters('cachetags/url-ignored-params', self::IGNORED_URL_PARAMS);
+        if (is_search()) {
+            return true;
+        }
 
-        return array_diff_key($_GET, array_flip($ignored)) !== [];
+        $ignored = (array) apply_filters('cachetags/url-ignored-params', self::IGNORED_URL_PARAMS);
+        $params = array_keys(array_diff_key($_GET, array_flip($ignored)));
+        $publicQueryVars = $GLOBALS['wp']->public_query_vars ?? [];
+        $renderParams = (array) apply_filters('cachetags/render-params', self::RENDER_PARAMS);
+
+        foreach ($params as $param) {
+            $param = (string) $param;
+            if (in_array($param, $publicQueryVars, true)) {
+                return true;
+            }
+            foreach ($renderParams as $renderParam) {
+                if ($param === $renderParam || (str_ends_with($renderParam, '_') && str_starts_with($param, $renderParam))) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

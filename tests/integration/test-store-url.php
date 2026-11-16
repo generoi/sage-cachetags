@@ -75,50 +75,46 @@ class TestStoreUrl extends WP_UnitTestCase
         $this->assertStringNotContainsString('campaign_id', $url);
     }
 
-    // Kinsta serves these from the bare URL's cache entry, so a render with one
-    // must be stored (and purged) as the bare URL.
-    public function test_params_kinsta_leaves_out_of_its_cache_key_map_to_the_bare_url(): void
+    // With storage on, the query string is part of the stored URL anyway.
+    public function test_nothing_is_skipped_with_query_string_storage_on(): void
+    {
+        $_GET = ['s' => 'shoes', 'orderby' => 'price'];
+
+        $this->assertFalse(Util::isUnstoredQueryVariant());
+    }
+
+    public function test_render_changing_params_are_not_stored_with_storage_off(): void
     {
         add_filter('cachetags/store-query-string', '__return_false');
 
-        foreach (['_ga', 'mc_cid', 'mc_eid', 'ref', 'fbclid', 'dclid', 'utm_campaign'] as $param) {
+        foreach ([['s' => 'shoes'], ['orderby' => 'price'], ['paged' => '2'], ['cat' => '5'], ['filter_color' => 'red'], ['min_price' => '10'], ['fwp_size' => 'm'], ['utm_source' => 'x', 'orderby' => 'price']] as $get) {
+            $_GET = $get;
+
+            $this->assertTrue(Util::isUnstoredQueryVariant(), http_build_query($get));
+        }
+    }
+
+    // An unknown param fails toward storing: it renders the bare URL's page and
+    // the edge may serve it from the bare URL's entry, which must stay purgeable.
+    public function test_unknown_and_tracking_params_are_stored_as_the_bare_url(): void
+    {
+        add_filter('cachetags/store-query-string', '__return_false');
+
+        foreach (['_kx', 'mtm_campaign', 'pk_source', '_hsenc', 'ttclid', 'igshid', 'yclid', 'utm_source', 'gclid', 'q'] as $param) {
             $_GET = [$param => 'x'];
 
-            $this->assertFalse(Util::isQueryStringDropped(), $param);
+            $this->assertFalse(Util::isUnstoredQueryVariant(), $param);
             $this->assertStringEndsWith('/shop/', Util::currentUrl(), $param);
         }
     }
 
-    public function test_a_query_string_is_dropped_only_when_storage_would_drop_it(): void
-    {
-        $_GET = ['s' => 'shoes'];
-        $this->assertFalse(Util::isQueryStringDropped(), 'stored with its query string');
-
-        add_filter('cachetags/store-query-string', '__return_false');
-        $this->assertTrue(Util::isQueryStringDropped(), 'storage off');
-
-        $_GET = [];
-        $this->assertFalse(Util::isQueryStringDropped(), 'no query string');
-    }
-
-    // Tracking params render the same page, so they still map to the bare URL.
-    public function test_ignored_params_alone_are_not_a_dropped_query_string(): void
+    public function test_render_params_are_filterable(): void
     {
         add_filter('cachetags/store-query-string', '__return_false');
-        $_GET = ['utm_source' => 'newsletter', 'gclid' => 'x'];
+        add_filter('cachetags/render-params', fn ($params) => [...$params, 'view']);
+        $_GET = ['view' => 'grid'];
 
-        $this->assertFalse(Util::isQueryStringDropped());
-    }
-
-    // With storage on the edge may cache query strings (SiteGround); an
-    // overlong one keeps falling back to the bare URL's row, as before.
-    public function test_an_overlong_query_string_is_dropped_only_with_storage_off(): void
-    {
-        $_GET = ['q' => str_repeat('a', 300)];
-        $this->assertFalse(Util::isQueryStringDropped(), 'storage on');
-
-        add_filter('cachetags/store-query-string', '__return_false');
-        $this->assertTrue(Util::isQueryStringDropped(), 'storage off');
+        $this->assertTrue(Util::isUnstoredQueryVariant());
     }
 
     public function test_overlong_query_string_falls_back_to_the_path(): void

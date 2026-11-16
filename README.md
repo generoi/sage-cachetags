@@ -115,13 +115,18 @@ add_filter('cachetags/store-query-string', '__return_false');
 ```
 
 With query-string storage off (as `KinstaGroupCacheInvalidator` sets it), a
-render with a query string is **not stored at all**, rather than stored under
-the bare URL: `/?s=x` would otherwise give the front page every search result's
-tags, and purge it on every one of them. Params in the ignored list (`utm_*`,
-`gclid`, …) don't count, so `/?utm_source=x` still maps to `/`. The tag header
-is sent either way. Keep the ignored list a superset of the params your edge
-leaves out of its cache key: a render with one of those that isn't ignored
-seeds the bare URL's edge entry without being stored, so nothing purges it.
+render with a query string is stored under the bare URL, **except** one that
+renders differently from it: a search, a WordPress public query var (`?p=`,
+`?cat=`, `?paged=`, …) or a listing sort/filter (`orderby`, `order`, `filter_*`,
+`min_price`, `fwp_*`, …; extend with `cachetags/render-params`). Those aren't
+stored: `/?s=x` would otherwise give the front page every search result's tags,
+and purge it on every one of them, and Kinsta doesn't cache them. Any other
+param fails toward storing, since it renders the bare URL's page and the edge
+may serve it from the bare URL's entry. The tag header is sent either way.
+
+```php
+add_filter('cachetags/render-params', fn (array $params) => [...$params, 'view']);
+```
 
 **To match a URL-keyed edge that does cache query strings** (SiteGround, or Kinsta
 configured to cache GET params) the strip list must equal that edge's — and that's

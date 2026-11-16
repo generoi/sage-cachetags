@@ -98,6 +98,21 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertSame([home_url('/')], $cacheTags->store->get(['stored-campaign']));
     }
 
+    // An unlisted tracking param renders the bare URL's page, and the edge may
+    // serve it from that entry, so it fails toward storing (as in 3.2).
+    public function test_an_unknown_param_render_is_stored_under_the_bare_url(): void
+    {
+        add_filter('cachetags/store-query-string', '__return_false');
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
+        $cacheTags = $bootstrap->bootstrap();
+        $this->go_to(home_url('/?_hsenc=abc&mtm_campaign=x'));
+        $cacheTags->add('stored-unknown');
+
+        $bootstrap->saveCacheTags();
+
+        $this->assertSame([home_url('/')], $cacheTags->store->get(['stored-unknown']));
+    }
+
     public function test_resolves_store_and_invalidators_from_class_names(): void
     {
         $cacheTags = (new Bootstrap)
