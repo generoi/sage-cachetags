@@ -13,8 +13,9 @@ use WP_Post;
  * never carry it) stay cached. Wired by Bootstrap with the configured tag name;
  * disable by setting the base tag to null.
  *
- * Global styles are inlined into every page, so a change to them clears the
- * base tag. So does a template appearing or disappearing that has no theme file:
+ * Global styles and the Customizer's Additional CSS are inlined into every page,
+ * so a change to them clears the base tag. So does a template in the hierarchy
+ * appearing or disappearing that has no theme file:
  * it changes which template pages resolve to, and those pages carry another
  * template's tag. Other template and template part saves purge only the pages
  * rendering them (Core's `template:` / `template-part:` tags). With the base
@@ -50,6 +51,8 @@ class BaseTag implements Action
             // Opening the block editor inserts an empty published stub when the
             // theme has none (WP_Theme_JSON_Resolver); it changes nothing.
             'wp_global_styles' => ! ($oldStatus === 'new' && $this->isEmptyGlobalStyles($post)),
+            // Customizer → Additional CSS, inlined into every page.
+            'custom_css' => true,
             'wp_template' => $newStatus !== $oldStatus && $this->changesTemplateResolution($post),
             default => false,
         };
@@ -66,7 +69,7 @@ class BaseTag implements Action
             return;
         }
 
-        if ($post->post_type === 'wp_global_styles' || ($post->post_type === 'wp_template' && $this->changesTemplateResolution($post))) {
+        if (in_array($post->post_type, ['wp_global_styles', 'custom_css'], true) || ($post->post_type === 'wp_template' && $this->changesTemplateResolution($post))) {
             $this->cacheTags->clear($this->tag);
         }
     }

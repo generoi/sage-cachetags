@@ -724,11 +724,13 @@ saving `footer___sv` purges only Swedish pages, saving `footer` purges the
 default language and every language without its own translation, and adding or
 removing a translation purges that language.
 
-The inlined global styles render on every page, so saving `wp_global_styles`
-clears the base tag (except the empty stub the block editor creates for a theme
-without user styles). So does adding or removing a template no theme file backs,
-since that changes which template pages resolve to. With the base tag turned
-off, nothing purges on those saves.
+The inlined global styles and the Customizer's Additional CSS render on every
+page, so saving `wp_global_styles` (except the empty stub the block editor
+creates for a theme without user styles) or `custom_css` clears the base tag.
+So does adding or removing a template in the hierarchy that no theme file backs,
+since that changes which template pages resolve to; a `wp-custom-template-*`
+template doesn't, as only the posts assigned to it render it. With the base tag
+turned off, nothing purges on those saves.
 
 When Polylang is active, every page is also tagged with its language, so you can
 clear all content in one language:

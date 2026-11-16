@@ -85,6 +85,19 @@ class TestBaseTag extends RestTestCase
         $this->assertContains('page', $this->queuedPurgeTags());
     }
 
+    // Customizer → Additional CSS is inlined into every page.
+    public function test_saving_additional_css_clears_the_base_tag(): void
+    {
+        $this->resetCacheTags();
+
+        wp_update_custom_css_post('body { color: red; }');
+        $this->assertContains('page', $this->queuedPurgeTags(), 'created');
+
+        $this->resetCacheTags();
+        wp_update_custom_css_post('body { color: blue; }');
+        $this->assertContains('page', $this->queuedPurgeTags(), 'updated');
+    }
+
     // Template parts and templates purge by their own key instead.
     public function test_saving_a_template_part_does_not_clear_the_base_tag(): void
     {
