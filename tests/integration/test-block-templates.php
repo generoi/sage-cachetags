@@ -91,8 +91,6 @@ class TestBlockTemplates extends RestTestCase
         $this->assertContains($this->key('header'), $this->cacheTags->get());
     }
 
-    // Resolved through core: the template hierarchy filter runs
-    // locate_block_template(), then template_include tags the result.
     // A third party passing null must not TypeError the page.
     public function test_get_block_template_with_a_null_id_does_not_throw(): void
     {
@@ -102,6 +100,8 @@ class TestBlockTemplates extends RestTestCase
         $this->assertNull(apply_filters('pre_get_block_template', null, null, null));
     }
 
+    // Resolved through core: the template hierarchy filter runs
+    // locate_block_template(), then template_include tags the result.
     public function test_the_resolved_block_template_is_tagged(): void
     {
         if (! wp_is_block_theme()) {
