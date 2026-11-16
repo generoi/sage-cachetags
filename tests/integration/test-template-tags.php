@@ -25,6 +25,21 @@ class TestTemplateTags extends RestTestCase
         $this->assertContains('archive:post', $this->templateTags(home_url('/?s=hello')));
     }
 
+    /**
+     * `/no-such-page/?s=x` sets is_page() and is_search() with no queried
+     * object. WordPress renders the search template, so tag it as one rather
+     * than fataling on the missing page.
+     */
+    public function test_search_on_a_missing_page_is_tagged_as_search(): void
+    {
+        $this->assertSame(['archive:post'], $this->templateTags(home_url('/?pagename=no-such-page&s=x')));
+    }
+
+    public function test_search_on_a_missing_term_is_tagged_as_search(): void
+    {
+        $this->assertSame(['archive:post'], $this->templateTags(home_url('/?category_name=no-such-term&s=x')));
+    }
+
     public function test_date_archive_is_tagged(): void
     {
         self::factory()->post->create(['post_status' => 'publish', 'post_date' => '2020-01-15 12:00:00']);
