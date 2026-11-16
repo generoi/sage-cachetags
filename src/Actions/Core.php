@@ -38,7 +38,7 @@ class Core implements Action
         \add_filter('wp_nav_menu_args', [$this, 'addNavMenuCacheTags']);
         // block_template_part() goes through get_block_template(); the
         // core/template-part block doesn't (tagged in addBlockCacheTags).
-        \add_filter('get_block_template', [$this, 'addTemplatePartCacheTags'], 10, 3);
+        \add_filter('pre_get_block_template', [$this, 'addTemplatePartCacheTags'], 10, 3);
         \add_filter('template_include', [$this, 'addBlockTemplateCacheTags'], PHP_INT_MAX);
         \add_action('transition_post_status', [$this, 'onBlockTemplateStatusTransition'], 10, 3);
         \add_action('before_delete_post', [$this, 'onBlockTemplateDelete']);
@@ -410,20 +410,21 @@ class Core implements Action
 
     /**
      * Tag a template part rendered with block_template_part(), which resolves
-     * it through get_block_template() (also when it falls back to the theme
-     * file, and also when there is none yet, so its first customisation still
-     * purges the page).
+     * it through get_block_template(). Its pre_ filter runs on every call; the
+     * get_block_template filter only on the theme-file fallback, as a
+     * customised (database) part is returned before it. Tagged also when there
+     * is no part yet, so its first customisation still purges the page.
      *
-     * @param  \WP_Block_Template|null  $template
+     * @param  \WP_Block_Template|null  $pre
      * @return \WP_Block_Template|null
      */
-    public function addTemplatePartCacheTags($template, string $id, string $templateType)
+    public function addTemplatePartCacheTags($pre, string $id, string $templateType)
     {
         if ($templateType === 'wp_template_part' && ! is_admin()) {
             $this->cacheTags->add($this->blockTemplateTags($id, $templateType));
         }
 
-        return $template;
+        return $pre;
     }
 
     /**

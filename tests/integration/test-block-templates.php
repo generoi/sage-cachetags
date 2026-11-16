@@ -71,6 +71,21 @@ class TestBlockTemplates extends RestTestCase
         $this->assertContains($this->key('header'), $this->cacheTags->get());
     }
 
+    // get_block_template() returns a customised (database) part before its
+    // get_block_template filter runs, so a theme rendering parts in PHP lost
+    // the tag after the first customisation.
+    public function test_block_template_part_in_php_tags_a_customised_part(): void
+    {
+        $this->templatePart('header');
+
+        ob_start();
+        block_template_part('header');
+        $html = ob_get_clean();
+
+        $this->assertStringContainsString('Footer', $html, 'rendered from the database post');
+        $this->assertContains($this->key('header'), $this->cacheTags->get());
+    }
+
     public function test_the_resolved_block_template_is_tagged(): void
     {
         global $_wp_current_template_id;
