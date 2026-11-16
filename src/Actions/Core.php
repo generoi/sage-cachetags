@@ -70,6 +70,7 @@ class Core implements Action
         \add_action('edit_attachment', [$this, 'onAttachmentEdit']);
         \add_action('updated_option', [$this, 'onOptionUpdate'], 10, 3);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
+        \add_action('wp_delete_nav_menu', [$this, 'onMenuDelete']);
         \add_action('wp_update_nav_menu_item', [$this, 'onMenuUpdate']);
         \add_action('post_updated', [$this, 'onMenuLinkedPostUpdate'], 10, 3);
         \add_action('transition_post_status', [$this, 'onMenuLinkedScheduledPublish'], 10, 3);
@@ -694,6 +695,19 @@ class Core implements Action
         }
 
         $this->cacheTags->clear(CoreTags::menu($menuId));
+    }
+
+    /**
+     * A deleted menu stops rendering wherever it was shown. wp_delete_nav_menu
+     * fires once the term is gone, so CoreTags::menu() can't resolve it; tag it
+     * by id. Under Polylang this also covers a language's location, which
+     * Polylang unassigns (delete_nav_menu) before the theme mod is saved.
+     */
+    public function onMenuDelete(int $menuId): void
+    {
+        if ($menuId) {
+            $this->cacheTags->clear(Tag::menu($menuId));
+        }
     }
 
     /**

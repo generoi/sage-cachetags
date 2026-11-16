@@ -206,6 +206,29 @@ class TestMenuLinks extends RestTestCase
         $this->assertContains('menu-location:footer', $this->queuedPurgeTags());
     }
 
+    public function test_deleting_a_menu_clears_it(): void
+    {
+        $this->resetCacheTags();
+
+        wp_delete_nav_menu($this->menuId);
+
+        $this->assertContains("menu:{$this->menuId}", $this->queuedPurgeTags());
+    }
+
+    // Deleting a menu also unassigns it from its locations.
+    public function test_deleting_a_menu_in_a_location_clears_it_and_the_location(): void
+    {
+        register_nav_menu('primary', 'Primary');
+        set_theme_mod('nav_menu_locations', ['primary' => $this->menuId]);
+        $this->resetCacheTags();
+
+        wp_delete_nav_menu($this->menuId);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("menu:{$this->menuId}", $tags);
+        $this->assertContains('menu-location:primary', $tags);
+    }
+
     public function test_unrelated_theme_mod_changes_clear_no_menu(): void
     {
         register_nav_menu('primary', 'Primary');
