@@ -317,6 +317,35 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains("term:{$en}:url", $this->queuedPurgeTags(), 'slug');
     }
 
+    // Polylang stores non-default languages' locations in its own option, not
+    // in the nav_menu_locations theme mod Core diffs.
+    public function test_reassigning_a_languages_menu_location_clears_the_previous_menu(): void
+    {
+        $theme = get_option('stylesheet');
+        $old = ['nav_menus' => [$theme => ['primary' => ['en' => 11, 'fi' => 12], 'footer' => ['fi' => 13]]]];
+        $new = ['nav_menus' => [$theme => ['primary' => ['en' => 11, 'fi' => 14], 'footer' => ['fi' => 13]]]];
+        $this->action()->init();
+        $this->resetPurgeTags();
+
+        do_action('updated_option', 'polylang', $old, $new);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains('menu:12', $tags, 'fi primary was reassigned');
+        $this->assertNotContains('menu:11', $tags, 'en primary unchanged');
+        $this->assertNotContains('menu:13', $tags, 'fi footer unchanged');
+    }
+
+    public function test_unassigning_a_languages_menu_location_clears_the_menu(): void
+    {
+        $theme = get_option('stylesheet');
+        $this->action()->init();
+        $this->resetPurgeTags();
+
+        do_action('updated_option', 'polylang', ['nav_menus' => [$theme => ['primary' => ['fi' => 12]]]], ['nav_menus' => [$theme => []]]);
+
+        $this->assertContains('menu:12', $this->queuedPurgeTags());
+    }
+
     public function test_a_singular_page_is_tagged_with_its_translations_urls(): void
     {
         [$en, $fi] = $this->translatedPosts();

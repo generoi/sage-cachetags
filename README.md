@@ -423,7 +423,8 @@ A menu item takes its label and URL from the post or term it links to, so
 `menu:{id}` is also cleared for every menu linking to a post whose title, slug,
 parent or status changes (including trash and delete), or to a term whose name,
 slug or parent changes (or that is deleted). Other saves leave the menu alone.
-Reassigning a menu location (the `nav_menu_locations` theme mod) clears the menu
+Reassigning a menu location (the `nav_menu_locations` theme mod, and with
+Polylang each language's location in its `polylang` option) clears the menu
 that was assigned before. Known limits: a child page's URL changes with its
 parent's slug, but menus linking to the child aren't cleared; and assigning a
 menu to a location that had none purges nothing, since those pages carried no

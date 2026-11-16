@@ -57,6 +57,7 @@ class Polylang implements Action
         \add_action('post_updated', [$this, 'onPostUpdated'], 10, 3);
         // wp_publish_post() (scheduled posts) doesn't fire post_updated.
         \add_action('transition_post_status', [$this, 'onScheduledPublish'], 10, 3);
+        \add_action('updated_option', [$this, 'onMenuLocationsUpdate'], 10, 3);
         // Priority 9 (not the default 10) so the lang: tag is added before
         // Bootstrap::saveCacheTagsRest and HttpHeader::restPostDispatch consume
         // the tag set at priority 10 — matching RestApi::tagResponse.
@@ -193,6 +194,42 @@ class Polylang implements Action
         $this->cacheTags->clear($taxonomy === 'post_translations'
             ? CoreTags::posts($members)
             : CoreTags::termPages($members));
+    }
+
+    /**
+     * Polylang keeps the non-default languages' menu locations out of the
+     * nav_menu_locations theme mod (which Core diffs) and in its own option,
+     * as nav_menus[stylesheet][location][lang] => menu id. Clear the menu a
+     * language's location had before it was reassigned.
+     */
+    public function onMenuLocationsUpdate(string $option, $oldValue, $newValue): void
+    {
+        if ($option !== 'polylang') {
+            return;
+        }
+
+        $theme = get_option('stylesheet');
+        $locations = function ($value) use ($theme): array {
+            if (! is_array($value) && ! $value instanceof \ArrayAccess) {
+                return [];
+            }
+            $menus = $value['nav_menus'] ?? [];
+
+            return is_array($menus[$theme] ?? null) ? $menus[$theme] : [];
+        };
+        $old = $locations($oldValue);
+        $new = $locations($newValue);
+
+        $tags = [];
+        foreach ($old as $location => $languages) {
+            foreach ((array) $languages as $language => $menuId) {
+                if ($menuId && (int) ($new[$location][$language] ?? 0) !== (int) $menuId) {
+                    $tags[] = Tag::menu((int) $menuId);
+                }
+            }
+        }
+
+        $this->cacheTags->clear($tags);
     }
 
     protected function isTranslationGroup(string $taxonomy): bool
