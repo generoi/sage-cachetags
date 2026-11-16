@@ -86,21 +86,55 @@ class TestBlockTemplates extends RestTestCase
         $this->assertContains($this->key('header'), $this->cacheTags->get());
     }
 
+    // Resolved through core: the template hierarchy filter runs
+    // locate_block_template(), then template_include tags the result.
     public function test_the_resolved_block_template_is_tagged(): void
     {
+        if (! wp_is_block_theme()) {
+            $this->markTestSkipped('The active theme is not a block theme.');
+        }
         global $_wp_current_template_id;
         $saved = $_wp_current_template_id;
-        $_wp_current_template_id = get_stylesheet().'//single';
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $this->go_to(get_permalink($postId));
         $this->resetCacheTags();
 
         try {
-            $result = (new Core($this->cacheTags))->addBlockTemplateCacheTags('/path/to/template-canvas.php');
+            $template = apply_filters('template_include', get_single_template());
+            $resolved = $_wp_current_template_id;
         } finally {
             $_wp_current_template_id = $saved;
         }
 
-        $this->assertSame('/path/to/template-canvas.php', $result);
-        $this->assertContains($this->key('single', 'template'), $this->cacheTags->get());
+        $this->assertNotEmpty($resolved, 'core resolved a block template');
+        $slug = explode('//', $resolved, 2)[1];
+        $this->assertContains($this->key($slug, 'template'), $this->cacheTags->get());
+        $this->assertNotEmpty($template);
+    }
+
+    // WooCommerce's own templates resolve as woocommerce/woocommerce//{slug},
+    // while their customisation is saved under the active theme.
+    public function test_a_plugin_provided_template_is_keyed_by_the_active_theme(): void
+    {
+        global $_wp_current_template_id;
+        $saved = $_wp_current_template_id;
+        $_wp_current_template_id = 'woocommerce/woocommerce//single-product';
+        $this->resetCacheTags();
+
+        try {
+            (new Core($this->cacheTags))->addBlockTemplateCacheTags('template-canvas.php');
+        } finally {
+            $_wp_current_template_id = $saved;
+        }
+
+        $this->assertContains($this->key('single-product', 'template'), $this->cacheTags->get());
+
+        // And a customisation, saved under the active theme, clears that key.
+        $postId = self::factory()->post->create(['post_type' => 'wp_template', 'post_status' => 'publish', 'post_name' => 'single-product']);
+        wp_set_object_terms($postId, get_stylesheet(), 'wp_theme');
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_content' => 'Customised']);
+        $this->assertContains($this->key('single-product', 'template'), $this->queuedPurgeTags());
     }
 
     // First customisation of a part the pages render from the theme file.

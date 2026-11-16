@@ -488,6 +488,16 @@ class Core implements Action
      */
     protected function blockTemplateTags(string $id, string $templateType): array
     {
+        // A plugin's own template resolves as `{plugin}//{slug}` (WooCommerce:
+        // `woocommerce/woocommerce//single-product`), but its customisation is
+        // saved under the active theme, which is what the purge key uses. Every
+        // template a page renders comes from the active theme or overrides one
+        // for it, so key them all by the active theme.
+        $parts = explode('//', $id, 2);
+        if (count($parts) === 2) {
+            $id = get_stylesheet().'//'.$parts[1];
+        }
+
         return Tag::fromMany((array) apply_filters('cachetags/block-template-tags', CoreTags::blockTemplate($id, $templateType), $id, $templateType));
     }
 

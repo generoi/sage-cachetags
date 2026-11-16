@@ -710,7 +710,10 @@ Rename it or turn it off with `'base-tag' => null` (config) / `->baseTag(null)`
 Pages are tagged with the block template they resolve to and the template parts
 they render, keyed by theme and slug: `template:{theme}//{slug}` and
 `template-part:{theme}//{slug}`. Both the `core/template-part` block and PHP
-`block_template_part('footer')` are covered. Because the key isn't a post id,
+`block_template_part('footer')` are covered. The key always uses the active theme,
+also for a plugin's own template (WooCommerce resolves
+`woocommerce/woocommerce//single-product`), since its customisation is saved
+under the active theme. Because the key isn't a post id,
 the theme file, its first customisation and "Clear customizations" (which
 force-deletes the post) all purge the same pages. Publishing, updating,
 trashing or deleting a `wp_template` / `wp_template_part` that is or was
