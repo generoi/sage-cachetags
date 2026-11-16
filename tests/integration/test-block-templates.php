@@ -57,7 +57,12 @@ class TestBlockTemplates extends RestTestCase
 
         do_blocks('<!-- wp:template-part {"slug":"footer","theme":"not-the-active-theme"} /-->');
 
-        $this->assertNotContains('template-part:not-the-active-theme//footer', $this->cacheTags->get());
+        // Core renders nothing for another theme's part, so no footer key —
+        // not even the active theme's, which every render key is rewritten to.
+        $this->assertSame([], array_values(array_filter(
+            $this->cacheTags->get(),
+            fn ($tag) => str_starts_with($tag, 'template-part:')
+        )));
     }
 
     public function test_block_template_part_in_php_tags_its_key(): void
@@ -254,14 +259,24 @@ class TestBlockTemplates extends RestTestCase
         $this->assertNotContains($this->key('footer'), $this->queuedPurgeTags());
     }
 
+    /**
+     * Insert a part the way the Site Editor does: with its wp_theme term set
+     * before the status transition, so the purge reads the term rather than
+     * falling back to the active theme. tax_input needs a user who may assign
+     * wp_theme terms.
+     */
     private function templatePartWithoutReset(string $slug): int
     {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
         $postId = wp_insert_post([
             'post_type' => 'wp_template_part',
             'post_status' => 'publish',
             'post_name' => $slug,
             'post_title' => ucfirst($slug),
+            'tax_input' => ['wp_theme' => [get_stylesheet()]],
         ]);
+        $this->assertSame([get_stylesheet()], wp_get_post_terms($postId, 'wp_theme', ['fields' => 'names']), 'the term is set');
 
         return $postId;
     }
