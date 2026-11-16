@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Block;
 use WP_Comment;
@@ -24,6 +25,14 @@ class Core implements Action
      * @var array<int, array<string, int[]>>
      */
     protected array $addedTermRelationships = [];
+
+    /**
+     * Term name, slug and parent before wp_update_term() writes them, to compare
+     * in onMenuLinkedTermEdited().
+     *
+     * @var array<int, array{0: string, 1: string, 2: int}>
+     */
+    protected array $termsBeforeEdit = [];
 
     public function __construct(protected CacheTags $cacheTags) {}
 
@@ -53,6 +62,12 @@ class Core implements Action
         \add_action('updated_option', [$this, 'onOptionUpdate'], 10, 3);
         \add_action('wp_update_nav_menu', [$this, 'onMenuUpdate']);
         \add_action('wp_update_nav_menu_item', [$this, 'onMenuUpdate']);
+        \add_action('post_updated', [$this, 'onMenuLinkedPostUpdate'], 10, 3);
+        \add_action('before_delete_post', [$this, 'onMenuLinkedPostDelete']);
+        \add_action('edit_terms', [$this, 'onMenuLinkedTermEdit'], 10, 2);
+        \add_action('edited_term', [$this, 'onMenuLinkedTermEdited'], 10, 3);
+        \add_action('pre_delete_term', [$this, 'onMenuLinkedTermDelete'], 10, 2);
+        \add_action('updated_option', [$this, 'onMenuLocationsUpdate'], 10, 3);
         \add_action('delete_user', [$this, 'onUserDelete'], 10, 3);
         \add_action('profile_update', [$this, 'onUserUpdate']);
         \add_action('user_register', [$this, 'onUserCreate']);
@@ -556,6 +571,125 @@ class Core implements Action
         }
 
         $this->cacheTags->clear(CoreTags::menu($menuId));
+    }
+
+    /**
+     * A menu item takes its label and URL live from the post it links to, but
+     * pages only carry the menu's `menu:{id}`. Clear the menus linking to a post
+     * when a field they render changes: title (the default label), slug, parent
+     * (the URL) or status (trashing or unpublishing hides the item). Other saves
+     * leave the menus alone, so editing content doesn't purge every page that
+     * shows the menu.
+     *
+     * Known limit: a child page's URL also changes when its parent's slug does,
+     * but menus linking to the child aren't cleared.
+     */
+    public function onMenuLinkedPostUpdate(int $postId, WP_Post $after, WP_Post $before): void
+    {
+        if (wp_is_post_revision($postId)) {
+            return;
+        }
+
+        foreach (['post_title', 'post_name', 'post_parent', 'post_status'] as $field) {
+            if ($after->$field !== $before->$field) {
+                $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
+
+                return;
+            }
+        }
+    }
+
+    /**
+     * Deleting a post removes its menu items (core's _wp_delete_post_menu_item,
+     * on delete_post) without saving the menu, so clear the menus before that.
+     */
+    public function onMenuLinkedPostDelete(int $postId): void
+    {
+        if (wp_is_post_revision($postId)) {
+            return;
+        }
+
+        $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
+    }
+
+    public function onMenuLinkedTermEdit(int $termId, string $taxonomy): void
+    {
+        $term = get_term($termId, $taxonomy);
+        if ($term instanceof WP_Term) {
+            $this->termsBeforeEdit[$termId] = [$term->name, $term->slug, $term->parent];
+        }
+    }
+
+    /**
+     * Clear the menus linking to a term whose name (the default label), slug or
+     * parent (the URL) changed.
+     */
+    public function onMenuLinkedTermEdited(int $termId, int $termTaxonomyId, string $taxonomy): void
+    {
+        $before = $this->termsBeforeEdit[$termId] ?? null;
+        unset($this->termsBeforeEdit[$termId]);
+
+        $term = get_term($termId, $taxonomy);
+        if ($before === null || ! $term instanceof WP_Term || $before === [$term->name, $term->slug, $term->parent]) {
+            return;
+        }
+
+        $this->cacheTags->clear($this->linkingMenus($termId, 'taxonomy', $taxonomy));
+    }
+
+    /**
+     * Deleting a term removes its menu items (core's _wp_delete_tax_menu_item,
+     * on delete_term) without saving the menu, so clear the menus before that.
+     */
+    public function onMenuLinkedTermDelete(int $termId, string $taxonomy): void
+    {
+        $this->cacheTags->clear($this->linkingMenus($termId, 'taxonomy', $taxonomy));
+    }
+
+    /**
+     * When a menu location is assigned another menu (or none), the pages that
+     * rendered the location carry the previous menu's tag, so clear that.
+     *
+     * Known limit: a location that had no menu tagged nothing, so assigning
+     * one to it purges nothing.
+     */
+    public function onMenuLocationsUpdate(string $option, $oldValue, $newValue): void
+    {
+        if ($option !== 'theme_mods_'.get_option('stylesheet')) {
+            return;
+        }
+
+        $old = is_array($oldValue) ? ($oldValue['nav_menu_locations'] ?? []) : [];
+        $new = is_array($newValue) ? ($newValue['nav_menu_locations'] ?? []) : [];
+
+        $tags = [];
+        foreach ((array) $old as $location => $menuId) {
+            if ($menuId && (int) ($new[$location] ?? 0) !== (int) $menuId) {
+                $tags[] = Tag::menu((int) $menuId);
+            }
+        }
+
+        $this->cacheTags->clear($tags);
+    }
+
+    /**
+     * The `menu:{id}` tags of the menus with an item linking to an object.
+     *
+     * @return Tag[]
+     */
+    protected function linkingMenus(int $objectId, string $objectType, string $taxonomy = ''): array
+    {
+        $items = wp_get_associated_nav_menu_items($objectId, $objectType, $taxonomy);
+        if (! $items) {
+            return [];
+        }
+
+        $menuIds = wp_get_object_terms($items, 'nav_menu', ['fields' => 'ids']);
+        if (! is_array($menuIds)) {
+            return [];
+        }
+
+        return array_map(fn ($menuId) => Tag::menu((int) $menuId), array_unique($menuIds));
     }
 
     public function onUserDelete(int $userId, ?int $reassign, WP_User $user): void
