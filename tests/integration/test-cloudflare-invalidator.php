@@ -198,6 +198,18 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
         $this->assertSame(['invalidate_cache', 'invalidate_cache'], $invalidator->endpoints, 'the next purge is soft again');
     }
 
+    public function test_the_soft_invalidator_hard_flush_purges(): void
+    {
+        $invalidator = $this->softInvalidator();
+
+        $this->assertTrue($invalidator->hardFlush());
+        $this->assertSame(['purge_cache', 'purge_cache'], $invalidator->endpoints);
+
+        $invalidator->endpoints = [];
+        $invalidator->flush();
+        $this->assertSame(['invalidate_cache', 'invalidate_cache'], $invalidator->endpoints, 'the next flush is soft again');
+    }
+
     public function test_the_hard_purge_tags_are_filterable(): void
     {
         $invalidator = $this->softInvalidator();

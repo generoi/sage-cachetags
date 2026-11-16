@@ -5,6 +5,7 @@ namespace Genero\Sage\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
 use Genero\Sage\CacheTags\Contracts\PrunableStore;
+use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 use WP_Term;
 
@@ -335,14 +336,15 @@ class CacheTags
     }
 
     /**
-     * Flush all caches.
+     * Flush all caches. With $hard, soft invalidators purge instead of marking
+     * content stale, so nothing old is served while it revalidates.
      */
-    public function flush(): bool
+    public function flush(bool $hard = false): bool
     {
         // Run all invalidators but keep track if something failed.
         $result = array_reduce(
             $this->invalidators,
-            fn ($result, $invalidator) => $invalidator->flush() ? $result : false,
+            fn ($result, $invalidator) => ($hard && $invalidator instanceof SoftInvalidator ? $invalidator->hardFlush() : $invalidator->flush()) ? $result : false,
             true
         );
 

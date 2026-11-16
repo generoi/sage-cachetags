@@ -8,11 +8,11 @@ use Roots\Acorn\Console\Commands\Command;
 class FlushCommand extends Command
 {
     /**
-     * The console command name.
+     * The console command signature.
      *
      * @var string
      */
-    protected $name = 'cachetags:flush';
+    protected $signature = 'cachetags:flush {--hard : Purge with soft invalidators too, instead of marking content stale}';
 
     /**
      * The console command description.
@@ -24,7 +24,7 @@ class FlushCommand extends Command
     public function handle(): void
     {
         $result = $this->app->make(CacheTags::class)
-            ->flush();
+            ->flush((bool) $this->option('hard'));
 
         if ($result) {
             $this->line('Flushed caches');

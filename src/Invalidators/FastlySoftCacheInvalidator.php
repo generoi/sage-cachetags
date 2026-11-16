@@ -2,6 +2,7 @@
 
 namespace Genero\Sage\CacheTags\Invalidators;
 
+use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Util;
 
 /**
@@ -10,17 +11,29 @@ use Genero\Sage\CacheTags\Util;
  * Util::needsHardPurge()) is sent without the soft header, so no one is served
  * the stale page.
  */
-class FastlySoftCacheInvalidator extends FastlyCacheInvalidator
+class FastlySoftCacheInvalidator extends FastlyCacheInvalidator implements SoftInvalidator
 {
     /** Set while a purge that must not serve stale is being sent. */
     protected bool $hard = false;
 
     public function clear(array $urls, array $tags): bool
     {
-        $this->hard = Util::needsHardPurge($tags);
+        $hard = $this->hard;
+        $this->hard = $hard || Util::needsHardPurge($tags);
 
         try {
             return parent::clear($urls, $tags);
+        } finally {
+            $this->hard = $hard;
+        }
+    }
+
+    public function hardFlush(): bool
+    {
+        $this->hard = true;
+
+        try {
+            return $this->flush();
         } finally {
             $this->hard = false;
         }

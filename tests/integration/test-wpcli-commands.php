@@ -1,6 +1,7 @@
 <?php
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\CacheTagStore;
 use Genero\Sage\CacheTags\WpCli\ClearCommand;
@@ -80,6 +81,41 @@ class TestWpCliCommands extends WP_UnitTestCase
     {
         (new FlushCommand)();
 
+        $this->assertContains('success:Flushed caches', $this->logger->messages);
+    }
+
+    public function test_flush_command_hard_flushes_soft_invalidators(): void
+    {
+        $soft = new class implements SoftInvalidator
+        {
+            public array $calls = [];
+
+            public function clear(array $urls, array $tags): bool
+            {
+                return true;
+            }
+
+            public function flush(): bool
+            {
+                $this->calls[] = 'flush';
+
+                return true;
+            }
+
+            public function hardFlush(): bool
+            {
+                $this->calls[] = 'hardFlush';
+
+                return true;
+            }
+        };
+        $this->prop()->setValue(null, null);
+        CacheTags::make(new CacheTagStore, false, 'Cache-Tag', [$soft, new DebugCacheInvalidator]);
+
+        (new FlushCommand)();
+        (new FlushCommand)([], ['hard' => true]);
+
+        $this->assertSame(['flush', 'hardFlush'], $soft->calls);
         $this->assertContains('success:Flushed caches', $this->logger->messages);
     }
 

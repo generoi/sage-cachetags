@@ -693,6 +693,9 @@ finish provisioning all of them.
 # Flush the entire cache
 wp acorn cachetags:flush
 
+# …purging with soft invalidators too, so nothing stale is served
+wp acorn cachetags:flush --hard
+
 # Clear specific tags
 wp acorn cachetags:clear post:1 term:5
 
@@ -719,6 +722,9 @@ wp acorn cachetags:warm
 ```sh
 # Flush the entire cache
 wp cachetags flush
+
+# …purging with soft invalidators too, so nothing stale is served
+wp cachetags flush --hard
 
 # Clear specific tags
 wp cachetags clear post:1 term:5

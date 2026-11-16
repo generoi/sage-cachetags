@@ -2,6 +2,7 @@
 
 namespace Genero\Sage\CacheTags\Invalidators;
 
+use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Util;
 
 /**
@@ -20,7 +21,7 @@ use Genero\Sage\CacheTags\Util;
  *
  * @see https://developers.cloudflare.com/cache/guides/invalidate-cache/
  */
-class CloudflareSoftCacheInvalidator extends CloudflareCacheInvalidator
+class CloudflareSoftCacheInvalidator extends CloudflareCacheInvalidator implements SoftInvalidator
 {
     const ENDPOINT = 'invalidate_cache';
 
@@ -29,10 +30,22 @@ class CloudflareSoftCacheInvalidator extends CloudflareCacheInvalidator
 
     public function clear(array $urls, array $tags): bool
     {
-        $this->hard = Util::needsHardPurge($tags);
+        $hard = $this->hard;
+        $this->hard = $hard || Util::needsHardPurge($tags);
 
         try {
             return parent::clear($urls, $tags);
+        } finally {
+            $this->hard = $hard;
+        }
+    }
+
+    public function hardFlush(): bool
+    {
+        $this->hard = true;
+
+        try {
+            return $this->flush();
         } finally {
             $this->hard = false;
         }
