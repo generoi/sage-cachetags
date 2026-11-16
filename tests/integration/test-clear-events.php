@@ -329,4 +329,55 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("term:{$newTerm}:full", $tags, 'new term archive');
         $this->assertContains("term:{$oldTerm}:full", $tags, 'old term archive purged on reassignment');
     }
+
+    // An importer re-setting the same terms on every listing each run must not
+    // purge the listing and every one of its term archives each time.
+    public function test_setting_the_same_terms_again_purges_nothing(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $first = self::factory()->category->create();
+        $second = self::factory()->category->create();
+        wp_set_object_terms($postId, [$first, $second], 'category');
+        $this->resetCacheTags();
+
+        // Same set, different order.
+        wp_set_object_terms($postId, [$second, $first], 'category');
+        wp_set_post_terms($postId, [$first], 'category', true);
+
+        $this->assertSame([], $this->queuedPurgeTags());
+    }
+
+    public function test_setting_terms_purges_only_the_terms_that_changed(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $kept = self::factory()->category->create();
+        $removed = self::factory()->category->create();
+        $added = self::factory()->category->create();
+        wp_set_object_terms($postId, [$kept, $removed], 'category');
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [$kept, $added], 'category');
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains("term:{$added}:full", $tags, 'added term archive');
+        $this->assertContains("term:{$removed}:full", $tags, 'removed term archive');
+        $this->assertNotContains("term:{$kept}:full", $tags, 'unchanged membership');
+    }
+
+    public function test_appending_a_new_term_purges_only_that_term(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $existing = self::factory()->category->create();
+        $added = self::factory()->category->create();
+        wp_set_object_terms($postId, [$existing], 'category');
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [$added], 'category', true);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains("term:{$added}:full", $tags);
+        $this->assertNotContains("term:{$existing}:full", $tags, 'appending removes nothing');
+    }
 }

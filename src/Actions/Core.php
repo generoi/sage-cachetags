@@ -17,6 +17,14 @@ class Core implements Action
      * same post:{id} for every inner block carrying the postId context. */
     protected array $taggedBlockPosts = [];
 
+    /**
+     * Term relationships inserted by the wp_set_object_terms() call under way,
+     * consumed by onTermSet().
+     *
+     * @var array<int, array<string, int[]>>
+     */
+    protected array $addedTermRelationships = [];
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
@@ -34,6 +42,7 @@ class Core implements Action
         \add_action('deleted_comment', [$this, 'onCommentDelete'], 10, 2);
         \add_action('saved_term', [$this, 'onTermSave'], 10, 4);
         \add_action('delete_term', [$this, 'onTermDelete'], 10, 3);
+        \add_action('added_term_relationship', [$this, 'onTermRelationshipAdded'], 10, 3);
         \add_action('set_object_terms', [$this, 'onTermSet'], 10, 6);
         \add_action('updated_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
         \add_action('added_post_meta', [$this, 'onPostMetaUpdate'], 10, 3);
@@ -363,19 +372,43 @@ class Core implements Action
     }
 
     /**
-     * When a term is added to an object, clear caches.
+     * Record a term relationship wp_set_object_terms() actually inserted; it
+     * skips the ones that already exist.
+     */
+    public function onTermRelationshipAdded(int $objectId, int $taxonomyId, string $taxonomy): void
+    {
+        $this->addedTermRelationships[$objectId][$taxonomy][] = $taxonomyId;
+    }
+
+    /**
+     * When the terms of an object change, clear the pages of the terms that
+     * were added or removed, and the object itself.
+     *
+     * set_object_terms fires on every wp_set_object_terms() call, also when the
+     * term set is unchanged (an importer re-saving every listing each hour), so
+     * only the difference is purged and nothing at all when there is none. The
+     * added terms come from added_term_relationship rather than the arguments:
+     * with $append, core passes no old terms, so every given term would look new.
      */
     public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append = false, array $oldTaxonomyIds = []): void
     {
+        $added = $this->addedTermRelationships[$objectId][$taxonomy] ?? [];
+        unset($this->addedTermRelationships[$objectId][$taxonomy]);
+
         if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
+            return;
+        }
+
+        $removed = $append ? [] : array_diff(array_map('intval', $oldTaxonomyIds), array_map('intval', $taxonomyIds));
+        if (! $added && ! $removed) {
             return;
         }
 
         // Resolve term_taxonomy_ids → term_ids in a single query: $terms can be
         // slugs/names (which CoreTags would mis-format as term:0), and the
-        // REMOVED terms ($oldTaxonomyIds) must be purged too so a reassigned
-        // post's old term archive isn't left stale.
-        $taxonomyIds = array_unique(array_map('intval', [...$taxonomyIds, ...$oldTaxonomyIds]));
+        // REMOVED terms must be purged too so a reassigned post's old term
+        // archive isn't left stale.
+        $taxonomyIds = array_values(array_unique([...$added, ...$removed]));
         $termIds = $taxonomyIds ? get_terms([
             'taxonomy' => $taxonomy,
             'term_taxonomy_id' => $taxonomyIds,
