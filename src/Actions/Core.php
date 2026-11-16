@@ -574,13 +574,36 @@ class Core implements Action
             return;
         }
 
+        if (self::linkFieldsChanged($after, $before)) {
+            $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
+        }
+    }
+
+    /**
+     * Whether a post changed in a way a link to it shows: its title (a menu
+     * item's default label), slug or parent (its URL), or status (trashing or
+     * unpublishing hides the link).
+     */
+    public static function linkFieldsChanged(WP_Post $after, WP_Post $before): bool
+    {
         foreach (['post_title', 'post_name', 'post_parent', 'post_status'] as $field) {
             if ($after->$field !== $before->$field) {
-                $this->cacheTags->clear($this->linkingMenus($postId, 'post_type'));
-
-                return;
+                return true;
             }
         }
+
+        return false;
+    }
+
+    /**
+     * The term equivalent of linkFieldsChanged(), from a snapshot taken with
+     * termLinkFields() before the edit.
+     *
+     * @return array{0: string, 1: string, 2: int}
+     */
+    public static function termLinkFields(WP_Term $term): array
+    {
+        return [$term->name, $term->slug, (int) $term->parent];
     }
 
     /**
@@ -600,7 +623,7 @@ class Core implements Action
     {
         $term = get_term($termId, $taxonomy);
         if ($term instanceof WP_Term) {
-            $this->termsBeforeEdit[$termId] = [$term->name, $term->slug, $term->parent];
+            $this->termsBeforeEdit[$termId] = self::termLinkFields($term);
         }
     }
 
@@ -614,7 +637,7 @@ class Core implements Action
         unset($this->termsBeforeEdit[$termId]);
 
         $term = get_term($termId, $taxonomy);
-        if ($before === null || ! $term instanceof WP_Term || $before === [$term->name, $term->slug, $term->parent]) {
+        if ($before === null || ! $term instanceof WP_Term || $before === self::termLinkFields($term)) {
             return;
         }
 

@@ -651,9 +651,11 @@ automatically — you don't need to list it in `action`:
 - **Polylang** makes archive tags language-specific (`archive:post:fi`) so a change
   in one language only purges that language's listings, and clears the right
   language archives on publish/unpublish/delete. Language switchers link to a
-  page's translations, so a post or term page is tagged with its translations'
-  `post:`/`term:` tags, and saving a post or term (which is when translations
-  are linked) clears its translations.
+  page's translations, so their pages are purged only when what a switcher shows
+  changes: linking or unlinking a translation purges every member's page, and a
+  translation's title, slug, parent or status change clears the
+  `post:{id}:url` / `term:{id}:url` tag the other translations' pages carry for
+  it. A content edit of one translation doesn't purge the others.
 - **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
   form's pages when it changes. It tags file-upload form pages `nonce`; the
   always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
