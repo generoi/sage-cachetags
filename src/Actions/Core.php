@@ -563,12 +563,18 @@ class Core implements Action
             ...CoreTags::termPages($termIds),
         ];
 
-        // If it was set on a post, clear the post as well.
-        if (get_post($objectId)) {
+        // If it was set on a post, clear the post as well, and with a
+        // %category%-style permalink the menus linking to its now-changed URL.
+        $post = get_post($objectId);
+        if ($post instanceof WP_Post) {
             $cacheTags = [
                 ...$cacheTags,
                 ...CoreTags::posts($objectId),
             ];
+
+            if (self::isPermalinkTaxonomy($taxonomy, $post->post_type) && $this->canBeInMenus($post)) {
+                $cacheTags = [...$cacheTags, ...$this->linkingMenus($objectId, 'post_type')];
+            }
         }
 
         $this->cacheTags->clear($cacheTags);
@@ -756,18 +762,48 @@ class Core implements Action
 
     /**
      * Whether a post changed in a way a link to it shows: its title (a menu
-     * item's default label), slug or parent (its URL), or status (trashing or
-     * unpublishing hides the link).
+     * item's default label), slug, parent or — with a date-based permalink
+     * structure — date (its URL), or status (trashing or unpublishing hides the
+     * link).
      */
     public static function linkFieldsChanged(WP_Post $after, WP_Post $before): bool
     {
-        foreach (['post_title', 'post_name', 'post_parent', 'post_status'] as $field) {
+        $fields = ['post_title', 'post_name', 'post_parent', 'post_status'];
+        if (self::permalinkUsesDate()) {
+            $fields[] = 'post_date';
+        }
+
+        foreach ($fields as $field) {
             if ($after->$field !== $before->$field) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Whether post URLs contain their date (%year%, %monthnum%, …).
+     */
+    public static function permalinkUsesDate(): bool
+    {
+        return (bool) preg_match('/%(year|monthnum|day|hour|minute|second)%/', (string) get_option('permalink_structure'));
+    }
+
+    /**
+     * Whether a post type's URLs contain a term of the taxonomy: %category% in
+     * the post permalink structure, %product_cat% in WooCommerce's product base.
+     * Custom post type rewrite tags aren't detected.
+     */
+    public static function isPermalinkTaxonomy(string $taxonomy, string $postType): bool
+    {
+        $structure = match ($postType) {
+            'post' => (string) get_option('permalink_structure'),
+            'product' => (string) (((array) get_option('woocommerce_permalinks', []))['product_base'] ?? ''),
+            default => '',
+        };
+
+        return str_contains($structure, "%{$taxonomy}%");
     }
 
     /**

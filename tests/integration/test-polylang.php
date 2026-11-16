@@ -308,6 +308,36 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains($group, $this->queuedPurgeTags(), 'unpublished');
     }
 
+    // With /%category%/%postname%/, a translation's URL changes with its
+    // category, so the switchers linking to it are stale.
+    public function test_changing_a_translations_permalink_category_purges_its_group(): void
+    {
+        [$en] = $this->translatedPosts();
+        $category = self::factory()->category->create();
+        pll_set_term_language($category, 'en');
+        $group = $this->groupTag($en, 'post_translations');
+        $this->action()->init();
+        $this->set_permalink_structure('/%category%/%postname%/');
+        $this->resetPurgeTags();
+
+        wp_set_post_categories($en, [$category]);
+
+        $this->assertContains($group, $this->queuedPurgeTags());
+    }
+
+    public function test_changing_a_translations_date_purges_its_group_with_a_date_permalink(): void
+    {
+        [$en] = $this->translatedPosts();
+        $group = $this->groupTag($en, 'post_translations');
+        $this->action()->init();
+        $this->set_permalink_structure('/%year%/%postname%/');
+        $this->resetPurgeTags();
+
+        wp_update_post(['ID' => $en, 'post_date' => '2020-05-05 10:00:00']);
+
+        $this->assertContains($group, $this->queuedPurgeTags());
+    }
+
     // wp_publish_post() fires transition_post_status but never post_updated.
     public function test_publishing_a_scheduled_translation_purges_the_pages_linking_to_it(): void
     {

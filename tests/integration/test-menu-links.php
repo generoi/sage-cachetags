@@ -206,6 +206,42 @@ class TestMenuLinks extends RestTestCase
         $this->assertContains('menu-location:footer', $this->queuedPurgeTags());
     }
 
+    // With a date-based permalink, the date is part of the URL a menu links to.
+    public function test_changing_a_linked_posts_date_clears_the_menu_only_with_a_date_permalink(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish', 'post_date' => '2025-01-01 10:00:00']);
+        $this->linkPost($postId);
+
+        $this->set_permalink_structure('/%postname%/');
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_date' => '2025-02-01 10:00:00']);
+        $this->assertNotContains("menu:{$this->menuId}", $this->queuedPurgeTags(), 'not in the URL');
+
+        $this->set_permalink_structure('/%year%/%monthnum%/%postname%/');
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_date' => '2024-03-01 10:00:00']);
+        $this->assertContains("menu:{$this->menuId}", $this->queuedPurgeTags(), 'in the URL');
+    }
+
+    // With /%category%/%postname%/, a post's URL changes with its category.
+    public function test_changing_a_linked_posts_permalink_category_clears_the_menu(): void
+    {
+        $first = self::factory()->category->create();
+        $second = self::factory()->category->create();
+        $postId = self::factory()->post->create(['post_status' => 'publish', 'post_category' => [$first]]);
+        $this->linkPost($postId);
+
+        $this->set_permalink_structure('/%postname%/');
+        $this->resetCacheTags();
+        wp_set_post_categories($postId, [$second]);
+        $this->assertNotContains("menu:{$this->menuId}", $this->queuedPurgeTags(), 'not in the URL');
+
+        $this->set_permalink_structure('/%category%/%postname%/');
+        $this->resetCacheTags();
+        wp_set_post_categories($postId, [$first]);
+        $this->assertContains("menu:{$this->menuId}", $this->queuedPurgeTags(), 'in the URL');
+    }
+
     public function test_deleting_a_menu_clears_it(): void
     {
         $this->resetCacheTags();

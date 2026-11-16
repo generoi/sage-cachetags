@@ -3,6 +3,7 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Concerns\TracksAddedTermRelationships;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
@@ -12,6 +13,8 @@ use WP_Term;
 
 class Polylang implements Action
 {
+    use TracksAddedTermRelationships;
+
     /**
      * Type of the tag a page carries for its translation group (the members
      * its language switcher links to): `translations:{group term id}`.
@@ -70,6 +73,8 @@ class Polylang implements Action
         \add_action('post_updated', [$this, 'onPostUpdated'], 10, 3);
         // wp_publish_post() (scheduled posts) doesn't fire post_updated.
         \add_action('transition_post_status', [$this, 'onScheduledPublish'], 10, 3);
+        \add_action('added_term_relationship', [$this, 'onTermRelationshipAdded'], 10, 3);
+        \add_action('set_object_terms', [$this, 'onTermSet'], 10, 6);
         $themeMods = 'pre_update_option_theme_mods_'.get_option('stylesheet');
         \add_filter($themeMods, [$this, 'snapshotMenuLocations'], 9);
         \add_filter($themeMods, [$this, 'compareMenuLocations'], 11);
@@ -115,7 +120,7 @@ class Polylang implements Action
     public function onPostUpdated(int $postId, WP_Post $after, WP_Post $before): void
     {
         $fields = ['post_name', 'post_parent', 'post_status'];
-        if (preg_match('/%(year|monthnum|day|hour|minute|second)%/', (string) get_option('permalink_structure'))) {
+        if (Core::permalinkUsesDate()) {
             $fields[] = 'post_date';
         }
 
@@ -134,6 +139,24 @@ class Polylang implements Action
     public function onScheduledPublish(string $newStatus, string $oldStatus, WP_Post $post): void
     {
         if ($oldStatus === 'future' && $newStatus === 'publish') {
+            $this->clearPostGroup($post);
+        }
+    }
+
+    /**
+     * With a %category%-style permalink, a post's URL changes with its terms in
+     * that taxonomy (see Core::isPermalinkTaxonomy).
+     */
+    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append = false, array $oldTaxonomyIds = []): void
+    {
+        $added = $this->takeAddedTermRelationships($objectId, $taxonomy);
+        $removed = $append ? [] : array_diff(array_map('intval', $oldTaxonomyIds), array_map('intval', $taxonomyIds));
+        if (! $added && ! $removed) {
+            return;
+        }
+
+        $post = get_post($objectId);
+        if ($post instanceof WP_Post && Core::isPermalinkTaxonomy($taxonomy, $post->post_type)) {
             $this->clearPostGroup($post);
         }
     }
