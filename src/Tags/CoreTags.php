@@ -117,24 +117,34 @@ class CoreTags
     }
 
     /**
-     * Return cache tags for the menu in a navigation location.
+     * Return cache tags for a navigation location and the menu in it:
+     * `menu-location:{location}` (cleared when the location is assigned another
+     * menu, or one for the first time) and the menu's `menu:{id}`.
      *
      * @return Tag[]
      */
     public static function navigation(?string $location = null): array
     {
-        if ($location === null) {
+        if ($location === null || $location === '') {
             return [];
         }
 
         $locations = get_nav_menu_locations();
         $menu = $locations[$location] ?? null;
-        if (! $menu) {
-            // @TODO: wp normally picks the first menu
-            return [];
-        }
 
-        return self::menu($menu);
+        return [
+            self::menuLocation($location),
+            ...($menu ? self::menu($menu) : []),
+        ];
+    }
+
+    /**
+     * The tag of a navigation location. Polylang's per-language locations
+     * (`primary___fi`) share their base location's tag.
+     */
+    public static function menuLocation(string $location): Tag
+    {
+        return Tag::of('menu-location', explode('___', $location, 2)[0]);
     }
 
     /**

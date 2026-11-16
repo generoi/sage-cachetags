@@ -800,11 +800,9 @@ class Core implements Action
     }
 
     /**
-     * When a menu location is assigned another menu (or none), the pages that
-     * rendered the location carry the previous menu's tag, so clear that.
-     *
-     * Known limit: a location that had no menu tagged nothing, so assigning
-     * one to it purges nothing.
+     * When a menu location is assigned another menu, or one for the first
+     * time, or none, clear the pages that rendered it (their
+     * `menu-location:{location}` tag, see CoreTags::navigation()).
      */
     public function onMenuLocationsUpdate(string $option, $oldValue, $newValue): void
     {
@@ -812,13 +810,13 @@ class Core implements Action
             return;
         }
 
-        $old = is_array($oldValue) ? ($oldValue['nav_menu_locations'] ?? []) : [];
-        $new = is_array($newValue) ? ($newValue['nav_menu_locations'] ?? []) : [];
+        $old = (array) (is_array($oldValue) ? ($oldValue['nav_menu_locations'] ?? []) : []);
+        $new = (array) (is_array($newValue) ? ($newValue['nav_menu_locations'] ?? []) : []);
 
         $tags = [];
-        foreach ((array) $old as $location => $menuId) {
-            if ($menuId && (int) ($new[$location] ?? 0) !== (int) $menuId) {
-                $tags[] = Tag::menu((int) $menuId);
+        foreach (array_keys($old + $new) as $location) {
+            if ((int) ($old[$location] ?? 0) !== (int) ($new[$location] ?? 0)) {
+                $tags[] = CoreTags::menuLocation((string) $location);
             }
         }
 

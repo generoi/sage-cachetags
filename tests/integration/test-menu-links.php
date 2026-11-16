@@ -165,7 +165,7 @@ class TestMenuLinks extends RestTestCase
         $this->assertContains("menu:{$this->menuId}", $this->queuedPurgeTags());
     }
 
-    public function test_reassigning_a_menu_location_clears_the_previous_menu(): void
+    public function test_reassigning_a_menu_location_clears_the_pages_rendering_it(): void
     {
         register_nav_menu('primary', 'Primary');
         $otherId = wp_create_nav_menu('Other '.wp_generate_password(6, false));
@@ -174,7 +174,21 @@ class TestMenuLinks extends RestTestCase
 
         set_theme_mod('nav_menu_locations', ['primary' => $otherId]);
 
-        $this->assertContains("menu:{$this->menuId}", $this->queuedPurgeTags());
+        $this->assertContains('menu-location:primary', $this->queuedPurgeTags());
+    }
+
+    // The location tag is on the page even while the location is empty.
+    public function test_assigning_a_menu_to_an_empty_location_clears_the_pages_rendering_it(): void
+    {
+        register_nav_menu('footer', 'Footer');
+        set_theme_mod('nav_menu_locations', []);
+        $this->resetCacheTags();
+        wp_nav_menu(['theme_location' => 'footer', 'echo' => false, 'fallback_cb' => false]);
+        $this->assertContains('menu-location:footer', $this->cacheTags->get(), 'rendered');
+
+        set_theme_mod('nav_menu_locations', ['footer' => $this->menuId]);
+
+        $this->assertContains('menu-location:footer', $this->queuedPurgeTags());
     }
 
     public function test_unrelated_theme_mod_changes_clear_no_menu(): void
@@ -185,6 +199,8 @@ class TestMenuLinks extends RestTestCase
 
         set_theme_mod('header_textcolor', 'ff0000');
 
-        $this->assertNotContains("menu:{$this->menuId}", $this->queuedPurgeTags());
+        $tags = $this->queuedPurgeTags();
+        $this->assertNotContains("menu:{$this->menuId}", $tags);
+        $this->assertNotContains('menu-location:primary', $tags);
     }
 }

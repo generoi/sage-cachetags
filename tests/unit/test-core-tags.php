@@ -112,8 +112,11 @@ class TestCoreTags extends WP_UnitTestCase
         register_nav_menu('footer', 'Footer location');
         set_theme_mod('nav_menu_locations', ['footer' => $menuId]);
 
-        $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::navigation('footer')));
-        $this->assertSame([], $this->strings(CoreTags::navigation('missing-location')));
+        $this->assertSame(['menu-location:footer', "menu:{$menuId}"], $this->strings(CoreTags::navigation('footer')));
+        // An empty location still carries its own tag, so assigning a menu to
+        // it purges the pages that render it.
+        $this->assertSame(['menu-location:missing-location'], $this->strings(CoreTags::navigation('missing-location')));
+        $this->assertSame(['menu-location:footer'], $this->strings([CoreTags::menuLocation('footer___fi')]), 'a Polylang language location');
     }
 
     public function test_is_cacheable_predicates(): void
@@ -196,7 +199,7 @@ class TestCoreTags extends WP_UnitTestCase
         $this->assertSame([], CoreTags::menu(999999));
     }
 
-    public function test_navigation_returns_no_tags_for_a_location_pointing_at_a_deleted_menu(): void
+    public function test_navigation_returns_no_menu_tag_for_a_location_pointing_at_a_deleted_menu(): void
     {
         $menuId = wp_create_nav_menu('Deleted');
         register_nav_menu('header', 'Header location');
@@ -206,7 +209,7 @@ class TestCoreTags extends WP_UnitTestCase
         // behind (an import, a stale option) still points at it.
         set_theme_mod('nav_menu_locations', ['header' => $menuId]);
 
-        $this->assertSame([], CoreTags::navigation('header'));
+        $this->assertSame(['menu-location:header'], $this->strings(CoreTags::navigation('header')));
     }
 
     public function test_queried_object_throws_for_an_unsupported_object(): void
