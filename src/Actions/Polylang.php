@@ -127,7 +127,7 @@ class Polylang implements Action
         // A switcher only links to published translations, so saves that keep
         // a post out of view (a draft's date on a date-permalink site) change
         // nothing it shows.
-        if ($after->post_status !== 'publish' && $before->post_status !== 'publish') {
+        if (! $this->isPublic($after) && ! $this->isPublic($before)) {
             return;
         }
 
@@ -168,9 +168,19 @@ class Polylang implements Action
         }
 
         $post = get_post($objectId);
-        if ($post instanceof WP_Post && Core::isPermalinkTaxonomy($taxonomy, $post->post_type)) {
+        if ($post instanceof WP_Post && $this->isPublic($post) && Core::isPermalinkTaxonomy($taxonomy, $post->post_type)) {
             $this->clearPostGroup($post);
         }
+    }
+
+    /**
+     * Whether a post is one a language switcher links to: published, or an
+     * attachment, whose status is `inherit`.
+     */
+    protected function isPublic(WP_Post $post): bool
+    {
+        return $post->post_status === 'publish'
+            || ($post->post_type === 'attachment' && $post->post_status === 'inherit');
     }
 
     protected function clearPostGroup(WP_Post $post): void

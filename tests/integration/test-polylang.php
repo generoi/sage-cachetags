@@ -354,6 +354,43 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertNotContains($group, $this->queuedPurgeTags());
     }
 
+    public function test_changing_a_draft_translations_permalink_category_purges_nothing(): void
+    {
+        [$en] = $this->translatedPosts();
+        wp_update_post(['ID' => $en, 'post_status' => 'draft']);
+        $category = self::factory()->category->create();
+        pll_set_term_language($category, 'en');
+        $group = $this->groupTag($en, 'post_translations');
+        $this->action()->init();
+        $this->set_permalink_structure('/%category%/%postname%/');
+        $this->resetPurgeTags();
+
+        wp_set_post_categories($en, [$category]);
+
+        $this->assertNotContains($group, $this->queuedPurgeTags());
+    }
+
+    // Attachments are `inherit`, not `publish`, yet are linked to.
+    public function test_renaming_a_translated_attachment_purges_its_group(): void
+    {
+        if (! pll_is_translated_post_type('attachment')) {
+            $this->markTestSkipped('Polylang media translation is off in this environment.');
+        }
+        $this->ensureFinnish();
+        $en = self::factory()->attachment->create(['post_status' => 'inherit']);
+        $fi = self::factory()->attachment->create(['post_status' => 'inherit']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi, 'fi');
+        pll_save_post_translations(['en' => $en, 'fi' => $fi]);
+        $group = $this->groupTag($en, 'post_translations');
+        $this->action()->init();
+        $this->resetPurgeTags();
+
+        wp_update_post(['ID' => $en, 'post_name' => 'renamed-attachment']);
+
+        $this->assertContains($group, $this->queuedPurgeTags());
+    }
+
     // The posts page's switcher links to the posts page's translations.
     public function test_the_posts_page_is_tagged_with_its_translation_group(): void
     {
