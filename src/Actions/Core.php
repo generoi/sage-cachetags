@@ -59,6 +59,12 @@ class Core implements Action
             case is_feed():
                 // Skip feeds
                 break;
+            case is_search():
+                // Checked before the singular and term cases, as template-loader
+                // does: `/no-such-page/?s=x` sets is_page() and is_search() with
+                // no queried object, and renders the search template.
+                $this->cacheTags->add(CoreTags::archive('post'));
+                break;
             case is_single():
             case is_page():
                 $this->cacheTags->add(CoreTags::queriedObject());
@@ -84,7 +90,6 @@ class Core implements Action
                 $this->cacheTags->add(CoreTags::queriedObject());
                 break;
             case is_date():
-            case is_search():
                 // Listings of any post that publishes/unpublishes into them.
                 $this->cacheTags->add(CoreTags::archive('post'));
                 break;
