@@ -138,7 +138,7 @@ class CoreTags
     }
 
     /**
-     * Return cache tags for a menu.
+     * Return cache tags for a menu, or none for a menu that doesn't exist.
      *
      * @return Tag[]
      */
@@ -149,12 +149,14 @@ class CoreTags
         }
 
         // wp_get_nav_menu_object resolves an id, slug, name, or menu object — all
-        // the forms wp_nav_menu()'s `menu` arg accepts. The old code only handled
-        // slugs, so a menu selected by name or object fataled. A non-empty value
-        // that still can't resolve is a real error (typo / deleted menu).
+        // the forms wp_nav_menu()'s `menu` arg accepts. One that doesn't resolve
+        // (a location still pointing at a deleted menu, a typo'd slug) renders
+        // nothing in wp_nav_menu() or Navi, so it has no tags either. This runs
+        // on every render, where throwing would turn a missing menu into a 500
+        // on every page.
         $object = wp_get_nav_menu_object($menu);
         if (! $object instanceof WP_Term) {
-            throw new Exception('CoreTags::menu received an unknown menu: '.(is_scalar($menu) ? $menu : get_debug_type($menu)));
+            return [];
         }
 
         return [Tag::menu($object->term_id)];

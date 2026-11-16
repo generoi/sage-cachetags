@@ -188,10 +188,25 @@ class TestCoreTags extends WP_UnitTestCase
         $this->assertSame(["menu:{$menuId}"], $this->strings(CoreTags::menu('Primary')));
     }
 
-    public function test_menu_throws_for_an_unknown_menu(): void
+    // Themes tag menus on every render; a missing menu renders nothing, so it
+    // must not throw and 500 the page.
+    public function test_menu_returns_no_tags_for_an_unknown_menu(): void
     {
-        $this->expectException(Exception::class);
-        CoreTags::menu('no-such-menu');
+        $this->assertSame([], CoreTags::menu('no-such-menu'));
+        $this->assertSame([], CoreTags::menu(999999));
+    }
+
+    public function test_navigation_returns_no_tags_for_a_location_pointing_at_a_deleted_menu(): void
+    {
+        $menuId = wp_create_nav_menu('Deleted');
+        register_nav_menu('header', 'Header location');
+        set_theme_mod('nav_menu_locations', ['header' => $menuId]);
+        wp_delete_nav_menu($menuId);
+        // Deleting a menu unassigns it from its locations; a theme mod left
+        // behind (an import, a stale option) still points at it.
+        set_theme_mod('nav_menu_locations', ['header' => $menuId]);
+
+        $this->assertSame([], CoreTags::navigation('header'));
     }
 
     public function test_queried_object_throws_for_an_unsupported_object(): void

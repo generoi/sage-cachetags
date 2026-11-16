@@ -398,6 +398,8 @@ template (single/page, taxonomy, author, post-type/date/search archives,
 attachments) and from core blocks (queries, terms, authors, comments,
 calendar/archives, site title/tagline/logo, etc.). Classic-theme `wp_nav_menu()`
 output is tagged with its `menu:{id}` so menu edits purge the pages showing it.
+`CoreTags::menu()` and `CoreTags::navigation()` return no tags for a menu that
+doesn't exist (a location pointing at a deleted menu), since nothing renders.
 
 Site-identity blocks (`core/site-title`, `core/site-tagline`, `core/site-logo`)
 are tagged with an `option:{name}` tag and purged when that option changes.

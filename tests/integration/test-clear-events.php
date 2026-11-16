@@ -136,9 +136,8 @@ class TestClearEvents extends RestTestCase
     /**
      * Core's "Add to Menu" button saves the submitted items through
      * `wp_save_nav_menu_items(0, ...)`, so `wp_update_nav_menu_item` fires with a
-     * menu id of 0 for an item that is in no menu yet. That has to be a no-op:
-     * CoreTags::menu() throws on an id it cannot resolve, and the exception is
-     * uncaught inside admin-ajax, which turns the whole request into a 500.
+     * menu id of 0 for an item that is in no menu yet. Nothing renders it yet,
+     * so that has to be a no-op.
      */
     public function test_adding_a_menu_item_with_no_menu_yet_is_a_noop(): void
     {

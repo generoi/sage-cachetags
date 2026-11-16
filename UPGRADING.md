@@ -1,5 +1,16 @@
 # Upgrading
 
+## 3.3
+
+No code changes are needed. These behaviours change:
+
+- **`CoreTags::menu()` no longer throws on a menu it can't resolve.** It returns
+  no tags, as `CoreTags::navigation()` does for an empty location. Themes call
+  both on every render (Navi menus), so a location still pointing at a deleted
+  menu turned into a 500 on every page, where `wp_nav_menu()` or Navi would just
+  render nothing. Code that relied on the exception to catch a typo'd slug
+  should check `wp_get_nav_menu_object()` itself.
+
 ## 3.0
 
 3.0 reworks cache tags from plain strings into a structured `Tag` value object

@@ -67,4 +67,15 @@ class TestBlockTags extends RestTestCase
 
         $this->assertContains("menu:{$menuId}", $this->cacheTags->get());
     }
+
+    // wp_nav_menu() renders nothing (or its fallback) for a menu that doesn't
+    // exist; tagging it must not turn that into a 500.
+    public function test_classic_nav_menu_render_of_an_unknown_menu_does_not_throw(): void
+    {
+        $this->resetCacheTags();
+
+        wp_nav_menu(['menu' => 'no-such-menu', 'echo' => false, 'fallback_cb' => false]);
+
+        $this->assertSame([], array_filter($this->cacheTags->get(), fn ($tag) => str_starts_with($tag, 'menu:')));
+    }
 }

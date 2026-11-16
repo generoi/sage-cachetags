@@ -548,11 +548,6 @@ class Core implements Action
      * only bound to a menu when the screen is saved, so `wp_update_nav_menu_item`
      * fires for an item that is in no menu yet. Nothing renders it at that point,
      * so there is nothing to purge.
-     *
-     * CoreTags::menu() throws on a value it cannot resolve, which is what we want
-     * for a deleted menu or a typo'd slug but fatal here — an uncaught exception
-     * inside an admin-ajax handler is a 500, and the nav-menus screen spins
-     * forever waiting on a response that never arrives.
      */
     public function onMenuUpdate(int $menuId): void
     {
