@@ -67,4 +67,36 @@ class TestBlockTags extends RestTestCase
 
         $this->assertContains("menu:{$menuId}", $this->cacheTags->get());
     }
+
+    // Without a theme location, wp_nav_menu() renders the first menu that has
+    // items for a `menu` it can't resolve; that menu must be tagged.
+    public function test_classic_nav_menu_render_of_an_unknown_menu_tags_the_menu_core_falls_back_to(): void
+    {
+        // Sorts first by name, which is the order wp_get_nav_menus() returns.
+        $menuId = wp_create_nav_menu('000 cachetags fallback');
+        wp_update_nav_menu_item($menuId, 0, [
+            'menu-item-title' => 'Fallback item',
+            'menu-item-url' => home_url('/fallback/'),
+            'menu-item-status' => 'publish',
+        ]);
+        $this->resetCacheTags();
+
+        $html = wp_nav_menu(['menu' => 'no-such-menu', 'echo' => false, 'fallback_cb' => false]);
+
+        $this->assertStringContainsString('Fallback item', (string) $html, 'core rendered this menu');
+        $this->assertContains("menu:{$menuId}", $this->cacheTags->get());
+    }
+
+    // A location still pointing at a deleted menu renders the fallback_cb, not
+    // a menu; tagging it must not throw (a 500 on every page).
+    public function test_classic_nav_menu_render_of_a_location_with_a_deleted_menu_does_not_throw(): void
+    {
+        register_nav_menu('primary', 'Primary');
+        set_theme_mod('nav_menu_locations', ['primary' => 999999]);
+        $this->resetCacheTags();
+
+        wp_nav_menu(['theme_location' => 'primary', 'echo' => false, 'fallback_cb' => false]);
+
+        $this->assertSame([], array_values(array_filter($this->cacheTags->get(), fn ($tag) => str_starts_with($tag, 'menu:'))));
+    }
 }

@@ -117,28 +117,38 @@ class CoreTags
     }
 
     /**
-     * Return cache tags for the menu in a navigation location.
+     * Return cache tags for a navigation location and the menu in it:
+     * `menu-location:{location}` (cleared when the location is assigned another
+     * menu, or one for the first time) and the menu's `menu:{id}`.
      *
      * @return Tag[]
      */
     public static function navigation(?string $location = null): array
     {
-        if ($location === null) {
+        if ($location === null || $location === '') {
             return [];
         }
 
         $locations = get_nav_menu_locations();
         $menu = $locations[$location] ?? null;
-        if (! $menu) {
-            // @TODO: wp normally picks the first menu
-            return [];
-        }
 
-        return self::menu($menu);
+        return [
+            self::menuLocation($location),
+            ...($menu ? self::menu($menu) : []),
+        ];
     }
 
     /**
-     * Return cache tags for a menu.
+     * The tag of a navigation location. Polylang's per-language locations
+     * (`primary___fi`) share their base location's tag.
+     */
+    public static function menuLocation(string $location): Tag
+    {
+        return Tag::of('menu-location', explode('___', $location, 2)[0]);
+    }
+
+    /**
+     * Return cache tags for a menu, or none for a menu that doesn't exist.
      *
      * @return Tag[]
      */
@@ -149,15 +159,63 @@ class CoreTags
         }
 
         // wp_get_nav_menu_object resolves an id, slug, name, or menu object — all
-        // the forms wp_nav_menu()'s `menu` arg accepts. The old code only handled
-        // slugs, so a menu selected by name or object fataled. A non-empty value
-        // that still can't resolve is a real error (typo / deleted menu).
+        // the forms wp_nav_menu()'s `menu` arg accepts. One that doesn't resolve
+        // (a location still pointing at a deleted menu, a typo'd slug) renders
+        // nothing in wp_nav_menu() or Navi, so it has no tags either. This runs
+        // on every render, where throwing would turn a missing menu into a 500
+        // on every page.
         $object = wp_get_nav_menu_object($menu);
         if (! $object instanceof WP_Term) {
-            throw new Exception('CoreTags::menu received an unknown menu: '.(is_scalar($menu) ? $menu : get_debug_type($menu)));
+            return [];
         }
 
         return [Tag::menu($object->term_id)];
+    }
+
+    /**
+     * Return cache tags for a block template or template part by its id
+     * (`{theme}//{slug}`): `template:…` / `template-part:…`. Keyed by theme and
+     * slug, not post id, so the theme file, its first customisation and a reset
+     * back to the file all share one tag.
+     *
+     * @return Tag[]
+     */
+    public static function blockTemplate(string $id, string $templateType = 'wp_template_part'): array
+    {
+        if (! str_contains($id, '//')) {
+            return [];
+        }
+
+        return [Tag::of($templateType === 'wp_template' ? 'template' : 'template-part', $id)];
+    }
+
+    /**
+     * The theme a template (part) post overrides for: its `wp_theme` term when
+     * that is an installed theme, else the active theme. WooCommerce saved
+     * older customisations of its own templates under `woocommerce` or
+     * `woocommerce/woocommerce`, which render for the active theme (and are
+     * keyed by it, see Core).
+     */
+    public static function blockTemplateTheme(WP_Post $post): string
+    {
+        $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
+        $theme = is_array($themes) && $themes ? (string) reset($themes) : '';
+
+        return $theme !== '' && wp_get_theme($theme)->exists() ? $theme : get_stylesheet();
+    }
+
+    /**
+     * The slug a template (part) post renders under. Trashing renames the post
+     * to `{slug}__trashed` before its status transition, keeping the slug in
+     * `_wp_desired_post_slug`.
+     */
+    public static function blockTemplateSlug(WP_Post $post): string
+    {
+        if ($post->post_status !== 'trash') {
+            return $post->post_name;
+        }
+
+        return (string) (get_post_meta($post->ID, '_wp_desired_post_slug', true) ?: preg_replace('/__trashed$/', '', $post->post_name));
     }
 
     /**

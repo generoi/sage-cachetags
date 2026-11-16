@@ -98,11 +98,15 @@ irrelevant, which makes it the best fit for high-frequency editorial sites.
 Front-end pages are stored under the **actual requested URL** (including its query
 string), so a URL-based purge matches the variant a page cache keyed on. A default
 set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
-`_`) is stripped and the rest sorted; keys longer than the `varchar(191)` column
-fall back to the path.
+`_`) is stripped and the rest sorted; a key longer than the `varchar(191)`
+column falls back to the path. The Kinsta invalidators also strip `_ga`,
+`mc_cid`, `mc_eid` and `ref`, which Kinsta's edge leaves out of its cache key and
+serves from the bare URL's entry; edges that cache them as their own key
+(SiteGround, WP Rocket, Super Cache) keep them.
 
 On a **query-bypass** edge — Fastly (purges by `Surrogate-Key`, ignores the URL)
-or Kinsta (query-string URLs bypass the cache entirely) — those query-string rows
+or Kinsta (a query-string URL bypasses the cache, except for the params it leaves
+out of its cache key, which share the bare URL's entry) — those query-string rows
 are never cached and so never need purging; they just accumulate in the store
 (one row per visited `?…` combination, including bot/scanner params). A
 query-bypass site with heavy parameterised traffic can keep the store lean by
@@ -110,6 +114,20 @@ storing the path only:
 
 ```php
 add_filter('cachetags/store-query-string', '__return_false');
+```
+
+With query-string storage off (as `KinstaGroupCacheInvalidator` sets it), a
+render with a query string is stored under the bare URL, **except** one that
+renders differently from it: a search, a WordPress public query var (`?p=`,
+`?cat=`, `?paged=`, …) or a listing sort/filter (`orderby`, `order`, `filter_*`,
+`min_price`, `fwp_*`, …; extend with `cachetags/render-params`). Those aren't
+stored: `/?s=x` would otherwise give the front page every search result's tags,
+and purge it on every one of them, and Kinsta doesn't cache them. Any other
+param fails toward storing, since it renders the bare URL's page and the edge
+may serve it from the bare URL's entry. The tag header is sent either way.
+
+```php
+add_filter('cachetags/render-params', fn (array $params) => [...$params, 'view']);
 ```
 
 **To match a URL-keyed edge that does cache query strings** (SiteGround, or Kinsta
@@ -147,11 +165,12 @@ Integration exists if you add the `SuperCacheInvalidator` invalidator in the `co
 Two invalidators, differing in how Kinsta resolves the purge:
 
 - **`KinstaGroupCacheInvalidator`** (recommended) purges by `group|` — a prefix
-  wildcard that clears a path together with everything beneath it: its pagination
-  (`/shop/page/2/`) and its query-string variants (`/shop/?orderby=…`) in one
-  request. It disables query-string storage (`cachetags/store-query-string`)
-  since the bare path is enough, keeping the store lean. This is the right choice
-  for a standard Kinsta setup, where query-string URLs bypass the cache anyway.
+  wildcard that clears a path together with everything beneath it, such as its
+  pagination (`/shop/page/2/`), in one request. It disables query-string storage
+  (`cachetags/store-query-string`): on a standard Kinsta setup a query-string
+  URL (`/shop/?orderby=…`) isn't cached at all, and the params Kinsta ignores
+  (`utm_*`, …) are served from the bare path's entry, so the bare path is all
+  there is to purge. This is the right choice for a standard Kinsta setup.
   Collapsing many URLs into a single prefix purge also keeps **purge volume low**
   — Kinsta dispatches purges to its edge (Cloudflare) asynchronously and rate-
   limits/coalesces them server-side, and the localhost endpoint returns `200` on
@@ -164,7 +183,13 @@ Two invalidators, differing in how Kinsta resolves the purge:
 
 Add one of them to the `invalidator` list in `config/cachetags.php`. The site
 root (`/`) is always purged exactly, so a group purge never flushes the whole
-site.
+site. So is each Polylang language home (`pll_home_url()`, e.g. `/sv/`), which
+would otherwise empty that whole language. Add other URLs whose prefix covers
+much of the site — a full URL matches its own host only, a path any host:
+
+```php
+add_filter('cachetags/kinsta-exact-urls', fn (array $urls) => [...$urls, home_url('/shop/')]);
+```
 
 ### Cloudflare
 
@@ -398,6 +423,50 @@ template (single/page, taxonomy, author, post-type/date/search archives,
 attachments) and from core blocks (queries, terms, authors, comments,
 calendar/archives, site title/tagline/logo, etc.). Classic-theme `wp_nav_menu()`
 output is tagged with its `menu:{id}` so menu edits purge the pages showing it.
+A menu rendered by location is also tagged `menu-location:{location}`, also
+while the location is empty; tag a theme's own location renders (e.g. Navi) with
+`CoreTags::navigation($location)`, which returns both. `CoreTags::menu()`
+returns no tags for a menu that doesn't exist (a location pointing at a deleted
+menu), since nothing renders.
+
+A menu item takes its label and URL from the post or term it links to, so
+`menu:{id}` is also cleared for every menu linking to a post whose title, slug,
+parent, status or (with a date permalink) date changes, including trash and
+delete, or whose category changes with a `%category%` permalink (`%product_cat%`
+in WooCommerce's product base); and for every menu linking to a term whose name,
+slug or parent changes, or that is deleted. Other saves leave the menu alone.
+Deleting a menu clears its own tag. Assigning a location another menu, its first
+menu or none (the `nav_menu_locations` theme mod, and with Polylang each
+language's location in its `polylang` option) clears
+`menu-location:{location}`. With Polylang the tag is qualified with the page's
+language (`menu-location:primary:fi`), so reassigning one language's menu purges
+only that language's pages.
+
+### Known limits (flush manually)
+
+These change what pages show without the hooks the purges listen to, so flush
+(`wp cachetags clear page`, or `flush`) after them:
+
+- **Child pages under a renamed or moved parent.** A child's URL changes with
+  its parent's slug or parent, but only the parent's own tags are cleared:
+  menus and Polylang language switchers linking to the child stay stale.
+- **Polylang synchronisation.** Polylang writes synchronised post and term
+  parents with direct SQL, so neither the menu nor the translation purges see
+  the change.
+- **Polylang language slug changes.** Every URL in that language changes.
+- **Polylang default-language changes.** Polylang Pro renames translated
+  template parts (`footer___sv` → `footer`) with direct SQL, and default-language
+  URLs change.
+- **Polylang's bulk "set language"** (`set_translation_in_mass`) writes
+  languages and translation groups in bulk, without the group term edits the
+  translation purge listens to.
+- **Renamed terms in a permalink.** With `%category%` (or `%product_cat%`) in
+  the permalink, renaming the term changes every post URL under it; menus and
+  switchers linking to those posts aren't cleared. Custom post type rewrite tags
+  aren't detected at all.
+- **WXR imports** (Tools → Import) write posts, terms and menus in bulk, partly
+  without the save hooks.
+- **The navigation block's overlay template part** isn't tagged.
 
 Site-identity blocks (`core/site-title`, `core/site-tagline`, `core/site-logo`)
 are tagged with an `option:{name}` tag and purged when that option changes.
@@ -620,7 +689,13 @@ automatically — you don't need to list it in `action`:
   changes.
 - **Polylang** makes archive tags language-specific (`archive:post:fi`) so a change
   in one language only purges that language's listings, and clears the right
-  language archives on publish/unpublish/delete.
+  language archives on publish/unpublish/delete. Language switchers link to a
+  page's translations, so a post or term page carries one
+  `translations:{group}` tag for its translation group, cleared only when what a
+  switcher shows changes: a translation linked or unlinked, or a member's URL
+  changing (slug, parent, status, and the date with a date-based permalink
+  structure; a term's slug or parent). A content or title edit of one
+  translation doesn't purge the others.
 - **Gravity Forms** keeps prepopulated forms out of the shared cache and purges a
   form's pages when it changes. It tags file-upload form pages `nonce`; the
   always-on [`Nonce` action](#nonces-in-cached-pages) (not Gravity Forms) purges
@@ -658,6 +733,39 @@ wp cachetags clear page
 
 Rename it or turn it off with `'base-tag' => null` (config) / `->baseTag(null)`
 (bootstrap).
+
+### Site Editor content
+
+Pages are tagged with the block template they resolve to and the template parts
+they render, keyed by theme and slug: `template:{theme}//{slug}` and
+`template-part:{theme}//{slug}`. Both the `core/template-part` block and PHP
+`block_template_part('footer')` are covered. The key always uses the active theme,
+also for a plugin's own template (WooCommerce resolves
+`woocommerce/woocommerce//single-product`), since its customisation is saved
+under the active theme. Because the key isn't a post id,
+the theme file, its first customisation and "Clear customizations" (which
+force-deletes the post) all purge the same pages. Publishing, updating,
+trashing or deleting a `wp_template` / `wp_template_part` that is or was
+published, draft or auto-draft clears its key (`block_template_part()` renders
+drafts too). A theme action that purged on these saves (or flushed the whole cache) can
+be removed.
+
+With Polylang, a template part's key is qualified with the page's language
+(`template-part:{theme}//footer:sv`). Polylang Pro stores a translated part as
+its own post (`footer___sv`) and falls back to the default language's part, so
+saving `footer___sv` purges only Swedish pages, saving `footer` purges the
+default language and every language without its own translation, and adding or
+removing a translation purges that language.
+
+The inlined global styles and the Customizer's Additional CSS render on every
+page, so saving `wp_global_styles` (except the empty stub the block editor
+creates for a theme without user styles) or `custom_css` clears the base tag.
+So does adding or removing a template in the hierarchy that no theme file backs
+and no plugin registers (`register_block_template()`; WooCommerce's category,
+tag and brand templates aren't registered), since that changes which template
+pages resolve to; a `wp-custom-template-*`
+template doesn't, as only the posts assigned to it render it. With the base tag
+turned off, nothing purges on those saves.
 
 When Polylang is active, every page is also tagged with its language, so you can
 clear all content in one language:
@@ -707,8 +815,9 @@ wp acorn cachetags:database --rebuild
 
 # Inspect the store: row/tag/url counts and the widest-fan-out tags
 wp acorn cachetags:status
-# …or the tags a given URL is stored under
-wp acorn cachetags:status --url=https://example.com/article/
+# …or the tags a given URL is stored under (an argument: WP-CLI takes --url
+# as its own global flag)
+wp acorn cachetags:status https://example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp acorn cachetags:prune --older-than=30d
@@ -737,7 +846,9 @@ wp cachetags database --rebuild
 
 # Inspect the store
 wp cachetags status
-wp cachetags status --url=https://example.com/article/
+wp cachetags status https://example.com/article/
+# …on a multisite subsite (WP-CLI's --url picks the site)
+wp --url=https://sub.example.com cachetags status https://sub.example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp cachetags prune --older-than=30d

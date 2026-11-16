@@ -1,5 +1,6 @@
 <?php
 
+use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Tests\RestTestCase;
 
 /**
@@ -136,9 +137,8 @@ class TestClearEvents extends RestTestCase
     /**
      * Core's "Add to Menu" button saves the submitted items through
      * `wp_save_nav_menu_items(0, ...)`, so `wp_update_nav_menu_item` fires with a
-     * menu id of 0 for an item that is in no menu yet. That has to be a no-op:
-     * CoreTags::menu() throws on an id it cannot resolve, and the exception is
-     * uncaught inside admin-ajax, which turns the whole request into a 500.
+     * menu id of 0 for an item that is in no menu yet. Nothing renders it yet,
+     * so that has to be a no-op.
      */
     public function test_adding_a_menu_item_with_no_menu_yet_is_a_noop(): void
     {
@@ -328,5 +328,74 @@ class TestClearEvents extends RestTestCase
         $tags = $this->queuedPurgeTags();
         $this->assertContains("term:{$newTerm}:full", $tags, 'new term archive');
         $this->assertContains("term:{$oldTerm}:full", $tags, 'old term archive purged on reassignment');
+    }
+
+    // An importer re-setting the same terms on every listing each run must not
+    // purge the listing and every one of its term archives each time.
+    public function test_setting_the_same_terms_again_purges_nothing(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $first = self::factory()->category->create();
+        $second = self::factory()->category->create();
+        wp_set_object_terms($postId, [$first, $second], 'category');
+        $this->resetCacheTags();
+
+        // Same set, different order.
+        wp_set_object_terms($postId, [$second, $first], 'category');
+        wp_set_post_terms($postId, [$first], 'category', true);
+
+        $this->assertSame([], $this->queuedPurgeTags());
+    }
+
+    public function test_setting_terms_purges_only_the_terms_that_changed(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $kept = self::factory()->category->create();
+        $removed = self::factory()->category->create();
+        $added = self::factory()->category->create();
+        wp_set_object_terms($postId, [$kept, $removed], 'category');
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [$kept, $added], 'category');
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains("term:{$added}:full", $tags, 'added term archive');
+        $this->assertContains("term:{$removed}:full", $tags, 'removed term archive');
+        $this->assertNotContains("term:{$kept}:full", $tags, 'unchanged membership');
+    }
+
+    // A long import sets terms on thousands of objects; nothing may be left
+    // behind per object once its set_object_terms has run.
+    public function test_term_set_leaves_no_bookkeeping_behind(): void
+    {
+        $core = new Core($this->cacheTags);
+        $termId = self::factory()->category->create();
+        $taxonomyId = get_term($termId)->term_taxonomy_id;
+
+        $core->onTermRelationshipAdded(5, $taxonomyId, 'category');
+        $core->onTermRelationshipAdded(5, 99, 'post_tag');
+        $core->onTermSet(5, [$termId], [$taxonomyId], 'category', false, []);
+        $core->onTermSet(5, [], [99], 'post_tag', false, []);
+
+        $prop = new ReflectionProperty($core, 'addedTermRelationships');
+        $prop->setAccessible(true);
+        $this->assertSame([], $prop->getValue($core));
+    }
+
+    public function test_appending_a_new_term_purges_only_that_term(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $existing = self::factory()->category->create();
+        $added = self::factory()->category->create();
+        wp_set_object_terms($postId, [$existing], 'category');
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [$added], 'category', true);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains("term:{$added}:full", $tags);
+        $this->assertNotContains("term:{$existing}:full", $tags, 'appending removes nothing');
     }
 }

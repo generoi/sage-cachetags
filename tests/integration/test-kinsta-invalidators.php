@@ -2,6 +2,7 @@
 
 use Genero\Sage\CacheTags\Invalidators\KinstaCacheInvalidator;
 use Genero\Sage\CacheTags\Invalidators\KinstaGroupCacheInvalidator;
+use Genero\Sage\CacheTags\Util;
 
 /**
  * @covers \Genero\Sage\CacheTags\Invalidators\KinstaCacheInvalidator
@@ -34,6 +35,109 @@ class TestKinstaInvalidators extends WP_UnitTestCase
             // The root would match the whole site, so it stays exact.
             'single|home' => 'example.com/',
         ], $list);
+    }
+
+    // A group purge of a language home ("/sv/") would empty that whole language.
+    public function test_group_invalidator_purges_exact_urls_exactly(): void
+    {
+        add_filter(KinstaGroupCacheInvalidator::FILTER_EXACT_URLS, fn ($urls) => [...$urls, 'https://example.com/sv/', '/fi/']);
+
+        $list = (new KinstaGroupCacheInvalidator)->purgeList([
+            'sv' => 'https://example.com/sv/',
+            'sv-page' => 'https://example.com/sv/produkter/',
+            'fi' => 'https://other.example/fi',
+            'sv-other-host' => 'https://other.example/sv/',
+        ]);
+
+        $this->assertSame([
+            'single|sv' => 'example.com/sv/',
+            // Beneath a language home stays a prefix purge.
+            'group|sv-page' => 'example.com/sv/produkter/',
+            // A host-less path matches on any host, with or without the slash.
+            'single|fi' => 'other.example/fi',
+            // A full URL only matches its own host.
+            'group|sv-other-host' => 'other.example/sv/',
+        ], $list);
+    }
+
+    public function test_exact_urls_default_to_the_site_and_language_homes(): void
+    {
+        $urls = (new KinstaGroupCacheInvalidator)->exactUrls();
+
+        $this->assertContains(home_url('/'), $urls);
+        if (function_exists('pll_languages_list')) {
+            foreach (pll_languages_list() as $language) {
+                $this->assertContains(pll_home_url($language), $urls, "{$language} home");
+            }
+        }
+    }
+
+    public function test_a_language_home_is_purged_exactly_with_polylang(): void
+    {
+        if (! function_exists('pll_home_url') || ! function_exists('PLL') || ! PLL() || ! isset(PLL()->model)) {
+            $this->markTestSkipped('Polylang is not installed in this environment.');
+        }
+        $model = PLL()->model;
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'rtl' => 0, 'term_group' => 1, 'flag' => 'fi']);
+            $model->clean_languages_cache();
+        }
+
+        $home = pll_home_url('fi');
+        $list = (new KinstaGroupCacheInvalidator)->purgeList(['fi' => $home]);
+
+        $this->assertSame(['single|fi'], array_keys($list));
+    }
+
+    /**
+     * A switch_to_blog() loop purges several sites with one invalidator; each
+     * must use its own site's homes, not the first site's.
+     *
+     * @group multisite
+     */
+    public function test_exact_urls_are_resolved_per_site(): void
+    {
+        if (! is_multisite()) {
+            $this->markTestSkipped('Requires multisite (run via the multisite CI job).');
+        }
+
+        // The converted test network has ms_files_rewriting on, whose upload
+        // path needs the legacy UPLOADBLOGSDIR constant to create a site.
+        update_site_option('ms_files_rewriting', 0);
+        $blogId = self::factory()->blog->create(['path' => '/cachetags-sub/']);
+        $subHome = get_home_url($blogId, '/');
+        $invalidator = new KinstaGroupCacheInvalidator;
+
+        $this->assertSame(['group|sub'], array_keys($invalidator->purgeList(['sub' => $subHome])), 'a path on the main site');
+
+        switch_to_blog($blogId);
+        try {
+            $this->assertSame(['single|sub'], array_keys($invalidator->purgeList(['sub' => $subHome])), "the subsite's home");
+        } finally {
+            restore_current_blog();
+        }
+    }
+
+    // Kinsta serves these from the bare URL's entry; other edges (SiteGround,
+    // WP Rocket, Super Cache) cache ?ref= as its own key, so only Kinsta adds them.
+    public function test_kinsta_invalidators_ignore_the_params_kinstas_edge_leaves_out_of_its_key(): void
+    {
+        $this->assertNotContains('ref', Util::IGNORED_URL_PARAMS, 'not ignored for every edge');
+        $this->assertNotContains('ref', apply_filters('cachetags/url-ignored-params', Util::IGNORED_URL_PARAMS));
+
+        new KinstaCacheInvalidator;
+
+        $ignored = apply_filters('cachetags/url-ignored-params', Util::IGNORED_URL_PARAMS);
+        foreach (['_ga', 'mc_cid', 'mc_eid', 'ref', 'utm_source'] as $param) {
+            $this->assertContains($param, $ignored, $param);
+        }
+    }
+
+    public function test_the_group_invalidator_ignores_them_too(): void
+    {
+        new KinstaGroupCacheInvalidator;
+
+        $this->assertContains('mc_cid', apply_filters('cachetags/url-ignored-params', Util::IGNORED_URL_PARAMS));
     }
 
     public function test_group_invalidator_disables_query_string_storage(): void

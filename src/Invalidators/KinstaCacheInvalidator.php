@@ -22,6 +22,20 @@ class KinstaCacheInvalidator implements Invalidator
     const IMMEDIATE_MAX_REQUESTS = 3;
 
     /**
+     * Params Kinsta's edge leaves out of its cache key and serves from the bare
+     * URL's entry (probed on a live Kinsta site, like utm_*, fbclid and dclid,
+     * which are ignored everywhere). A render with one seeds that entry, so it
+     * is stored under the bare URL. Not ignored on other edges: SiteGround, WP
+     * Rocket and Super Cache cache `?ref=` as its own key.
+     */
+    const IGNORED_URL_PARAMS = ['_ga', 'mc_cid', 'mc_eid', 'ref'];
+
+    public function __construct()
+    {
+        \add_filter('cachetags/url-ignored-params', fn ($params) => [...(array) $params, ...self::IGNORED_URL_PARAMS]);
+    }
+
+    /**
      * @param  string[]  $urls
      * @param  string[]  $tags
      */
