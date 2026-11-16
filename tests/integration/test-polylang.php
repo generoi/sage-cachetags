@@ -293,13 +293,15 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains("post:{$en}:url", $this->queuedPurgeTags(), 'unpublished');
     }
 
+    // wp_publish_post() fires transition_post_status but never post_updated.
     public function test_publishing_a_scheduled_translation_purges_the_pages_linking_to_it(): void
     {
         [$en] = $this->translatedPosts();
+        wp_update_post(['ID' => $en, 'post_status' => 'future', 'post_date' => gmdate('Y-m-d H:i:s', time() + DAY_IN_SECONDS)]);
         $this->action()->init();
         $this->resetPurgeTags();
 
-        $this->action()->onScheduledPublish('publish', 'future', get_post($en));
+        wp_publish_post($en);
 
         $this->assertContains("post:{$en}:url", $this->queuedPurgeTags());
     }
@@ -317,33 +319,52 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains("term:{$en}:url", $this->queuedPurgeTags(), 'slug');
     }
 
-    // Polylang stores non-default languages' locations in its own option, not
-    // in the nav_menu_locations theme mod Core diffs.
-    public function test_reassigning_a_languages_menu_location_clears_the_previous_menu(): void
+    /**
+     * Save menu locations the way Appearance → Menus → Manage Locations does,
+     * through Polylang's own handler: it moves `{location}___{lang}` out of the
+     * theme mod into its nav_menus options (written on shutdown in 3.7+).
+     *
+     * @param  array<string, int>  $locations
+     */
+    private function saveLocationsScreen(array $locations): void
     {
-        $theme = get_option('stylesheet');
-        $old = ['nav_menus' => [$theme => ['primary' => ['en' => 11, 'fi' => 12], 'footer' => ['fi' => 13]]]];
-        $new = ['nav_menus' => [$theme => ['primary' => ['en' => 11, 'fi' => 14], 'footer' => ['fi' => 13]]]];
-        $this->action()->init();
-        $this->resetPurgeTags();
-
-        do_action('updated_option', 'polylang', $old, $new);
-
-        $tags = $this->queuedPurgeTags();
-        $this->assertContains('menu:12', $tags, 'fi primary was reassigned');
-        $this->assertNotContains('menu:11', $tags, 'en primary unchanged');
-        $this->assertNotContains('menu:13', $tags, 'fi footer unchanged');
+        $get = $_GET;
+        $request = $_REQUEST;
+        try {
+            $_GET['action'] = 'locations';
+            $_REQUEST['_wpnonce'] = wp_create_nonce('save-menu-locations');
+            set_theme_mod('nav_menu_locations', $locations);
+        } finally {
+            $_GET = $get;
+            $_REQUEST = $request;
+        }
     }
 
-    public function test_unassigning_a_languages_menu_location_clears_the_menu(): void
+    // Polylang keeps non-default languages' locations out of the theme mod Core
+    // diffs, and 3.7+ saves them after the shutdown purge has run.
+    public function test_reassigning_a_languages_menu_location_through_polylang_clears_it(): void
     {
-        $theme = get_option('stylesheet');
+        if (! class_exists('PLL_Admin_Nav_Menu')) {
+            $this->markTestSkipped('Polylang has no admin nav menu integration here.');
+        }
+        $this->ensureFinnish();
+        register_nav_menu('primary', 'Primary');
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $polylang = PLL();
+        (new PLL_Admin_Nav_Menu($polylang))->admin_init();
         $this->action()->init();
+        [$en, $fi, $other] = [wp_create_nav_menu('EN menu'), wp_create_nav_menu('FI menu'), wp_create_nav_menu('Other FI menu')];
+        $this->saveLocationsScreen(['primary' => $en, 'primary___fi' => $fi]);
         $this->resetPurgeTags();
 
-        do_action('updated_option', 'polylang', ['nav_menus' => [$theme => ['primary' => ['fi' => 12]]]], ['nav_menus' => [$theme => []]]);
+        // Only the Finnish menu changes; the theme mod itself keeps primary => $en.
+        $this->saveLocationsScreen(['primary' => $en, 'primary___fi' => $other]);
 
-        $this->assertContains('menu:12', $this->queuedPurgeTags());
+        $this->assertContains('menu-location:primary', $this->queuedPurgeTags());
+
+        $this->resetPurgeTags();
+        $this->saveLocationsScreen(['primary' => $en, 'primary___fi' => $other]);
+        $this->assertNotContains('menu-location:primary', $this->queuedPurgeTags(), 'nothing changed');
     }
 
     private function templatePartKey(string $slug, ?string $language = null): string

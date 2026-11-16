@@ -32,6 +32,13 @@ class Polylang implements Action
      */
     protected array $beforeEdit = [];
 
+    /**
+     * Polylang's per-language menu locations before a theme-mods save.
+     *
+     * @var array<string, array<string, int>>|null
+     */
+    protected ?array $locationsBefore = null;
+
     public function __construct(protected CacheTags $cacheTags) {}
 
     public function bind(): void
@@ -63,7 +70,9 @@ class Polylang implements Action
         \add_action('post_updated', [$this, 'onPostUpdated'], 10, 3);
         // wp_publish_post() (scheduled posts) doesn't fire post_updated.
         \add_action('transition_post_status', [$this, 'onScheduledPublish'], 10, 3);
-        \add_action('updated_option', [$this, 'onMenuLocationsUpdate'], 10, 3);
+        $themeMods = 'pre_update_option_theme_mods_'.get_option('stylesheet');
+        \add_filter($themeMods, [$this, 'snapshotMenuLocations'], 9);
+        \add_filter($themeMods, [$this, 'compareMenuLocations'], 11);
         \add_filter('cachetags/block-template-tags', [$this, 'filterBlockTemplateTags'], 10, 3);
         \add_filter('cachetags/block-template-purge-tags', [$this, 'filterBlockTemplatePurgeTags'], 10, 4);
         // Priority 9 (not the default 10) so the lang: tag is added before
@@ -205,39 +214,59 @@ class Polylang implements Action
     }
 
     /**
-     * Polylang keeps the non-default languages' menu locations out of the
-     * nav_menu_locations theme mod (which Core diffs) and in its own option,
-     * as nav_menus[stylesheet][location][lang] => menu id. Clear the menu a
-     * language's location had before it was reassigned.
+     * Before Polylang handles a nav_menu_locations save (its own
+     * pre_update_option_theme_mods_{stylesheet} filter, priority 10), keep its
+     * per-language locations to compare with afterwards.
      */
-    public function onMenuLocationsUpdate(string $option, $oldValue, $newValue): void
+    public function snapshotMenuLocations($value)
     {
-        if ($option !== 'polylang') {
-            return;
-        }
+        $this->locationsBefore = $this->languageMenuLocations();
 
-        $theme = get_option('stylesheet');
-        $locations = function ($value) use ($theme): array {
-            if (! is_array($value) && ! $value instanceof \ArrayAccess) {
-                return [];
-            }
-            $menus = $value['nav_menus'] ?? [];
+        return $value;
+    }
 
-            return is_array($menus[$theme] ?? null) ? $menus[$theme] : [];
-        };
-        $old = $locations($oldValue);
-        $new = $locations($newValue);
+    /**
+     * Polylang keeps the non-default languages' locations out of the
+     * nav_menu_locations theme mod (which Core diffs) and in its options, as
+     * nav_menus[stylesheet][location][lang] => menu id. Polylang 3.7+ writes
+     * that option only on shutdown at priority 1000, after the purge at
+     * shutdown 10, so compare the in-memory options right after its filter ran.
+     */
+    public function compareMenuLocations($value)
+    {
+        $before = $this->locationsBefore ?? [];
+        $after = $this->languageMenuLocations();
+        $this->locationsBefore = null;
 
         $tags = [];
-        foreach ($old as $location => $languages) {
-            foreach ((array) $languages as $language => $menuId) {
-                if ($menuId && (int) ($new[$location][$language] ?? 0) !== (int) $menuId) {
-                    $tags[] = Tag::menu((int) $menuId);
-                }
+        foreach (array_keys($before + $after) as $location) {
+            $old = array_map('intval', (array) ($before[$location] ?? []));
+            $new = array_map('intval', (array) ($after[$location] ?? []));
+            ksort($old);
+            ksort($new);
+            if (array_filter($old) !== array_filter($new)) {
+                $tags[] = CoreTags::menuLocation((string) $location);
             }
         }
-
         $this->cacheTags->clear($tags);
+
+        return $value;
+    }
+
+    /**
+     * @return array<string, array<string, int>>
+     */
+    protected function languageMenuLocations(): array
+    {
+        $options = PLL()->options ?? null;
+        if (! is_array($options) && ! $options instanceof \ArrayAccess) {
+            return [];
+        }
+
+        $menus = $options['nav_menus'] ?? [];
+        $theme = get_option('stylesheet');
+
+        return is_array($menus[$theme] ?? null) ? $menus[$theme] : [];
     }
 
     /**
