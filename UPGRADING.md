@@ -26,6 +26,17 @@ No code changes are needed. These behaviours change:
   (and set WP-CLI's site URL). The Acorn command still accepts `--url` where it
   reaches it.
 
+New purges to expect:
+
+- Saving a published template part, template or global styles clears the base
+  tag (`page`), so every page. A theme action that did this (or flushed the
+  whole cache) can be removed. With `'base-tag' => null` nothing purges.
+- With Polylang, saving a post or term also purges its translations, and a
+  post or term page carries its translations' tags, so a save in one language
+  purges that page in every language.
+- Changing a linked post's title, slug, parent or status, or a linked term's
+  name, slug or parent, purges the menus linking to it.
+
 ## 3.0
 
 3.0 reworks cache tags from plain strings into a structured `Tag` value object
