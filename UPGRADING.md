@@ -2,14 +2,24 @@
 
 ## 3.3
 
-No code changes are needed. These behaviours change:
+No code changes are needed, except in theme tests that assert
+`CoreTags::navigation()`'s output (see below). These behaviours change:
 
 - **`CoreTags::menu()` no longer throws on a menu it can't resolve.** It returns
-  no tags, as `CoreTags::navigation()` does for an empty location. Themes call
-  both on every render (Navi menus), so a location still pointing at a deleted
-  menu turned into a 500 on every page, where `wp_nav_menu()` or Navi would just
-  render nothing. Code that relied on the exception to catch a typo'd slug
-  should check `wp_get_nav_menu_object()` itself.
+  no tags. Themes call it on every render (Navi menus), so a location still
+  pointing at a deleted menu turned into a 500 on every page, where
+  `wp_nav_menu()` or Navi would just render nothing. Code that relied on the
+  exception to catch a typo'd slug should check `wp_get_nav_menu_object()`
+  itself.
+- **`CoreTags::navigation()` also returns `menu-location:{location}`**, before
+  the menu's `menu:{id}` and also for an empty location, so assigning a menu to
+  a location purges the pages rendering it. A theme test asserting
+  `navigation()` returns exactly `['menu:5']` now gets
+  `['menu-location:primary', 'menu:5']`.
+- **Term archives are no longer purged on every save of a post in them.** The
+  classic editor and Quick Edit re-set a post's terms on every save, which
+  purged all of its term archives each time; now only terms added to or removed
+  from the post purge their archives. The post itself is purged as before.
 - **Searches, filters and sorts aren't stored under the bare URL.** With
   `cachetags/store-query-string` off (which `KinstaGroupCacheInvalidator` sets),
   a render that differs from the bare URL's page — a search, a WordPress public
@@ -29,7 +39,8 @@ No code changes are needed. These behaviours change:
   `wp cachetags status https://example.com/article/`. WP-CLI takes `--url` as
   its own global flag, so `--url=<page>` printed the store-wide totals instead
   (and set WP-CLI's site URL). The Acorn command still accepts `--url` where it
-  reaches it.
+  reaches it. On multisite, pick the site with WP-CLI's own flag:
+  `wp --url=https://sub.example.com cachetags status https://sub.example.com/article/`.
 - **Kinsta: language homes are no longer group-purged.**
   `KinstaGroupCacheInvalidator` purges the site home and each Polylang language
   home (`/sv/`) exactly, where a `group|/sv/` purge used to empty that whole
@@ -40,25 +51,34 @@ No code changes are needed. These behaviours change:
 
 New purges to expect:
 
-- Saving, trashing or resetting a published template or template part purges
-  the pages rendering it (`template:` / `template-part:{theme}//{slug}`, per
-  language with Polylang). Saving global styles, or adding or removing a
-  template no theme file backs, clears the base tag (`page`), so every page;
-  with `'base-tag' => null` those purge nothing. A theme action that purged on
-  these saves (or flushed the whole cache) can be removed. Pages rendered before
-  the upgrade don't carry the new tags yet, so flush once after deploying.
+- Saving, trashing or resetting a template or template part purges the pages
+  rendering it (`template:` / `template-part:{theme}//{slug}`, per language with
+  Polylang) — also a draft or auto-draft, since `block_template_part()` renders
+  those publicly, not only a published one.
+- Saving global styles or the Customizer's **Additional CSS** for the active
+  theme, or adding or removing a hierarchy template no theme file or plugin
+  backs, clears the base tag (`page`), so **every page**; with
+  `'base-tag' => null` those purge nothing.
+- A theme action that purged on these saves (or flushed the whole cache) can be
+  removed. Pages rendered before the upgrade don't carry the new tags yet, so
+  flush once after deploying.
+- Deleting a menu purges the pages showing it.
 - With Polylang, post and term pages carry a `translations:{group}` tag:
   linking or unlinking a translation, or changing a translation's URL (slug,
   parent, status, the date with a date-based permalink structure), purges the
   pages of every translation in the group, since their language switchers link
   to it. A content or title edit purges only its own language.
-- Changing a linked post's title, slug, parent or status, or a linked term's
-  name, slug or parent, purges the menus linking to it, and assigning a menu
-  location (even one that was empty) purges the pages rendering it.
+- Changing a linked post's title, slug, parent, status or (with a date
+  permalink) date, its category with a `%category%` permalink (`%product_cat%`
+  for products), or a linked term's name, slug or parent, purges the menus
+  linking to it. Assigning a menu location (even one that was empty) purges the
+  pages rendering it, per language with Polylang.
 
-Still needing a manual flush: child pages under a renamed parent, Polylang's
-direct-SQL parent sync, a Polylang language slug change and WXR imports (see
-"Known limits" in the README).
+Still needing a manual flush (see "Known limits" in the README): child pages
+under a renamed parent, a renamed term in a `%category%` permalink, Polylang's
+direct-SQL parent sync, a Polylang default-language change, Polylang's bulk
+"set language" (`set_translation_in_mass`), a Polylang language slug change and
+WXR imports.
 
 ## 3.0
 

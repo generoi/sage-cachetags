@@ -431,13 +431,16 @@ menu), since nothing renders.
 
 A menu item takes its label and URL from the post or term it links to, so
 `menu:{id}` is also cleared for every menu linking to a post whose title, slug,
-parent or status changes (including trash and delete), or to a term whose name,
-slug or parent changes (or that is deleted). Other saves leave the menu alone.
-Assigning a location another menu, its first menu or none (the
-`nav_menu_locations` theme mod, and with Polylang each language's location in
-its `polylang` option) clears `menu-location:{location}`. All languages share a
-location's tag, so reassigning one language's menu purges the location's pages
-in every language.
+parent, status or (with a date permalink) date changes, including trash and
+delete, or whose category changes with a `%category%` permalink (`%product_cat%`
+in WooCommerce's product base); and for every menu linking to a term whose name,
+slug or parent changes, or that is deleted. Other saves leave the menu alone.
+Deleting a menu clears its own tag. Assigning a location another menu, its first
+menu or none (the `nav_menu_locations` theme mod, and with Polylang each
+language's location in its `polylang` option) clears
+`menu-location:{location}`. With Polylang the tag is qualified with the page's
+language (`menu-location:primary:fi`), so reassigning one language's menu purges
+only that language's pages.
 
 ### Known limits (flush manually)
 
@@ -451,6 +454,16 @@ These change what pages show without the hooks the purges listen to, so flush
   parents with direct SQL, so neither the menu nor the translation purges see
   the change.
 - **Polylang language slug changes.** Every URL in that language changes.
+- **Polylang default-language changes.** Polylang Pro renames translated
+  template parts (`footer___sv` → `footer`) with direct SQL, and default-language
+  URLs change.
+- **Polylang's bulk "set language"** (`set_translation_in_mass`) writes
+  languages and translation groups in bulk, without the group term edits the
+  translation purge listens to.
+- **Renamed terms in a permalink.** With `%category%` (or `%product_cat%`) in
+  the permalink, renaming the term changes every post URL under it; menus and
+  switchers linking to those posts aren't cleared. Custom post type rewrite tags
+  aren't detected at all.
 - **WXR imports** (Tools → Import) write posts, terms and menus in bulk, partly
   without the save hooks.
 - **The navigation block's overlay template part** isn't tagged.
@@ -832,6 +845,8 @@ wp cachetags database --rebuild
 # Inspect the store
 wp cachetags status
 wp cachetags status https://example.com/article/
+# …on a multisite subsite (WP-CLI's --url picks the site)
+wp --url=https://sub.example.com cachetags status https://sub.example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp cachetags prune --older-than=30d
