@@ -55,7 +55,20 @@ class TestBaseTag extends RestTestCase
         $this->assertContains('page', $this->queuedPurgeTags(), 'delete');
     }
 
-    // Another theme's styles (a Site Editor or Customizer preview) change no page.
+    // Core stores the post_name as sanitize_title(stylesheet), so a mixed-case
+    // theme folder (Divi, Avada-Child) must still match.
+    public function test_saving_additional_css_for_a_mixed_case_stylesheet_clears_the_base_tag(): void
+    {
+        add_filter('stylesheet', fn () => 'Avada-Child');
+        $this->resetCacheTags();
+
+        wp_update_custom_css_post('body { color: red; }');
+
+        $this->assertSame('avada-child', wp_get_custom_css_post()->post_name);
+        $this->assertContains('page', $this->queuedPurgeTags());
+    }
+
+    // An inactive theme's styles change no page.
     public function test_saving_another_themes_styles_or_css_does_not_clear_the_base_tag(): void
     {
         $this->resetCacheTags();

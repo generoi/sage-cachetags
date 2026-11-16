@@ -81,15 +81,17 @@ class BaseTag implements Action
     }
 
     /**
-     * Global styles and Additional CSS are stored per theme; saving another
-     * theme's (a Customizer or Site Editor preview of it) changes no page.
-     * Global styles carry a wp_theme term, Additional CSS the stylesheet as its
-     * post_name.
+     * Global styles and Additional CSS are stored per theme; saving an inactive
+     * theme's changes no page. Global styles carry a wp_theme term, Additional
+     * CSS the sanitize_title()d stylesheet as its post_name (so `Avada-Child`
+     * is stored as `avada-child`). During a Customizer or Site Editor live
+     * preview `stylesheet` is filtered to the previewed theme, so a save there
+     * still clears the base tag.
      */
     protected function isForActiveTheme(WP_Post $post): bool
     {
         return $post->post_type === 'custom_css'
-            ? $post->post_name === get_stylesheet()
+            ? $post->post_name === sanitize_title(get_stylesheet())
             : CoreTags::blockTemplateTheme($post) === get_stylesheet();
     }
 
