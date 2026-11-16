@@ -18,7 +18,12 @@ class StatusCommand extends Command
      */
     protected $description = 'Inspect the cache-tag store';
 
-    protected $signature = 'cachetags:status {--top=20 : How many widest-fan-out tags to list} {--url= : List the tags this URL is stored under}';
+    /**
+     * The URL is a positional argument: under `wp acorn` WP-CLI takes `--url` as
+     * its own global flag, so the option never reaches the command. The option
+     * stays for other ways of running it.
+     */
+    protected $signature = 'cachetags:status {url? : List the tags this URL is stored under} {--top=20 : How many widest-fan-out tags to list} {--url= : Same as the url argument}';
 
     public function handle(): int
     {
@@ -30,7 +35,7 @@ class StatusCommand extends Command
             return self::FAILURE;
         }
 
-        if ($url = $this->option('url')) {
+        if ($url = $this->argument('url') ?: $this->option('url')) {
             $tags = $store->tagsForUrl($url);
             $tags ? $this->line(implode(PHP_EOL, $tags)) : $this->warn('URL not in the store.');
 

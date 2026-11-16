@@ -17,19 +17,20 @@ class StatusCommand extends WP_CLI_Command
      *
      * ## OPTIONS
      *
+     * [<url>]
+     * : Instead of stats, list the tags this URL is stored under. (Not
+     * `--url`, which WP-CLI takes as its own global flag.)
+     *
      * [--top=<n>]
      * : How many of the widest-fan-out tags to list.
      * ---
      * default: 20
      * ---
      *
-     * [--url=<url>]
-     * : Instead of stats, list the tags this URL is stored under.
-     *
      * ## EXAMPLES
      *
      *     $ wp cachetags status
-     *     $ wp cachetags status --url=https://example.com/article/
+     *     $ wp cachetags status https://example.com/article/
      *
      * @param  string[]  $args
      * @param  array<string, string>  $assoc
@@ -38,8 +39,8 @@ class StatusCommand extends WP_CLI_Command
     {
         $store = $this->store();
 
-        if (isset($assoc['url'])) {
-            $tags = $store->tagsForUrl($assoc['url']);
+        if (isset($args[0])) {
+            $tags = $store->tagsForUrl($args[0]);
             $tags ? WP_CLI::log(implode(PHP_EOL, $tags)) : WP_CLI::warning('URL not in the store.');
 
             return;

@@ -19,6 +19,12 @@ No code changes are needed. These behaviours change:
   Params in `cachetags/url-ignored-params` (`utm_*`, `gclid`, …) still map to the
   bare URL. The tag header is unchanged. The extra tags already stored on `/`
   go with its next purge, which forgets every tag of a purged URL.
+- **`cachetags:status` takes the URL as an argument:**
+  `wp acorn cachetags:status https://example.com/article/` or
+  `wp cachetags status https://example.com/article/`. WP-CLI takes `--url` as
+  its own global flag, so `--url=<page>` printed the store-wide totals instead
+  (and set WP-CLI's site URL). The Acorn command still accepts `--url` where it
+  reaches it.
 
 ## 3.0
 

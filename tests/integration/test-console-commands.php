@@ -4,8 +4,10 @@ use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Console\ClearCommand;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
+use Genero\Sage\CacheTags\Console\StatusCommand;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\CacheTagStore;
+use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Illuminate\Console\Command;
 use Illuminate\Container\Container;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -19,6 +21,7 @@ use Symfony\Component\Console\Output\BufferedOutput;
  * @covers \Genero\Sage\CacheTags\Console\FlushCommand
  * @covers \Genero\Sage\CacheTags\Console\ClearCommand
  * @covers \Genero\Sage\CacheTags\Console\DatabaseCommand
+ * @covers \Genero\Sage\CacheTags\Console\StatusCommand
  */
 class TestConsoleCommands extends WP_UnitTestCase
 {
@@ -91,5 +94,27 @@ class TestConsoleCommands extends WP_UnitTestCase
 
         $this->assertSame(Command::SUCCESS, $exitCode);
         $this->assertStringContainsString('Created table', $output);
+    }
+
+    // Under `wp acorn` WP-CLI takes --url as its global flag, so one URL is a
+    // positional argument; --url still works where it reaches the command.
+    public function test_status_command_lists_the_tags_of_a_url(): void
+    {
+        $this->prop()->setValue(null, null);
+        $store = new WordpressDbStore;
+        $this->container->instance(CacheTags::class, CacheTags::make($store, false, 'Cache-Tag', []));
+        $store->save(['post:32', 'archive:post'], 'https://example.com/status-page/');
+
+        foreach ([['url' => 'https://example.com/status-page/'], ['--url' => 'https://example.com/status-page/']] as $input) {
+            [$exitCode, $output] = $this->runCommand(new StatusCommand, $input);
+
+            $this->assertSame(Command::SUCCESS, $exitCode);
+            $this->assertStringContainsString('post:32', $output);
+            $this->assertStringContainsString('archive:post', $output);
+            $this->assertStringNotContainsString('Rows:', $output, 'the URL\'s tags, not store-wide stats');
+        }
+
+        [, $output] = $this->runCommand(new StatusCommand, ['url' => 'https://example.com/not-stored/']);
+        $this->assertStringContainsString('URL not in the store.', $output);
     }
 }

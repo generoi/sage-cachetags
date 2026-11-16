@@ -4,9 +4,11 @@ use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\CacheTagStore;
+use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Genero\Sage\CacheTags\WpCli\ClearCommand;
 use Genero\Sage\CacheTags\WpCli\DatabaseCommand;
 use Genero\Sage\CacheTags\WpCli\FlushCommand;
+use Genero\Sage\CacheTags\WpCli\StatusCommand;
 
 /**
  * Real integration against WP-CLI: the commands extend the real WP_CLI_Command
@@ -15,6 +17,7 @@ use Genero\Sage\CacheTags\WpCli\FlushCommand;
  * @covers \Genero\Sage\CacheTags\WpCli\FlushCommand
  * @covers \Genero\Sage\CacheTags\WpCli\ClearCommand
  * @covers \Genero\Sage\CacheTags\WpCli\DatabaseCommand
+ * @covers \Genero\Sage\CacheTags\WpCli\StatusCommand
  */
 class TestWpCliCommands extends WP_UnitTestCase
 {
@@ -131,5 +134,22 @@ class TestWpCliCommands extends WP_UnitTestCase
         (new DatabaseCommand)();
 
         $this->assertContains('success:Created table', $this->logger->messages);
+    }
+
+    // WP-CLI takes --url as its global flag, so one URL is a positional arg.
+    public function test_status_command_lists_the_tags_of_a_url_given_as_an_argument(): void
+    {
+        $this->prop()->setValue(null, null);
+        $store = new WordpressDbStore;
+        CacheTags::make($store, false, 'Cache-Tag', []);
+        $store->save(['post:31', 'archive:post'], 'https://example.com/status-page/');
+
+        (new StatusCommand)(['https://example.com/status-page/'], []);
+        (new StatusCommand)(['https://example.com/not-stored/'], []);
+
+        $listed = array_values(array_filter($this->logger->messages, fn ($message) => str_starts_with($message, 'info:')));
+        $this->assertCount(1, $listed, 'the URL\'s tags, not store-wide stats');
+        $this->assertEqualsCanonicalizing(['post:31', 'archive:post'], explode(PHP_EOL, substr($listed[0], strlen('info:'))));
+        $this->assertContains('warning:URL not in the store.', $this->logger->messages);
     }
 }

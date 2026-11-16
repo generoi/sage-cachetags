@@ -744,8 +744,9 @@ wp acorn cachetags:database --rebuild
 
 # Inspect the store: row/tag/url counts and the widest-fan-out tags
 wp acorn cachetags:status
-# …or the tags a given URL is stored under
-wp acorn cachetags:status --url=https://example.com/article/
+# …or the tags a given URL is stored under (an argument: WP-CLI takes --url
+# as its own global flag)
+wp acorn cachetags:status https://example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp acorn cachetags:prune --older-than=30d
@@ -774,7 +775,7 @@ wp cachetags database --rebuild
 
 # Inspect the store
 wp cachetags status
-wp cachetags status --url=https://example.com/article/
+wp cachetags status https://example.com/article/
 
 # Garbage-collect store rows not re-rendered within the age (see note below)
 wp cachetags prune --older-than=30d
