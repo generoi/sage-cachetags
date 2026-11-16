@@ -3,6 +3,7 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Concerns\TracksAddedTermRelationships;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tag;
 use Genero\Sage\CacheTags\Tags\CoreTags;
@@ -14,17 +15,11 @@ use WP_User;
 
 class Core implements Action
 {
+    use TracksAddedTermRelationships;
+
     /** Post ids already tagged from a block this request, to avoid re-adding the
      * same post:{id} for every inner block carrying the postId context. */
     protected array $taggedBlockPosts = [];
-
-    /**
-     * Term relationships inserted by the wp_set_object_terms() call under way,
-     * consumed by onTermSet().
-     *
-     * @var array<int, array<string, int[]>>
-     */
-    protected array $addedTermRelationships = [];
 
     /**
      * Term name, slug and parent before wp_update_term() writes them, to compare
@@ -387,28 +382,17 @@ class Core implements Action
     }
 
     /**
-     * Record a term relationship wp_set_object_terms() actually inserted; it
-     * skips the ones that already exist.
-     */
-    public function onTermRelationshipAdded(int $objectId, int $taxonomyId, string $taxonomy): void
-    {
-        $this->addedTermRelationships[$objectId][$taxonomy][] = $taxonomyId;
-    }
-
-    /**
      * When the terms of an object change, clear the pages of the terms that
      * were added or removed, and the object itself.
      *
      * set_object_terms fires on every wp_set_object_terms() call, also when the
      * term set is unchanged (an importer re-saving every listing each hour), so
-     * only the difference is purged and nothing at all when there is none. The
-     * added terms come from added_term_relationship rather than the arguments:
-     * with $append, core passes no old terms, so every given term would look new.
+     * only the difference is purged and nothing at all when there is none (see
+     * TracksAddedTermRelationships for why the added terms aren't the arguments).
      */
     public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append = false, array $oldTaxonomyIds = []): void
     {
-        $added = $this->addedTermRelationships[$objectId][$taxonomy] ?? [];
-        unset($this->addedTermRelationships[$objectId][$taxonomy]);
+        $added = $this->takeAddedTermRelationships($objectId, $taxonomy);
 
         if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
             return;

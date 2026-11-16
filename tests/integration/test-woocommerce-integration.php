@@ -233,6 +233,35 @@ class TestWooCommerceIntegration extends WP_UnitTestCase
         $this->assertSame([], $this->purgeTags());
     }
 
+    // With $append core passes no old terms, so the arguments alone make every
+    // appended term look new; only the relationship actually inserted counts.
+    public function test_appending_a_term_the_product_already_has_purges_no_listing(): void
+    {
+        $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
+        $termId = self::factory()->term->create(['taxonomy' => 'product_cat']);
+        wp_set_object_terms($productId, [$termId], 'product_cat');
+        $this->action()->bind();
+        $this->resetPurge();
+
+        wp_set_object_terms($productId, [$termId], 'product_cat', true);
+
+        $this->assertNotContains('archive:product', $this->purgeTags());
+    }
+
+    public function test_appending_a_new_term_purges_the_listings(): void
+    {
+        $productId = self::factory()->post->create(['post_type' => 'product', 'post_status' => 'publish']);
+        $existing = self::factory()->term->create(['taxonomy' => 'product_cat']);
+        $added = self::factory()->term->create(['taxonomy' => 'product_cat']);
+        wp_set_object_terms($productId, [$existing], 'product_cat');
+        $this->action()->bind();
+        $this->resetPurge();
+
+        wp_set_object_terms($productId, [$added], 'product_cat', true);
+
+        $this->assertContains('archive:product', $this->purgeTags());
+    }
+
     public function test_a_term_change_on_another_post_type_purges_nothing(): void
     {
         $postId = self::factory()->post->create(['post_status' => 'publish']);

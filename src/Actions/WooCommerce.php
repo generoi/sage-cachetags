@@ -3,6 +3,7 @@
 namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
+use Genero\Sage\CacheTags\Concerns\TracksAddedTermRelationships;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tags\WooCommerceTags;
@@ -11,6 +12,8 @@ use WP_Post;
 
 class WooCommerce implements Action
 {
+    use TracksAddedTermRelationships;
+
     /**
      * Written meta props that can't change which products a listing selects or how
      * it orders them. Anything not named here purges the listings, so a new prop
@@ -65,6 +68,7 @@ class WooCommerce implements Action
         \add_action('woocommerce_variation_set_stock_status', [$this, 'onProductChange']);
         \add_action('woocommerce_product_set_stock', [$this, 'onProductObjectChange']);
         \add_action('woocommerce_variation_set_stock', [$this, 'onProductObjectChange']);
+        \add_action('added_term_relationship', [$this, 'onTermRelationshipAdded'], 10, 3);
         \add_action('set_object_terms', [$this, 'onProductTermsSet'], 10, 6);
     }
 
@@ -149,7 +153,8 @@ class WooCommerce implements Action
     /**
      * A product moving between terms joins or leaves listings it isn't tagged on
      * yet. WooCommerce re-sets a product's terms on every save, so only an actual
-     * change counts.
+     * change counts: a term added (see TracksAddedTermRelationships — with
+     * $append core passes no old terms) or, unless appending, one removed.
      *
      * @param  array<int|string>  $terms
      * @param  int[]  $taxonomyIds
@@ -157,16 +162,15 @@ class WooCommerce implements Action
      */
     public function onProductTermsSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append, array $oldTaxonomyIds): void
     {
+        $added = $this->takeAddedTermRelationships($objectId, $taxonomy);
+
         if (get_post_type($objectId) !== 'product') {
             return;
         }
 
-        $new = array_map('intval', $taxonomyIds);
-        $old = array_map('intval', $oldTaxonomyIds);
-        sort($new);
-        sort($old);
+        $removed = $append ? [] : array_diff(array_map('intval', $oldTaxonomyIds), array_map('intval', $taxonomyIds));
 
-        if ($new !== $old) {
+        if ($added || $removed) {
             $this->clearProduct($objectId, true);
         }
     }

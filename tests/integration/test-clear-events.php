@@ -1,5 +1,6 @@
 <?php
 
+use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Tests\RestTestCase;
 
 /**
@@ -362,6 +363,24 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("term:{$added}:full", $tags, 'added term archive');
         $this->assertContains("term:{$removed}:full", $tags, 'removed term archive');
         $this->assertNotContains("term:{$kept}:full", $tags, 'unchanged membership');
+    }
+
+    // A long import sets terms on thousands of objects; nothing may be left
+    // behind per object once its set_object_terms has run.
+    public function test_term_set_leaves_no_bookkeeping_behind(): void
+    {
+        $core = new Core($this->cacheTags);
+        $termId = self::factory()->category->create();
+        $taxonomyId = get_term($termId)->term_taxonomy_id;
+
+        $core->onTermRelationshipAdded(5, $taxonomyId, 'category');
+        $core->onTermRelationshipAdded(5, 99, 'post_tag');
+        $core->onTermSet(5, [$termId], [$taxonomyId], 'category', false, []);
+        $core->onTermSet(5, [], [99], 'post_tag', false, []);
+
+        $prop = new ReflectionProperty($core, 'addedTermRelationships');
+        $prop->setAccessible(true);
+        $this->assertSame([], $prop->getValue($core));
     }
 
     public function test_appending_a_new_term_purges_only_that_term(): void
