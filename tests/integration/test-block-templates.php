@@ -93,6 +93,15 @@ class TestBlockTemplates extends RestTestCase
 
     // Resolved through core: the template hierarchy filter runs
     // locate_block_template(), then template_include tags the result.
+    // A third party passing null must not TypeError the page.
+    public function test_get_block_template_with_a_null_id_does_not_throw(): void
+    {
+        $this->resetCacheTags();
+
+        $this->assertNull((new Core($this->cacheTags))->addTemplatePartCacheTags(null, null, 'wp_template_part'));
+        $this->assertNull(apply_filters('pre_get_block_template', null, null, null));
+    }
+
     public function test_the_resolved_block_template_is_tagged(): void
     {
         if (! wp_is_block_theme()) {

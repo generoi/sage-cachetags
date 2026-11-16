@@ -424,12 +424,17 @@ class Core implements Action
      * customised (database) part is returned before it. Tagged also when there
      * is no part yet, so its first customisation still purges the page.
      *
+     * The id and type are untyped: a third party calling get_block_template()
+     * with null would otherwise turn this filter into a TypeError on every page.
+     *
      * @param  \WP_Block_Template|null  $pre
+     * @param  string|mixed  $id
+     * @param  string|mixed  $templateType
      * @return \WP_Block_Template|null
      */
-    public function addTemplatePartCacheTags($pre, string $id, string $templateType)
+    public function addTemplatePartCacheTags($pre, $id, $templateType)
     {
-        if ($templateType === 'wp_template_part' && ! is_admin()) {
+        if ($templateType === 'wp_template_part' && is_string($id) && ! is_admin()) {
             $this->cacheTags->add($this->blockTemplateTags($id, $templateType));
         }
 
