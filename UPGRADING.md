@@ -56,9 +56,11 @@ New purges to expect:
   Polylang) — also a draft or auto-draft, since `block_template_part()` renders
   those publicly, not only a published one.
 - Saving global styles or the Customizer's **Additional CSS** for the active
-  theme, or adding or removing a hierarchy template no theme file or plugin
-  backs, clears the base tag (`page`), so **every page**; with
-  `'base-tag' => null` those purge nothing.
+  theme, or adding or removing a hierarchy template that no theme file backs
+  and no plugin registers (`register_block_template()`), clears the base tag
+  (`page`), so **every page**; with `'base-tag' => null` those purge nothing.
+  WooCommerce's category, tag and brand templates aren't registered (those
+  pages resolve to `archive-product`), so customising one clears it too.
 - A theme action that purged on these saves (or flushed the whole cache) can be
   removed. Pages rendered before the upgrade don't carry the new tags yet, so
   flush once after deploying.

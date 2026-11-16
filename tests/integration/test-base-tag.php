@@ -100,17 +100,22 @@ class TestBaseTag extends RestTestCase
         $this->assertNotContains('page', $this->queuedPurgeTags());
     }
 
-    // WooCommerce serves its product taxonomy templates itself.
-    public function test_customising_a_woocommerce_taxonomy_template_does_not_clear_the_base_tag(): void
+    // WooCommerce doesn't register its category, tag and brand templates:
+    // those pages resolve to archive-product, so a first customisation (or a
+    // per-term taxonomy-product_cat-shoes) changes resolution.
+    public function test_customising_a_woocommerce_taxonomy_template_clears_the_base_tag(): void
     {
         if (! class_exists('WooCommerce')) {
             $this->markTestSkipped('WooCommerce is not installed in this environment.');
         }
-        $this->resetCacheTags();
 
-        $this->sitePostWithoutReset('wp_template', 'taxonomy-product_cat');
+        foreach (['taxonomy-product_cat', 'taxonomy-product_cat-shoes'] as $slug) {
+            $this->resetCacheTags();
 
-        $this->assertNotContains('page', $this->queuedPurgeTags());
+            $this->sitePostWithoutReset('wp_template', $slug);
+
+            $this->assertContains('page', $this->queuedPurgeTags(), $slug);
+        }
     }
 
     private function sitePostWithoutReset(string $postType, string $slug): int

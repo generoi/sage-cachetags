@@ -122,18 +122,18 @@ class BaseTag implements Action
     }
 
     /**
-     * A template a plugin provides already renders under its slug, so its
-     * customisation replaces it under the same key (Core's `template:` tag)
-     * rather than changing resolution. WooCommerce registers its templates
-     * with register_block_template() but serves its product taxonomy templates
-     * (taxonomy-product_cat, …) itself.
+     * A template a plugin registers (register_block_template(), e.g.
+     * WooCommerce's single-product or taxonomy-product_attribute) already
+     * renders under its slug, so its customisation replaces it under the same
+     * key (Core's `template:` tag) rather than changing resolution.
+     * WooCommerce's category, tag and brand templates aren't registered:
+     * those pages resolve to archive-product, so customising one does change
+     * resolution and clears the base tag.
      */
     protected function isPluginTemplate(string $slug): bool
     {
-        if (class_exists('WP_Block_Templates_Registry') && method_exists('WP_Block_Templates_Registry', 'get_by_slug') && \WP_Block_Templates_Registry::get_instance()->get_by_slug($slug)) {
-            return true;
-        }
-
-        return class_exists('WooCommerce') && str_starts_with($slug, 'taxonomy-product_');
+        return class_exists('WP_Block_Templates_Registry')
+            && method_exists('WP_Block_Templates_Registry', 'get_by_slug')
+            && \WP_Block_Templates_Registry::get_instance()->get_by_slug($slug);
     }
 }

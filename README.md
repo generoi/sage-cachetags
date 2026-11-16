@@ -760,8 +760,10 @@ removing a translation purges that language.
 The inlined global styles and the Customizer's Additional CSS render on every
 page, so saving `wp_global_styles` (except the empty stub the block editor
 creates for a theme without user styles) or `custom_css` clears the base tag.
-So does adding or removing a template in the hierarchy that no theme file backs,
-since that changes which template pages resolve to; a `wp-custom-template-*`
+So does adding or removing a template in the hierarchy that no theme file backs
+and no plugin registers (`register_block_template()`; WooCommerce's category,
+tag and brand templates aren't registered), since that changes which template
+pages resolve to; a `wp-custom-template-*`
 template doesn't, as only the posts assigned to it render it. With the base tag
 turned off, nothing purges on those saves.
 
