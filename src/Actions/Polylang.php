@@ -105,8 +105,13 @@ class Polylang implements Action
     {
         $object = \get_queried_object();
 
-        if (is_singular() && $object instanceof WP_Post) {
+        // The posts page (is_home) queries its page object too.
+        if ((is_singular() || is_home()) && $object instanceof WP_Post) {
             $this->cacheTags->add($this->groupTags($object->ID, 'post_translations'));
+        } elseif (function_exists('is_shop') && is_shop() && function_exists('wc_get_page_id') && wc_get_page_id('shop') > 0) {
+            // The shop is a product archive whose switcher links to the shop
+            // page's translations.
+            $this->cacheTags->add($this->groupTags(wc_get_page_id('shop'), 'post_translations'));
         } elseif ((is_category() || is_tag() || is_tax()) && $object instanceof WP_Term) {
             $this->cacheTags->add($this->groupTags($object->term_id, 'term_translations'));
         }
@@ -119,6 +124,13 @@ class Polylang implements Action
      */
     public function onPostUpdated(int $postId, WP_Post $after, WP_Post $before): void
     {
+        // A switcher only links to published translations, so saves that keep
+        // a post out of view (a draft's date on a date-permalink site) change
+        // nothing it shows.
+        if ($after->post_status !== 'publish' && $before->post_status !== 'publish') {
+            return;
+        }
+
         $fields = ['post_name', 'post_parent', 'post_status'];
         if (Core::permalinkUsesDate()) {
             $fields[] = 'post_date';
@@ -261,9 +273,14 @@ class Polylang implements Action
      */
     protected function groupTags(int $objectId, string $taxonomy): array
     {
-        $groups = wp_get_object_terms($objectId, $taxonomy, ['fields' => 'ids']);
+        // A post's terms are in the object term cache WP_Query primed, so
+        // get_the_terms() skips the query; a term's group isn't, so query it.
+        $groups = $taxonomy === 'post_translations'
+            ? get_the_terms($objectId, $taxonomy)
+            : wp_get_object_terms($objectId, $taxonomy);
+        $group = is_array($groups) ? reset($groups) : null;
 
-        return is_array($groups) && $groups ? [Tag::of(self::GROUP_TAG, (int) reset($groups))] : [];
+        return $group instanceof WP_Term ? [Tag::of(self::GROUP_TAG, $group->term_id)] : [];
     }
 
     /**

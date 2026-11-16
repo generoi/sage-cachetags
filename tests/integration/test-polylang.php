@@ -339,6 +339,41 @@ class TestPolylang extends WP_UnitTestCase
         $this->assertContains($group, $this->queuedPurgeTags());
     }
 
+    // A switcher only links to published translations.
+    public function test_changing_a_draft_translations_date_purges_nothing(): void
+    {
+        [$en] = $this->translatedPosts();
+        wp_update_post(['ID' => $en, 'post_status' => 'draft']);
+        $group = $this->groupTag($en, 'post_translations');
+        $this->action()->init();
+        $this->set_permalink_structure('/%year%/%postname%/');
+        $this->resetPurgeTags();
+
+        wp_update_post(['ID' => $en, 'post_date' => '2019-05-05 10:00:00']);
+
+        $this->assertNotContains($group, $this->queuedPurgeTags());
+    }
+
+    // The posts page's switcher links to the posts page's translations.
+    public function test_the_posts_page_is_tagged_with_its_translation_group(): void
+    {
+        $this->ensureFinnish();
+        $en = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        $fi = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi, 'fi');
+        pll_save_post_translations(['en' => $en, 'fi' => $fi]);
+        update_option('show_on_front', 'page');
+        update_option('page_for_posts', $en);
+        $this->go_to(get_permalink($en));
+        $this->assertTrue(is_home(), 'the posts page');
+        $cacheTags = $this->resetTags();
+
+        $this->action()->addTranslationTags();
+
+        $this->assertSame([$this->groupTag($en, 'post_translations')], $this->translationTags($cacheTags->get()));
+    }
+
     // wp_publish_post() fires transition_post_status but never post_updated.
     public function test_publishing_a_scheduled_translation_purges_the_pages_linking_to_it(): void
     {
