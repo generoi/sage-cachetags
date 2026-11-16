@@ -190,6 +190,20 @@ class CoreTags
     }
 
     /**
+     * The slug a template (part) post renders under. Trashing renames the post
+     * to `{slug}__trashed` before its status transition, keeping the slug in
+     * `_wp_desired_post_slug`.
+     */
+    public static function blockTemplateSlug(WP_Post $post): string
+    {
+        if ($post->post_status !== 'trash') {
+            return $post->post_name;
+        }
+
+        return (string) (get_post_meta($post->ID, '_wp_desired_post_slug', true) ?: preg_replace('/__trashed$/', '', $post->post_name));
+    }
+
+    /**
      * Return cache tags for the current queried object.
      *
      * @param  WP_Post|WP_Term|WP_Post_Type|null  $object

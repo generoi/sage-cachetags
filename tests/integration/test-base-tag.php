@@ -119,6 +119,37 @@ class TestBaseTag extends RestTestCase
         $this->assertContains('page', $this->queuedPurgeTags(), 'removed');
     }
 
+    // Trashing renames the post to {slug}__trashed first; a customised template
+    // that has a theme file falls back to it, which changes no resolution.
+    public function test_trashing_a_customised_template_with_a_theme_file_does_not_clear_the_base_tag(): void
+    {
+        if (! get_block_file_template(get_stylesheet().'//index', 'wp_template')) {
+            $this->markTestSkipped('The active theme has no index.html block template.');
+        }
+        $postId = $this->sitePost('wp_template', 'index', 'publish', 'Customised index');
+
+        wp_trash_post($postId);
+
+        $this->assertNotContains('page', $this->queuedPurgeTags());
+    }
+
+    // Nothing resolves to a custom template until it is assigned to a post, and
+    // saving that assignment purges the post.
+    public function test_creating_a_custom_template_does_not_clear_the_base_tag(): void
+    {
+        $this->resetCacheTags();
+
+        $postId = self::factory()->post->create([
+            'post_type' => 'wp_template',
+            'post_status' => 'publish',
+            'post_name' => 'wp-custom-template-landing',
+        ]);
+        $this->assertNotContains('page', $this->queuedPurgeTags(), 'created');
+
+        wp_delete_post($postId, true);
+        $this->assertNotContains('page', $this->queuedPurgeTags(), 'deleted');
+    }
+
     public function test_other_post_types_do_not_clear_the_base_tag(): void
     {
         $this->resetCacheTags();

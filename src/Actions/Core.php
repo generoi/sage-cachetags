@@ -492,11 +492,7 @@ class Core implements Action
     {
         $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
         $theme = is_array($themes) && $themes ? (string) reset($themes) : get_stylesheet();
-        // Trashing renames the post to {slug}__trashed before the transition,
-        // keeping the slug it rendered under in _wp_desired_post_slug.
-        $slug = $post->post_status === 'trash'
-            ? (get_post_meta($post->ID, '_wp_desired_post_slug', true) ?: preg_replace('/__trashed$/', '', $post->post_name))
-            : $post->post_name;
+        $slug = CoreTags::blockTemplateSlug($post);
         $tags = CoreTags::blockTemplate("{$theme}//{$slug}", $post->post_type);
 
         return Tag::fromMany((array) apply_filters('cachetags/block-template-purge-tags', $tags, $post, $theme, $slug));

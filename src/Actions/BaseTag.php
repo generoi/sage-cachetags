@@ -4,6 +4,7 @@ namespace Genero\Sage\CacheTags\Actions;
 
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
+use Genero\Sage\CacheTags\Tags\CoreTags;
 use WP_Post;
 
 /**
@@ -49,7 +50,7 @@ class BaseTag implements Action
             // Opening the block editor inserts an empty published stub when the
             // theme has none (WP_Theme_JSON_Resolver); it changes nothing.
             'wp_global_styles' => ! ($oldStatus === 'new' && $this->isEmptyGlobalStyles($post)),
-            'wp_template' => $newStatus !== $oldStatus && $this->isTemplateWithoutFile($post),
+            'wp_template' => $newStatus !== $oldStatus && $this->changesTemplateResolution($post),
             default => false,
         };
 
@@ -65,7 +66,7 @@ class BaseTag implements Action
             return;
         }
 
-        if ($post->post_type === 'wp_global_styles' || ($post->post_type === 'wp_template' && $this->isTemplateWithoutFile($post))) {
+        if ($post->post_type === 'wp_global_styles' || ($post->post_type === 'wp_template' && $this->changesTemplateResolution($post))) {
             $this->cacheTags->clear($this->tag);
         }
     }
@@ -82,13 +83,19 @@ class BaseTag implements Action
     }
 
     /**
-     * A custom template of the active theme that no theme file backs.
+     * Whether a template of the active theme appearing or disappearing changes
+     * which template pages resolve to: one in the template hierarchy that no
+     * theme file backs. A `wp-custom-template-*` template only renders for the
+     * posts assigned to it, and assigning one purges that post.
      */
-    protected function isTemplateWithoutFile(WP_Post $post): bool
+    protected function changesTemplateResolution(WP_Post $post): bool
     {
         $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
         $theme = is_array($themes) && $themes ? (string) reset($themes) : get_stylesheet();
+        $slug = CoreTags::blockTemplateSlug($post);
 
-        return $theme === get_stylesheet() && ! get_block_file_template("{$theme}//{$post->post_name}", 'wp_template');
+        return $theme === get_stylesheet()
+            && ! str_starts_with($slug, 'wp-custom-template-')
+            && ! get_block_file_template("{$theme}//{$slug}", 'wp_template');
     }
 }
