@@ -6,11 +6,12 @@ namespace Genero\Sage\CacheTags\Invalidators;
  * Kinsta invalidator that purges by `group|` (prefix/wildcard) instead of
  * `single|` (exact URL).
  *
- * A group purge clears a URL together with everything beneath it — its
- * pagination (`/shop/page/2/`) and its query-string variants (`/shop/?orderby`)
- * — in one request. So the bare path is all that needs storing; this invalidator
- * disables query-string storage to keep the store lean and avoid purging URLs
- * Kinsta never cached (query strings bypass its cache).
+ * A group purge clears a URL together with everything beneath it, such as its
+ * pagination (`/shop/page/2/`), in one request. Kinsta doesn't cache a
+ * query-string URL (`/shop/?orderby`), and serves the params it leaves out of
+ * its cache key (utm_*, …) from the bare path's entry, so the bare path is all
+ * that needs storing; this invalidator disables query-string storage to keep the
+ * store lean and avoid purging URLs Kinsta never cached.
  *
  * Use this on a standard Kinsta setup. Use the plain `KinstaCacheInvalidator`
  * (exact `single|` purges) if you've configured Kinsta to cache query-string

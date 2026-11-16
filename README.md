@@ -98,11 +98,13 @@ irrelevant, which makes it the best fit for high-frequency editorial sites.
 Front-end pages are stored under the **actual requested URL** (including its query
 string), so a URL-based purge matches the variant a page cache keyed on. A default
 set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
-`_`) is stripped and the rest sorted; a request whose key would be longer than
-the `varchar(191)` column isn't stored (see below).
+`_`, and `_ga`/`mc_cid`/`mc_eid`/`ref`, which Kinsta's edge leaves out of its
+cache key) is stripped and the rest sorted; a key longer than the
+`varchar(191)` column falls back to the path.
 
 On a **query-bypass** edge — Fastly (purges by `Surrogate-Key`, ignores the URL)
-or Kinsta (query-string URLs bypass the cache entirely) — those query-string rows
+or Kinsta (a query-string URL bypasses the cache, except for the params it leaves
+out of its cache key, which share the bare URL's entry) — those query-string rows
 are never cached and so never need purging; they just accumulate in the store
 (one row per visited `?…` combination, including bot/scanner params). A
 query-bypass site with heavy parameterised traffic can keep the store lean by
@@ -115,10 +117,11 @@ add_filter('cachetags/store-query-string', '__return_false');
 With query-string storage off (as `KinstaGroupCacheInvalidator` sets it), a
 render with a query string is **not stored at all**, rather than stored under
 the bare URL: `/?s=x` would otherwise give the front page every search result's
-tags, and purge it on every one of them. The same goes for a query string too
-long for the store column. Params in the ignored list (`utm_*`, `gclid`, …)
-don't count, so `/?utm_source=x` still maps to `/`. The tag header is sent
-either way.
+tags, and purge it on every one of them. Params in the ignored list (`utm_*`,
+`gclid`, …) don't count, so `/?utm_source=x` still maps to `/`. The tag header
+is sent either way. Keep the ignored list a superset of the params your edge
+leaves out of its cache key: a render with one of those that isn't ignored
+seeds the bare URL's edge entry without being stored, so nothing purges it.
 
 **To match a URL-keyed edge that does cache query strings** (SiteGround, or Kinsta
 configured to cache GET params) the strip list must equal that edge's — and that's
@@ -155,11 +158,12 @@ Integration exists if you add the `SuperCacheInvalidator` invalidator in the `co
 Two invalidators, differing in how Kinsta resolves the purge:
 
 - **`KinstaGroupCacheInvalidator`** (recommended) purges by `group|` — a prefix
-  wildcard that clears a path together with everything beneath it: its pagination
-  (`/shop/page/2/`) and its query-string variants (`/shop/?orderby=…`) in one
-  request. It disables query-string storage (`cachetags/store-query-string`)
-  since the bare path is enough, keeping the store lean. This is the right choice
-  for a standard Kinsta setup, where query-string URLs bypass the cache anyway.
+  wildcard that clears a path together with everything beneath it, such as its
+  pagination (`/shop/page/2/`), in one request. It disables query-string storage
+  (`cachetags/store-query-string`): on a standard Kinsta setup a query-string
+  URL (`/shop/?orderby=…`) isn't cached at all, and the params Kinsta ignores
+  (`utm_*`, …) are served from the bare path's entry, so the bare path is all
+  there is to purge. This is the right choice for a standard Kinsta setup.
   Collapsing many URLs into a single prefix purge also keeps **purge volume low**
   — Kinsta dispatches purges to its edge (Cloudflare) asynchronously and rate-
   limits/coalesces them server-side, and the localhost endpoint returns `200` on

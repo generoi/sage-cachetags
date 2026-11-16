@@ -189,6 +189,11 @@ class Util
         // Campaign / click trackers (Google, Microsoft, Facebook, GA linker).
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
         'gclid', 'gad_source', 'gbraid', 'wbraid', 'dclid', 'fbclid', 'msclkid', '_gl',
+        // Kinsta's edge leaves these out of its cache key and serves the request
+        // from the bare URL's entry (probed on a live site, as it does utm_*,
+        // fbclid and dclid). A render with one seeds that entry, so it must be
+        // stored under the bare URL to be purgeable.
+        '_ga', 'mc_cid', 'mc_eid', 'ref',
         // Volatile WordPress per-request params.
         '_wpnonce', '_',
     ];
@@ -226,24 +231,31 @@ class Util
     }
 
     /**
-     * Whether the current request has a query string that currentUrl() drops:
-     * query-string storage is off, or the full URL overflows the url column.
+     * Whether the current request has a query string that query-string storage
+     * being off (`cachetags/store-query-string`) drops.
      *
      * Storing such a render would attribute its tags to the bare URL — every
      * `/?s=…` search to the front page, which then collects every result's
-     * tags and is purged by all of them — while the edge cached it, if at all,
-     * under the query-string URL, which a purge of the bare URL doesn't reach
-     * (on Kinsta query-string URLs aren't cached). So it isn't stored.
+     * tags and is purged by all of them — while the edge that storage is turned
+     * off for doesn't cache it (Kinsta bypasses query-string URLs). So it isn't
+     * stored.
      *
      * Ignored params (`cachetags/url-ignored-params`: utm_*, gclid, …) don't
      * count: `/?utm_source=x` renders the same page as `/` and still maps to it.
+     *
+     * A query string too long for the url column, with storage on, still falls
+     * back to the bare URL as before: that is an edge that may cache query
+     * strings (SiteGround), and the fallback row keeps the page's tags.
      */
     public static function isQueryStringDropped(): bool
     {
+        if (apply_filters('cachetags/store-query-string', true)) {
+            return false;
+        }
+
         $ignored = apply_filters('cachetags/url-ignored-params', self::IGNORED_URL_PARAMS);
 
-        return array_diff_key($_GET, array_flip($ignored)) !== []
-            && ! str_contains(self::currentUrl(), '?');
+        return array_diff_key($_GET, array_flip($ignored)) !== [];
     }
 
     /**

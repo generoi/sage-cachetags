@@ -66,13 +66,27 @@ class TestStoreUrl extends WP_UnitTestCase
 
     public function test_ignored_params_are_filterable(): void
     {
-        $_GET = ['ref' => 'campaign', 'orderby' => 'price'];
-        add_filter('cachetags/url-ignored-params', fn ($p) => [...$p, 'ref']);
+        $_GET = ['campaign_id' => 'spring', 'orderby' => 'price'];
+        add_filter('cachetags/url-ignored-params', fn ($p) => [...$p, 'campaign_id']);
 
         $url = Util::currentUrl();
 
         $this->assertStringEndsWith('/shop/?orderby=price', $url);
-        $this->assertStringNotContainsString('ref', $url);
+        $this->assertStringNotContainsString('campaign_id', $url);
+    }
+
+    // Kinsta serves these from the bare URL's cache entry, so a render with one
+    // must be stored (and purged) as the bare URL.
+    public function test_params_kinsta_leaves_out_of_its_cache_key_map_to_the_bare_url(): void
+    {
+        add_filter('cachetags/store-query-string', '__return_false');
+
+        foreach (['_ga', 'mc_cid', 'mc_eid', 'ref', 'fbclid', 'dclid', 'utm_campaign'] as $param) {
+            $_GET = [$param => 'x'];
+
+            $this->assertFalse(Util::isQueryStringDropped(), $param);
+            $this->assertStringEndsWith('/shop/', Util::currentUrl(), $param);
+        }
     }
 
     public function test_a_query_string_is_dropped_only_when_storage_would_drop_it(): void
@@ -96,11 +110,15 @@ class TestStoreUrl extends WP_UnitTestCase
         $this->assertFalse(Util::isQueryStringDropped());
     }
 
-    public function test_an_overlong_query_string_is_dropped(): void
+    // With storage on the edge may cache query strings (SiteGround); an
+    // overlong one keeps falling back to the bare URL's row, as before.
+    public function test_an_overlong_query_string_is_dropped_only_with_storage_off(): void
     {
         $_GET = ['q' => str_repeat('a', 300)];
+        $this->assertFalse(Util::isQueryStringDropped(), 'storage on');
 
-        $this->assertTrue(Util::isQueryStringDropped());
+        add_filter('cachetags/store-query-string', '__return_false');
+        $this->assertTrue(Util::isQueryStringDropped(), 'storage off');
     }
 
     public function test_overlong_query_string_falls_back_to_the_path(): void
