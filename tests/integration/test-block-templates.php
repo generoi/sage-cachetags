@@ -137,6 +137,50 @@ class TestBlockTemplates extends RestTestCase
         $this->assertContains($this->key('single-product', 'template'), $this->queuedPurgeTags());
     }
 
+    // Older WooCommerce versions saved customisations of its own templates under
+    // a `woocommerce/woocommerce` or `woocommerce` term; they render for the
+    // active theme, so they purge its key.
+    public function test_a_legacy_woocommerce_customisation_clears_the_active_themes_key(): void
+    {
+        foreach (['woocommerce/woocommerce', 'woocommerce'] as $term) {
+            $postId = self::factory()->post->create(['post_type' => 'wp_template', 'post_status' => 'publish', 'post_name' => 'single-product']);
+            wp_set_object_terms($postId, $term, 'wp_theme');
+            $this->resetCacheTags();
+
+            wp_update_post(['ID' => $postId, 'post_content' => 'Customised']);
+
+            $tags = $this->queuedPurgeTags();
+            $this->assertContains($this->key('single-product', 'template'), $tags, $term);
+            $this->assertNotContains("template:{$term}//single-product", $tags, $term);
+        }
+    }
+
+    // A customisation saved for another installed theme keeps that theme's key.
+    public function test_another_installed_themes_customisation_keeps_its_own_key(): void
+    {
+        // wp_get_themes() also lists wp-phpunit's test-data themes, which
+        // wp_get_theme() doesn't resolve on its own.
+        $other = null;
+        foreach (array_keys(wp_get_themes()) as $stylesheet) {
+            if ($stylesheet !== get_stylesheet() && wp_get_theme($stylesheet)->exists()) {
+                $other = $stylesheet;
+                break;
+            }
+        }
+        if ($other === null) {
+            $this->markTestSkipped('Only one theme is installed.');
+        }
+        $postId = self::factory()->post->create(['post_type' => 'wp_template_part', 'post_status' => 'publish', 'post_name' => 'footer']);
+        wp_set_object_terms($postId, $other, 'wp_theme');
+        $this->resetCacheTags();
+
+        wp_update_post(['ID' => $postId, 'post_content' => 'Other theme footer']);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("template-part:{$other}//footer", $tags);
+        $this->assertNotContains($this->key('footer'), $tags);
+    }
+
     // First customisation of a part the pages render from the theme file.
     public function test_customising_a_template_part_clears_its_key(): void
     {

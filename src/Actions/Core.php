@@ -510,8 +510,7 @@ class Core implements Action
      */
     protected function blockTemplatePurgeTags(WP_Post $post): array
     {
-        $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
-        $theme = is_array($themes) && $themes ? (string) reset($themes) : get_stylesheet();
+        $theme = CoreTags::blockTemplateTheme($post);
         $slug = CoreTags::blockTemplateSlug($post);
         $tags = CoreTags::blockTemplate("{$theme}//{$slug}", $post->post_type);
 

@@ -190,6 +190,21 @@ class CoreTags
     }
 
     /**
+     * The theme a template (part) post overrides for: its `wp_theme` term when
+     * that is an installed theme, else the active theme. WooCommerce saved
+     * older customisations of its own templates under `woocommerce` or
+     * `woocommerce/woocommerce`, which render for the active theme (and are
+     * keyed by it, see Core).
+     */
+    public static function blockTemplateTheme(WP_Post $post): string
+    {
+        $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
+        $theme = is_array($themes) && $themes ? (string) reset($themes) : '';
+
+        return $theme !== '' && wp_get_theme($theme)->exists() ? $theme : get_stylesheet();
+    }
+
+    /**
      * The slug a template (part) post renders under. Trashing renames the post
      * to `{slug}__trashed` before its status transition, keeping the slug in
      * `_wp_desired_post_slug`.

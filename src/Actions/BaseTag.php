@@ -93,8 +93,7 @@ class BaseTag implements Action
      */
     protected function changesTemplateResolution(WP_Post $post): bool
     {
-        $themes = wp_get_post_terms($post->ID, 'wp_theme', ['fields' => 'names']);
-        $theme = is_array($themes) && $themes ? (string) reset($themes) : get_stylesheet();
+        $theme = CoreTags::blockTemplateTheme($post);
         $slug = CoreTags::blockTemplateSlug($post);
 
         return $theme === get_stylesheet()
