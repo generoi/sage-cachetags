@@ -56,6 +56,7 @@ class CacheTagsServiceProvider extends ServiceProvider
             baseTag: $config->get('cachetags.base-tag', 'page'),
             pruneOlderThan: $config->get('cachetags.prune-older-than', '30d'),
             warmSkip: $config->get('cachetags.warm-skip', []),
+            kinstaRemoveTermMenuClears: $config->get('cachetags.kinsta-remove-term-menu-clears', false),
         );
 
         return $bootstrap;

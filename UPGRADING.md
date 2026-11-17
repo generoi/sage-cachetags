@@ -1,5 +1,13 @@
 # Upgrading
 
+## 3.4
+
+No changes needed. New, off by default: `'kinsta-remove-term-menu-clears' =>
+true` stops kinsta-mu-plugins clearing the whole site on every term edit, term
+deletion and menu save, which MyKinsta's autopurge setting can't stop and
+Polylang triggers on each translation link. The tag purges cover those saves.
+See "Kinsta's full clears on term and menu saves" in the README.
+
 ## 3.3
 
 No code changes are needed, except in theme tests that assert
