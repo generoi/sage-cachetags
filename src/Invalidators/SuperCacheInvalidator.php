@@ -12,9 +12,12 @@ class SuperCacheInvalidator implements Invalidator
      */
     public function clear(array $urls, array $tags): bool
     {
+        // WP Super Cache never caches URLs with a query string, and
+        // wpsc_delete_url_cache() returns false for them. There is nothing to
+        // delete, so skip them instead of failing the whole purge.
         return array_reduce(
             $urls,
-            fn ($result, $url) => \wpsc_delete_url_cache($url) ? $result : false,
+            fn ($result, $url) => str_contains($url, '?') || \wpsc_delete_url_cache($url) ? $result : false,
             true
         );
     }
