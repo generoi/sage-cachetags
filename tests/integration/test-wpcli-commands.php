@@ -1,14 +1,17 @@
 <?php
 
+use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
+use Genero\Sage\CacheTags\Invalidators\KinstaGroupCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\CacheTagStore;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Genero\Sage\CacheTags\WpCli\ClearCommand;
 use Genero\Sage\CacheTags\WpCli\DatabaseCommand;
 use Genero\Sage\CacheTags\WpCli\FlushCommand;
 use Genero\Sage\CacheTags\WpCli\StatusCommand;
+use Kinsta\Cache_Purge;
 
 /**
  * Real integration against WP-CLI: the commands extend the real WP_CLI_Command
@@ -151,5 +154,26 @@ class TestWpCliCommands extends WP_UnitTestCase
         $this->assertCount(1, $listed, 'the URL\'s tags, not store-wide stats');
         $this->assertEqualsCanonicalizing(['post:31', 'archive:post'], explode(PHP_EOL, substr($listed[0], strlen('info:'))));
         $this->assertContains('warning:URL not in the store.', $this->logger->messages);
+    }
+
+    public function test_status_command_warns_about_a_kinsta_hook_it_did_not_find(): void
+    {
+        require_once dirname(__DIR__).'/fixtures/kinsta-cache-purge.php';
+        $this->prop()->setValue(null, null);
+        $GLOBALS['kinsta_muplugin'] = (object) ['kinsta_cache_purge' => new Cache_Purge(['edited_term', 'delete_term'])];
+
+        try {
+            (new Bootstrap)->store(WordpressDbStore::class)->invalidators([KinstaGroupCacheInvalidator::class])
+                ->actions([])->autoDetectActions(false)->baseTag(null)->pruneOlderThan(null)
+                ->kinstaRemoveTermMenuClears()->bootstrap();
+
+            (new StatusCommand)([], []);
+        } finally {
+            unset($GLOBALS['kinsta_muplugin']);
+        }
+
+        $this->assertContains('info:Kinsta full clears removed from: edited_term, delete_term.', $this->logger->messages);
+        $warnings = array_filter($this->logger->messages, fn ($message) => str_starts_with($message, 'warning:') && str_contains($message, 'wp_update_nav_menu'));
+        $this->assertCount(1, $warnings);
     }
 }

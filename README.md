@@ -191,6 +191,37 @@ much of the site — a full URL matches its own host only, a path any host:
 add_filter('cachetags/kinsta-exact-urls', fn (array $urls) => [...$urls, home_url('/shop/')]);
 ```
 
+#### Kinsta's full clears on term and menu saves
+
+kinsta-mu-plugins clears the **whole site** — page cache, CDN and object cache —
+on every term edit, term deletion and menu save (`Cache_Purge::purge_complete_caches()`
+on `edited_term`, `delete_term` and `wp_update_nav_menu`). WordPress passes the
+term or menu id as the method's `$force` argument, so turning autopurge off in
+MyKinsta doesn't stop it. Polylang rewrites a term each time a translation is
+linked, so on a multilingual site every editor save can empty the cache.
+
+The tag purges already cover terms and menus, so a site can drop those three
+hooks:
+
+```php
+// config/cachetags.php
+'kinsta-remove-term-menu-clears' => true,
+```
+
+or `->kinstaRemoveTermMenuClears()` on the `Bootstrap`. It applies only with a
+Kinsta invalidator and once kinsta-mu-plugins has built its `Cache_Purge` (on
+`init`). Kinsta's other full clears stay: site title, tagline, date/time format
+and language changes, theme switches and mods, widgets, ACF options pages,
+Elementor, the admin bar's "Clear cache" and a deploy's clear. So do its
+per-post purges.
+
+Don't define `KINSTAMU_DISABLE_AUTOPURGE` instead: the Kinsta invalidators stop
+purging with it too.
+
+The hooks live in a legacy Kinsta class marked to move elsewhere. If one of them
+isn't where expected, `wp cachetags status` (or `wp acorn cachetags:status`)
+warns with the hook's name: Kinsta's full clears on that save may be back.
+
 ### Cloudflare
 
 `CloudflareCacheInvalidator` purges by [cache tag](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-tags/)

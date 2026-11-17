@@ -2,6 +2,7 @@
 
 namespace Genero\Sage\CacheTags\Console;
 
+use Genero\Sage\CacheTags\Actions\KinstaTermMenuClears;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\InspectableStore;
 use Roots\Acorn\Console\Commands\Command;
@@ -49,6 +50,10 @@ class StatusCommand extends Command
         if ($top) {
             $this->newLine();
             $this->table(['tag', 'urls'], array_map(fn ($row) => [$row['tag'], $row['urls']], $top));
+        }
+
+        foreach ($this->app->make(CacheTags::class)->action(KinstaTermMenuClears::class)?->status() ?? [] as [$ok, $message]) {
+            $ok ? $this->line($message) : $this->warn($message);
         }
 
         return self::SUCCESS;

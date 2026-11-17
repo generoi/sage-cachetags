@@ -2,6 +2,7 @@
 
 namespace Genero\Sage\CacheTags\WpCli;
 
+use Genero\Sage\CacheTags\Actions\KinstaTermMenuClears;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\InspectableStore;
 use WP_CLI;
@@ -54,6 +55,10 @@ class StatusCommand extends WP_CLI_Command
             WP_CLI::log('');
             WP_CLI::log('Widest-fan-out tags (a change to one purges this many URLs):');
             WP_CLI\Utils\format_items('table', $top, ['tag', 'urls']);
+        }
+
+        foreach (CacheTags::getInstance()->action(KinstaTermMenuClears::class)?->status() ?? [] as [$ok, $message]) {
+            $ok ? WP_CLI::log($message) : WP_CLI::warning($message);
         }
     }
 

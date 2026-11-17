@@ -1,15 +1,18 @@
 <?php
 
+use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Console\ClearCommand;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
 use Genero\Sage\CacheTags\Console\StatusCommand;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
+use Genero\Sage\CacheTags\Invalidators\KinstaGroupCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\CacheTagStore;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 use Illuminate\Console\Command;
 use Illuminate\Container\Container;
+use Kinsta\Cache_Purge;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 
@@ -116,5 +119,27 @@ class TestConsoleCommands extends WP_UnitTestCase
 
         [, $output] = $this->runCommand(new StatusCommand, ['url' => 'https://example.com/not-stored/']);
         $this->assertStringContainsString('URL not in the store.', $output);
+    }
+
+    public function test_status_command_warns_about_a_kinsta_hook_it_did_not_find(): void
+    {
+        require_once dirname(__DIR__).'/fixtures/kinsta-cache-purge.php';
+        $this->prop()->setValue(null, null);
+        $GLOBALS['kinsta_muplugin'] = (object) ['kinsta_cache_purge' => new Cache_Purge(['edited_term', 'delete_term'])];
+
+        try {
+            $this->container->instance(CacheTags::class, (new Bootstrap)
+                ->store(WordpressDbStore::class)->invalidators([KinstaGroupCacheInvalidator::class])
+                ->actions([])->autoDetectActions(false)->baseTag(null)->pruneOlderThan(null)
+                ->kinstaRemoveTermMenuClears()->bootstrap());
+
+            [$exitCode, $output] = $this->runCommand(new StatusCommand);
+        } finally {
+            unset($GLOBALS['kinsta_muplugin']);
+        }
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString('Kinsta full clears removed from: edited_term, delete_term.', $output);
+        $this->assertStringContainsString("wasn't hooked on wp_update_nav_menu", $output);
     }
 }

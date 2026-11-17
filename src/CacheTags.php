@@ -411,4 +411,23 @@ class CacheTags
 
         return false;
     }
+
+    /**
+     * The bound action of a class, if any.
+     *
+     * @template T of Action
+     *
+     * @param  class-string<T>  $class
+     * @return T|null
+     */
+    public function action(string $class): ?Action
+    {
+        foreach ($this->actions as $registeredAction) {
+            if (get_class($registeredAction) === $class) {
+                return $registeredAction;
+            }
+        }
+
+        return null;
+    }
 }

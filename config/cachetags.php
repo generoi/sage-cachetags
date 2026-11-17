@@ -51,6 +51,12 @@ return [
     // cached at the edge leaves an object you can't purge by tag. null to disable.
     'prune-older-than' => '30d',
 
+    // With a Kinsta invalidator: stop kinsta-mu-plugins clearing the whole site
+    // (page cache, CDN, object cache) on every term edit, term deletion and
+    // menu save, which the tag purges already cover. `wp cachetags status`
+    // warns if Kinsta's hooks weren't where expected.
+    'kinsta-remove-term-menu-clears' => false,
+
     'action' => [
         Core::class,
         DebugComment::class,

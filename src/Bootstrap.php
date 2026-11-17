@@ -55,6 +55,7 @@ class Bootstrap
         protected ?string $pruneOlderThan = '30d',
         /** @var string[] Path patterns the warmer skips (see Warmer) */
         protected array $warmSkip = [],
+        protected bool $kinstaRemoveTermMenuClears = false,
     ) {
         $this->debug = $debug ?? (defined('WP_DEBUG') ? WP_DEBUG : false);
     }
@@ -172,6 +173,18 @@ class Bootstrap
     }
 
     /**
+     * Remove kinsta-mu-plugins' whole-site clear on term and menu saves, which
+     * the tag purges already cover (see Actions\KinstaTermMenuClears). Only
+     * applies with a Kinsta invalidator. Off by default.
+     */
+    public function kinstaRemoveTermMenuClears(bool $enable = true): static
+    {
+        $this->kinstaRemoveTermMenuClears = $enable;
+
+        return $this;
+    }
+
+    /**
      * Bootstrap CacheTags and return the instance.
      */
     public function bootstrap(): CacheTags
@@ -266,6 +279,12 @@ class Bootstrap
             $actions[] = new Actions\PruneStore($this->cacheTags, $this->pruneOlderThan);
         }
 
+        // Kinsta's term/menu full clears go only where a Kinsta invalidator
+        // purges those saves by tag instead.
+        if ($this->kinstaRemoveTermMenuClears && $this->usesKinsta()) {
+            $actions[] = new Actions\KinstaTermMenuClears($this->cacheTags);
+        }
+
         foreach ($actions as $action) {
             $this->cacheTags->bindAction($action);
         }
@@ -278,6 +297,17 @@ class Bootstrap
         } else {
             add_action('plugins_loaded', [$this, 'bindDetectedActions'], 0);
         }
+    }
+
+    protected function usesKinsta(): bool
+    {
+        foreach ($this->cacheTags->invalidators as $invalidator) {
+            if ($invalidator instanceof Invalidators\KinstaCacheInvalidator) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
