@@ -77,4 +77,12 @@ class TestInvalidators extends WP_UnitTestCase
         $this->assertTrue($invalidator->flush());
         $this->assertTrue($GLOBALS['__wpsc_flush']);
     }
+
+    public function test_supercache_skips_query_string_urls(): void
+    {
+        // wpsc_delete_url_cache() returns false for these, which would fail the
+        // purge and leave the rows in the store.
+        $this->assertTrue((new SuperCacheInvalidator)->clear(['/a/', '/?s=x'], ['post:1']));
+        $this->assertSame(['/a/'], $GLOBALS['__wpsc_url_calls']);
+    }
 }
