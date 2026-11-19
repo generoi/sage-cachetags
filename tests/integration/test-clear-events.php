@@ -200,6 +200,8 @@ class TestClearEvents extends RestTestCase
         do_action('comment_post', $commentId, 1, ['comment_post_ID' => $postId]);
 
         $this->assertContains("post:{$postId}", $this->queuedPurgeTags());
+        // The site-wide comments feed.
+        $this->assertContains('comment:any', $this->queuedPurgeTags());
     }
 
     public function test_approving_a_comment_clears_it_and_its_post(): void
@@ -216,6 +218,7 @@ class TestClearEvents extends RestTestCase
         $tags = $this->queuedPurgeTags();
         $this->assertContains("comment:{$commentId}", $tags);
         $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains('comment:any', $tags);
     }
 
     public function test_editing_an_attachment_clears_it(): void

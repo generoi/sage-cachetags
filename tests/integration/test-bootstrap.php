@@ -73,7 +73,9 @@ class TestBootstrap extends WP_UnitTestCase
     {
         $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
         $cacheTags = $bootstrap->bootstrap();
-        $this->go_to(home_url('/?sitemap=posts&sitemap-subtype=post&paged=1'));
+        $this->go_to(home_url('/'));
+        // go_to() can't route a sitemap here; set the var the router would.
+        $GLOBALS['wp_query']->set('sitemap', 'posts');
         $cacheTags->add('stored-sitemap');
 
         $bootstrap->saveFeedCacheTags();

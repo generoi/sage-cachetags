@@ -53,6 +53,12 @@ abstract class RestTestCase extends WP_UnitTestCase
             $prop->setAccessible(true);
             $prop->setValue($this->cacheTags, []);
         }
+
+        // get() memoises until the next add(); a test adding nothing would
+        // otherwise read the previous test's tags.
+        $prop = $reflection->getProperty('boundedTags');
+        $prop->setAccessible(true);
+        $prop->setValue($this->cacheTags, null);
     }
 
     /**

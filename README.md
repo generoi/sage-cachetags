@@ -461,11 +461,19 @@ returns no tags for a menu that doesn't exist (a location pointing at a deleted
 menu), since nothing renders.
 
 Feeds and XML sitemaps are tagged too, and their tags saved at `shutdown`, as
-they print no `wp_footer`. A feed gets the tags of its HTML page plus each item
-it lists, since it prints their content itself. A sitemap, core's or Yoast's
-(both use the `sitemap` query var), gets `archive:{type}:any` and
-`taxonomy:{tax}:any` for every cacheable type, as it lists every post and term
-with its last modified date.
+they print no `wp_footer`.
+
+- **Feeds** get the tags of their HTML page (a term feed its term, a post type
+  feed `archive:{type}`, a post's comment feed the post), plus each item's post,
+  author, categories and tags, which the feed prints itself. The main feed gets
+  `archive:post`, and the site-wide comments feed `comment:any`, cleared by any
+  comment change.
+- **Sitemaps**, core's or Yoast's (both use the `sitemap` query var), get only
+  what they list: a post type's sitemap `archive:{type}:any`, a taxonomy's
+  `taxonomy:{tax}:any` (each entry prints its last modified date), the author
+  sitemap the user roles and post listings. Core's index lists undated pages of
+  entries, so it gets `archive:{type}` and `taxonomy:{tax}`; Yoast's dates each
+  sub-sitemap, so it gets every `:any` tag.
 
 A menu item takes its label and URL from the post or term it links to, so
 `menu:{id}` is also cleared for every menu linking to a post whose title, slug,
