@@ -2,10 +2,12 @@
 
 use Genero\Sage\CacheTags\Actions\BaseTag;
 use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Actions\Feed;
 use Genero\Sage\CacheTags\Actions\Gravityform;
 use Genero\Sage\CacheTags\Actions\Nonce;
 use Genero\Sage\CacheTags\Actions\Polylang;
 use Genero\Sage\CacheTags\Actions\PruneStore;
+use Genero\Sage\CacheTags\Actions\Sitemap;
 use Genero\Sage\CacheTags\Actions\WooCommerce;
 use Genero\Sage\CacheTags\Bootstrap;
 use Genero\Sage\CacheTags\CacheTags;
@@ -378,6 +380,38 @@ class TestBootstrap extends WP_UnitTestCase
         $withDetected->setAccessible(true);
 
         $this->assertSame([Core::class], $withDetected->invoke($bootstrap, [Core::class]));
+    }
+
+    public function test_feed_and_sitemap_are_always_detected(): void
+    {
+        $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
+        $withDetected->setAccessible(true);
+
+        $result = $withDetected->invoke(new Bootstrap, [Core::class]);
+
+        $this->assertContains(Feed::class, $result);
+        $this->assertContains(Sitemap::class, $result);
+    }
+
+    public function test_a_detected_action_can_be_dropped_by_filter(): void
+    {
+        $drop = function (array $detected) {
+            unset($detected[Sitemap::class]);
+
+            return $detected;
+        };
+        add_filter('cachetags/detected-actions', $drop);
+        $withDetected = new ReflectionMethod(Bootstrap::class, 'withDetectedActions');
+        $withDetected->setAccessible(true);
+
+        try {
+            $result = $withDetected->invoke(new Bootstrap, [Core::class]);
+        } finally {
+            remove_filter('cachetags/detected-actions', $drop);
+        }
+
+        $this->assertNotContains(Sitemap::class, $result);
+        $this->assertContains(Feed::class, $result);
     }
 
     public function test_a_detected_action_is_not_duplicated_when_already_listed(): void

@@ -327,7 +327,10 @@ class Bootstrap
      * Auto-enable integration actions whose plugin is active (WooCommerce,
      * Polylang, Gravity Forms), so their safety vetoes (cart/checkout/account,
      * prepopulated forms) and language-aware purging aren't silently missing when
-     * an operator forgets to list them. Toggle with autoDetectActions().
+     * an operator forgets to list them; and Feed and Sitemap, which act only on
+     * those requests, so a page cache storing them can purge them. Toggle with
+     * autoDetectActions(), or drop one with the `cachetags/detected-actions`
+     * filter.
      *
      * @param  array<string|Action>  $actions
      * @return array<string|Action>
@@ -338,11 +341,13 @@ class Bootstrap
             return $actions;
         }
 
-        $detected = array_filter([
+        $detected = array_filter((array) apply_filters('cachetags/detected-actions', [
             Actions\WooCommerce::class => class_exists('WooCommerce'),
             Actions\Polylang::class => defined('POLYLANG_VERSION'),
             Actions\Gravityform::class => class_exists('GFForms'),
-        ]);
+            Actions\Feed::class => true,
+            Actions\Sitemap::class => true,
+        ]));
 
         foreach (array_keys($detected) as $action) {
             if (! $this->hasActionClass($actions, $action)) {

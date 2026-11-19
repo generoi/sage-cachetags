@@ -462,10 +462,19 @@ menu), since nothing renders.
 
 ### Feeds and sitemaps
 
-Core skips RSS feeds and XML sitemaps. The `Feed` and `Sitemap` actions, in the
-default `action` config, tag them and save their tags at `shutdown`, as neither
-prints `wp_footer`. Remove them to opt out, and then keep your page cache from
-storing feeds and sitemaps, or nothing purges them.
+Core skips RSS feeds and XML sitemaps. The `Feed` and `Sitemap` actions, enabled
+automatically like the [integrations](#woocommerce-polylang--gravity-forms-auto-enabled),
+tag them and save their tags at `shutdown`, as neither prints `wp_footer`. To
+opt out of one, drop it from detection, and then keep your page cache from
+storing those responses, or nothing purges them:
+
+```php
+add_filter('cachetags/detected-actions', function (array $detected) {
+    unset($detected[\Genero\Sage\CacheTags\Actions\Sitemap::class]);
+
+    return $detected;
+});
+```
 
 - **`Feed`**: the tags of the feed's HTML page (a term feed its term, a post
   type feed `archive:{type}`, a post's comment feed the post, an author feed the
@@ -765,7 +774,10 @@ a change can alter which products a listing selects or their order: publish,
 unpublish, stock status, terms, or a save changing a prop like price or name (see
 `WooCommerce::NON_LISTING_META_PROPS`).
 
-To manage the action list entirely yourself, turn detection off:
+`Feed` and `Sitemap` are detected the same way, always (see
+[Feeds and sitemaps](#feeds-and-sitemaps)). To drop one detected action, filter
+`cachetags/detected-actions` (a map of action class to whether it's enabled). To
+manage the action list entirely yourself, turn detection off:
 
 ```php
 // config/cachetags.php
