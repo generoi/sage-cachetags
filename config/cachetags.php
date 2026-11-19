@@ -34,7 +34,9 @@ return [
 
     // The WooCommerce, Polylang and Gravity Forms actions are auto-enabled when
     // their plugin is active — cart/checkout/account stay uncached, language-aware
-    // purging, and prepopulated-form handling. Set false to manage 'action'
+    // purging, and prepopulated-form handling. Feed and Sitemap are always
+    // enabled, so feeds and sitemaps a page cache stores get purged; drop one
+    // with the `cachetags/detected-actions` filter. Set false to manage 'action'
     // entirely yourself.
     'auto-detect-actions' => true,
 
