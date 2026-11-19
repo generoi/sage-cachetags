@@ -17,7 +17,16 @@ trait SavesAtShutdown
 {
     protected function saveAtShutdown(): void
     {
-        if (did_action('wp_footer') || ! Util::isCacheableRequest()) {
+        if (did_action('wp_footer')) {
+            return;
+        }
+        if (! Util::isCacheableRequest()) {
+            // As Bootstrap::saveCacheTags(): make the veto actionable for page
+            // caches, which would otherwise keep a response nothing can purge.
+            if (! defined('DONOTCACHEPAGE')) {
+                define('DONOTCACHEPAGE', true);
+            }
+
             return;
         }
         // do_feed() wp_die()s an unknown ?feed= with a 404 without set_404().

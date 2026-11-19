@@ -44,6 +44,17 @@ class Feed implements Action
         if (! is_feed()) {
             return;
         }
+        // WP never 404s a feed (WP::handle_404() exempts it), so the feed of a
+        // missing or private post, page or term keeps its singular or term flag
+        // with no queried object. It lists nothing, and nothing could purge it
+        // once the object is published, so keep page caches from storing it.
+        if ((is_singular() || is_category() || is_tag() || is_tax()) && ! get_queried_object()) {
+            if (! defined('DONOTCACHEPAGE')) {
+                define('DONOTCACHEPAGE', true);
+            }
+
+            return;
+        }
 
         global $wp_query;
         $items = array_filter($wp_query->posts ?? [], fn ($item) => $item instanceof WP_Post);

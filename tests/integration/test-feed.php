@@ -85,6 +85,22 @@ class TestFeed extends RestTestCase
         $this->assertNotContains('archive:post', $tags);
     }
 
+    /** WP never 404s a feed, so these keep their singular/term flags with no queried object. */
+    public function test_feeds_of_missing_objects_are_left_untagged(): void
+    {
+        $draftId = self::factory()->post->create(['post_status' => 'draft']);
+
+        foreach ([
+            '/?feed=rss2&p=999999',
+            '/?feed=rss2&p='.$draftId,
+            '/?feed=rss2&pagename=no-such-page',
+            '/?feed=rss2&category_name=no-such-term',
+            '/?feed=rss2&tag=no-such-term',
+        ] as $path) {
+            $this->assertSame([], $this->feedTags(home_url($path)), $path);
+        }
+    }
+
     public function test_a_page_gets_no_feed_tags(): void
     {
         $this->assertSame([], $this->feedTags(home_url('/')));

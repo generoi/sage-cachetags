@@ -51,6 +51,33 @@ class TestSitemap extends RestTestCase
         $this->assertContains('taxonomy:category:any', $this->queuedPurgeTags());
     }
 
+    /** Importers re-save unchanged term sets; taxonomy:{tax}:any is on every page listing the taxonomy. */
+    public function test_re_saving_unchanged_terms_leaves_the_taxonomy_sitemap(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $categoryId = self::factory()->category->create();
+        wp_set_object_terms($postId, [$categoryId], 'category');
+        (new Sitemap($this->cacheTags))->bind();
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [$categoryId], 'category');
+
+        $this->assertNotContains('taxonomy:category:any', $this->queuedPurgeTags());
+    }
+
+    public function test_removing_a_term_clears_the_taxonomy_sitemap(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $categoryId = self::factory()->category->create();
+        wp_set_object_terms($postId, [$categoryId], 'category');
+        (new Sitemap($this->cacheTags))->bind();
+        $this->resetCacheTags();
+
+        wp_set_object_terms($postId, [], 'category');
+
+        $this->assertContains('taxonomy:category:any', $this->queuedPurgeTags());
+    }
+
     public function test_core_sitemap_index_is_tagged_with_listing_membership(): void
     {
         $tags = $this->sitemapTags(['sitemap' => 'index']);

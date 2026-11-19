@@ -29,15 +29,30 @@ class Sitemap implements Action
         \add_action('shutdown', [$this, 'saveSitemapCacheTags'], 0);
         // A taxonomy sitemap lists only terms with posts; an importer can
         // assign terms without saving the post.
-        \add_action('set_object_terms', [$this, 'onTermSet'], 10, 4);
+        \add_action('set_object_terms', [$this, 'onTermSet'], 10, 6);
     }
 
     /**
-     * @param  int[]  $terms
+     * Only when the object's terms changed: importers re-save unchanged term
+     * sets, and taxonomy:{tax}:any is on every page listing the taxonomy.
+     *
+     * @param  array<int|string>  $terms
      * @param  int[]  $taxonomyIds
+     * @param  int[]  $oldTaxonomyIds
      */
-    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy): void
+    public function onTermSet(int $objectId, array $terms, array $taxonomyIds, string $taxonomy, bool $append = false, array $oldTaxonomyIds = []): void
     {
+        if (! CoreTags::isCacheableTaxonomy($taxonomy)) {
+            return;
+        }
+
+        $new = array_map('intval', $taxonomyIds);
+        $old = array_map('intval', $oldTaxonomyIds);
+        $removed = $append ? [] : array_diff($old, $new);
+        if (! array_diff($new, $old) && ! $removed) {
+            return;
+        }
+
         $this->cacheTags->clear(CoreTags::anyTerm($taxonomy));
     }
 
