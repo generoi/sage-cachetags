@@ -2,7 +2,9 @@
 
 use Genero\Sage\CacheTags\Actions\Core;
 use Genero\Sage\CacheTags\Actions\DebugComment;
+use Genero\Sage\CacheTags\Actions\Feed;
 use Genero\Sage\CacheTags\Actions\Nonce;
+use Genero\Sage\CacheTags\Actions\Sitemap;
 use Genero\Sage\CacheTags\Invalidators\SuperCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\WordpressDbStore;
 
@@ -64,6 +66,12 @@ return [
         // Purge pages tagged 'nonce' twice daily so a cached page never serves an
         // expired nonce. Light cron; remove this to opt out.
         Nonce::class,
+
+        // Tag and store RSS feeds and XML sitemaps (core's and Yoast's), which a
+        // page cache like WP Super Cache keeps. Remove these to opt out, and
+        // keep the page cache from storing them, or nothing purges them.
+        Feed::class,
+        Sitemap::class,
 
         // Emit the cache-tag HTTP header (above) for surrogate-key CDNs like
         // Fastly. Not needed for URL/store-based purging (e.g. WP Super Cache).

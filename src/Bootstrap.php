@@ -223,9 +223,6 @@ class Bootstrap
             $this->bindActions();
 
             add_action('wp_footer', [$this, 'saveCacheTags']);
-            // Before shutdown's output-buffer flush (priority 1), where page
-            // caches decide whether to keep the response.
-            add_action('shutdown', [$this, 'saveFeedCacheTags'], 0);
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
 
@@ -402,16 +399,6 @@ class Bootstrap
             // Cache-Control sent earlier, so their bypass must come from the
             // theme/VCL consulting Util::isCacheableRequest().
             define('DONOTCACHEPAGE', true);
-        }
-    }
-
-    /**
-     * Feeds and sitemaps print no wp_footer, where pages save their tags.
-     */
-    public function saveFeedCacheTags(): void
-    {
-        if (! did_action('wp_footer') && (is_feed() || get_query_var('sitemap'))) {
-            $this->saveCacheTags();
         }
     }
 

@@ -42,7 +42,6 @@ class Core implements Action
     public function bind(): void
     {
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
-        \add_action('parse_request', [$this, 'addSitemapCacheTags']);
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
         \add_filter('wp_nav_menu_args', [$this, 'addNavMenuCacheTags']);
         // block_template_part() goes through get_block_template(); the
@@ -87,80 +86,14 @@ class Core implements Action
     }
 
     /**
-     * Tag an XML sitemap. Core's (wp-sitemap*.xml) and Yoast's (*sitemap*.xml)
-     * both route through the `sitemap` query var, and Yoast prints and exits on
-     * pre_get_posts, before template_redirect, so this runs on parse_request.
-     * A type's sitemap lists its entries with their last modified dates, so
-     * any change to one of them changes it.
-     */
-    public function addSitemapCacheTags(\WP $wp): void
-    {
-        $sitemap = (string) ($wp->query_vars['sitemap'] ?? '');
-        if ($sitemap === '') {
-            return;
-        }
-        $subtype = (string) ($wp->query_vars['sitemap-subtype'] ?? '') ?: 'any';
-
-        $this->cacheTags->add(match (true) {
-            // Core's index lists a sub-sitemap per page of entries, undated.
-            $sitemap === 'index' => [...CoreTags::archive('any'), ...CoreTags::taxonomy('any')],
-            // Core's per-type sitemaps (wp-sitemap-{provider}-{subtype}-{n}.xml).
-            $sitemap === 'posts' => CoreTags::anyArchive($subtype),
-            $sitemap === 'taxonomies' => CoreTags::anyTerm($subtype),
-            // Core's and Yoast's author sitemaps list users with published posts.
-            $sitemap === 'users', $sitemap === 'author' => [...CoreTags::anyUser('any'), ...CoreTags::archive('any')],
-            // Yoast's per-type sitemaps ({type}-sitemap{n}.xml).
-            post_type_exists($sitemap) => CoreTags::anyArchive($sitemap),
-            taxonomy_exists($sitemap) => CoreTags::anyTerm($sitemap),
-            // Yoast's index (sitemap=1) dates each sub-sitemap by its newest
-            // entry, and any other sitemap type is unknown: tag every change.
-            default => [...CoreTags::anyArchive('any'), ...CoreTags::anyTerm('any')],
-        });
-    }
-
-    /**
-     * A feed prints its items itself, not through blocks or teasers that would
-     * tag them: their content, author, and (RSS `<category>`) categories and
-     * tags. The template cases tag the term, post type and singular feeds like
-     * their HTML pages; the two listings WP_Query flags as neither (is_home()
-     * is never set on a feed) are tagged here.
-     */
-    protected function addFeedCacheTags(): void
-    {
-        global $wp_query;
-        $items = array_filter($wp_query->posts ?? [], fn ($item) => $item instanceof WP_Post);
-
-        $tags = CoreTags::posts($items);
-        foreach ($items as $item) {
-            $tags = [
-                ...$tags,
-                ...CoreTags::users((int) $item->post_author),
-                ...CoreTags::terms(get_the_terms($item, 'category') ?: []),
-                ...CoreTags::terms(get_the_terms($item, 'post_tag') ?: []),
-            ];
-        }
-
-        if (is_comment_feed() && ! is_singular()) {
-            // /comments/feed/: the latest comments on any post.
-            $tags[] = Tag::of('comment', 'any');
-        } elseif (! is_singular() && ! is_archive() && ! is_search()) {
-            // /feed/: the latest posts, joined by every one published.
-            $tags = [...$tags, ...CoreTags::archive(get_query_var('post_type') ?: 'post')];
-        }
-
-        $this->cacheTags->add($tags);
-    }
-
-    /**
      * Add default cache tags based on the template.
      */
     public function addTemplateCacheTags(): void
     {
-        if (is_feed()) {
-            $this->addFeedCacheTags();
-        }
-
         switch (true) {
+            case is_feed():
+                // Skip feeds
+                break;
             case is_search():
                 // Checked before the singular and term cases, as template-loader
                 // does: `/no-such-page/?s=x` sets is_page() and is_search() with
@@ -345,11 +278,7 @@ class Core implements Action
             return;
         }
 
-        $this->cacheTags->clear([
-            ...CoreTags::posts($commentData['comment_post_ID']),
-            // The site-wide comments feed.
-            Tag::of('comment', 'any'),
-        ]);
+        $this->cacheTags->clear(CoreTags::posts($commentData['comment_post_ID']));
     }
 
     /**
@@ -367,7 +296,6 @@ class Core implements Action
             $cacheTags = [
                 ...$cacheTags,
                 ...CoreTags::posts($comment->comment_post_ID),
-                Tag::of('comment', 'any'),
             ];
         }
 
@@ -387,7 +315,6 @@ class Core implements Action
         $this->cacheTags->clear([
             ...CoreTags::comments($commentId),
             ...CoreTags::posts((int) $comment->comment_post_ID),
-            Tag::of('comment', 'any'),
         ]);
     }
 
@@ -399,7 +326,6 @@ class Core implements Action
         $this->cacheTags->clear([
             ...CoreTags::comments($commentId),
             ...CoreTags::posts((int) $comment->comment_post_ID),
-            Tag::of('comment', 'any'),
         ]);
     }
 

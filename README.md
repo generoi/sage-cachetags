@@ -460,20 +460,30 @@ while the location is empty; tag a theme's own location renders (e.g. Navi) with
 returns no tags for a menu that doesn't exist (a location pointing at a deleted
 menu), since nothing renders.
 
-Feeds and XML sitemaps are tagged too, and their tags saved at `shutdown`, as
-they print no `wp_footer`.
+### Feeds and sitemaps
 
-- **Feeds** get the tags of their HTML page (a term feed its term, a post type
-  feed `archive:{type}`, a post's comment feed the post), plus each item's post,
-  author, categories and tags, which the feed prints itself. The main feed gets
-  `archive:post`, and the site-wide comments feed `comment:any`, cleared by any
-  comment change.
-- **Sitemaps**, core's or Yoast's (both use the `sitemap` query var), get only
-  what they list: a post type's sitemap `archive:{type}:any`, a taxonomy's
-  `taxonomy:{tax}:any` (each entry prints its last modified date), the author
-  sitemap the user roles and post listings. Core's index lists undated pages of
-  entries, so it gets `archive:{type}` and `taxonomy:{tax}`; Yoast's dates each
-  sub-sitemap, so it gets every `:any` tag.
+Core skips RSS feeds and XML sitemaps. The `Feed` and `Sitemap` actions, in the
+default `action` config, tag them and save their tags at `shutdown`, as neither
+prints `wp_footer`. Remove them to opt out, and then keep your page cache from
+storing feeds and sitemaps, or nothing purges them.
+
+- **`Feed`**: the tags of the feed's HTML page (a term feed its term, a post
+  type feed `archive:{type}`, a post's comment feed the post, an author feed the
+  author and `archive:post`), plus each item's post, author, categories and
+  tags, and `option:blogname`/`option:blogdescription` for the channel. The main
+  feed gets `archive:post`, and the site-wide comments feed `comment:any`,
+  cleared by any approved comment change.
+- **`Sitemap`**, core's or Yoast's (both use the `sitemap` query var): only
+  what each lists. A post type's sitemap gets `archive:{type}:any` (entries
+  print their last modified date); a taxonomy's `taxonomy:{tax}:any` plus
+  `archive:{type}:any` for its post types, as it lists only terms with posts;
+  the author sitemap the user roles and post listings. Core's index lists
+  undated pages of entries, so it gets `archive:{type}` and `taxonomy:{tax}`;
+  Yoast's dates each sub-sitemap, so it gets every `:any` tag.
+
+Sitemaps are stored for URL-based purging (WP Super Cache, Kinsta), but send no
+cache-tag header: core's and Yoast's exit before `HttpHeader` sends one, so a
+tag-based edge (Fastly, Cloudflare) can't purge them by tag.
 
 A menu item takes its label and URL from the post or term it links to, so
 `menu:{id}` is also cleared for every menu linking to a post whose title, slug,
