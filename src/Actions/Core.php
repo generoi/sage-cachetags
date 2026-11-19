@@ -42,6 +42,7 @@ class Core implements Action
     public function bind(): void
     {
         \add_action('template_redirect', [$this, 'addTemplateCacheTags']);
+        \add_action('parse_request', [$this, 'addSitemapCacheTags']);
         \add_filter('render_block', [$this, 'addBlockCacheTags'], 10, 3);
         \add_filter('wp_nav_menu_args', [$this, 'addNavMenuCacheTags']);
         // block_template_part() goes through get_block_template(); the
@@ -86,14 +87,38 @@ class Core implements Action
     }
 
     /**
+     * Tag an XML sitemap. Core's (wp-sitemap*.xml) and Yoast's (*sitemap*.xml)
+     * both route through the `sitemap` query var, and Yoast prints and exits on
+     * pre_get_posts, before template_redirect, so this runs on parse_request.
+     * A sitemap lists every published post and term with its last modified
+     * date, so any change to one changes it.
+     */
+    public function addSitemapCacheTags(\WP $wp): void
+    {
+        if (empty($wp->query_vars['sitemap'])) {
+            return;
+        }
+
+        $this->cacheTags->add([
+            ...CoreTags::anyArchive('any'),
+            ...CoreTags::anyTerm('any'),
+        ]);
+    }
+
+    /**
      * Add default cache tags based on the template.
      */
     public function addTemplateCacheTags(): void
     {
+        if (is_feed()) {
+            // A feed prints its items itself, not through blocks or teasers that
+            // would tag them, so tag what it lists. The cases below then tag it
+            // like its HTML page: posts joining or leaving the listing.
+            global $wp_query;
+            $this->cacheTags->add(CoreTags::posts($wp_query->posts ?? []));
+        }
+
         switch (true) {
-            case is_feed():
-                // Skip feeds
-                break;
             case is_search():
                 // Checked before the singular and term cases, as template-loader
                 // does: `/no-such-page/?s=x` sets is_page() and is_search() with

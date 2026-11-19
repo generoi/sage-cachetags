@@ -460,6 +460,13 @@ while the location is empty; tag a theme's own location renders (e.g. Navi) with
 returns no tags for a menu that doesn't exist (a location pointing at a deleted
 menu), since nothing renders.
 
+Feeds and XML sitemaps are tagged too, and their tags saved at `shutdown`, as
+they print no `wp_footer`. A feed gets the tags of its HTML page plus each item
+it lists, since it prints their content itself. A sitemap, core's or Yoast's
+(both use the `sitemap` query var), gets `archive:{type}:any` and
+`taxonomy:{tax}:any` for every cacheable type, as it lists every post and term
+with its last modified date.
+
 A menu item takes its label and URL from the post or term it links to, so
 `menu:{id}` is also cleared for every menu linking to a post whose title, slug,
 parent, status or (with a date permalink) date changes, including trash and

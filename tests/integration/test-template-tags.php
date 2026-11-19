@@ -20,6 +20,47 @@ class TestTemplateTags extends RestTestCase
         return $this->cacheTags->get();
     }
 
+    public function test_feed_is_tagged_with_its_items_and_listing(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+
+        $tags = $this->templateTags(home_url('/?feed=rss2'));
+
+        $this->assertContains("post:{$postId}", $tags);
+        $this->assertContains('archive:post', $tags);
+    }
+
+    public function test_post_comment_feed_is_tagged_with_its_post(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+
+        $this->assertContains("post:{$postId}", $this->templateTags(home_url('/?feed=rss2&p='.$postId)));
+    }
+
+    public function test_sitemap_is_tagged_with_any_post_and_term_change(): void
+    {
+        $this->resetCacheTags();
+        $wp = new WP;
+        $wp->query_vars = ['sitemap' => 'posts', 'sitemap-subtype' => 'post'];
+
+        (new Core($this->cacheTags))->addSitemapCacheTags($wp);
+
+        $tags = $this->cacheTags->get();
+        $this->assertContains('archive:post:any', $tags);
+        $this->assertContains('taxonomy:category:any', $tags);
+    }
+
+    public function test_non_sitemap_request_gets_no_sitemap_tags(): void
+    {
+        $this->resetCacheTags();
+        $wp = new WP;
+        $wp->query_vars = ['pagename' => 'about'];
+
+        (new Core($this->cacheTags))->addSitemapCacheTags($wp);
+
+        $this->assertSame([], $this->cacheTags->get());
+    }
+
     public function test_search_results_are_tagged_as_a_post_archive(): void
     {
         $this->assertContains('archive:post', $this->templateTags(home_url('/?s=hello')));

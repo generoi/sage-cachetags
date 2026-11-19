@@ -57,6 +57,43 @@ class TestBootstrap extends WP_UnitTestCase
         $this->assertNotEmpty($cacheTags->store->get(['stored-page']));
     }
 
+    public function test_a_feed_is_stored_at_shutdown(): void
+    {
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
+        $cacheTags = $bootstrap->bootstrap();
+        $this->go_to(home_url('/?feed=rss2'));
+        $cacheTags->add('stored-feed');
+
+        $bootstrap->saveFeedCacheTags();
+
+        $this->assertNotEmpty($cacheTags->store->get(['stored-feed']));
+    }
+
+    public function test_a_sitemap_is_stored_at_shutdown(): void
+    {
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
+        $cacheTags = $bootstrap->bootstrap();
+        $this->go_to(home_url('/?sitemap=posts&sitemap-subtype=post&paged=1'));
+        $cacheTags->add('stored-sitemap');
+
+        $bootstrap->saveFeedCacheTags();
+
+        $this->assertNotEmpty($cacheTags->store->get(['stored-sitemap']));
+    }
+
+    /** A page saves on wp_footer; the shutdown save is only for feeds and sitemaps. */
+    public function test_a_page_is_not_stored_at_shutdown(): void
+    {
+        $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
+        $cacheTags = $bootstrap->bootstrap();
+        $this->go_to(home_url('/'));
+        $cacheTags->add('shutdown-page');
+
+        $bootstrap->saveFeedCacheTags();
+
+        $this->assertEmpty($cacheTags->store->get(['shutdown-page']));
+    }
+
     public function test_a_404_is_not_stored(): void
     {
         $bootstrap = (new Bootstrap)->store(TransientStore::class)->actions([])->disable();
