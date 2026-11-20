@@ -345,6 +345,14 @@ class Core implements Action
             return;
         }
 
+        // A post listed neither before nor after (an auto-draft from "Add New",
+        // a draft save, trashing a draft) changes no listing.
+        if (! $this->isListedStatus($oldStatus, $post->post_type) && ! $this->isListedStatus($newStatus, $post->post_type)) {
+            $this->cacheTags->clear(CoreTags::posts($post->ID));
+
+            return;
+        }
+
         $isStatusChanged = $newStatus !== $oldStatus;
         $cacheTags = [
             ...CoreTags::posts($post->ID),
@@ -392,6 +400,14 @@ class Core implements Action
             return;
         }
 
+        // WP's daily cleanup deletes old auto-drafts and emptied trash; a
+        // trashed post already purged its listings when it left `publish`.
+        if (! $this->isListedStatus($post->post_status, $post->post_type)) {
+            $this->cacheTags->clear(CoreTags::posts($post->ID));
+
+            return;
+        }
+
         $taxonomies = array_intersect(
             CoreTags::getCacheableTaxonomies(),
             get_post_taxonomies($post)
@@ -415,6 +431,16 @@ class Core implements Action
     protected function isEmbeddedPostType(string $postType): bool
     {
         return in_array($postType, ['wp_block', 'wp_navigation'], true);
+    }
+
+    /**
+     * Whether a post with this status shows up on cached listings. Attachments
+     * are always `inherit`; drafts, pending, scheduled, private and trashed
+     * posts are only seen logged in, where pages aren't cached.
+     */
+    protected function isListedStatus(string $status, string $postType): bool
+    {
+        return $status === 'publish' || ($postType === 'attachment' && $status === 'inherit');
     }
 
     /**
