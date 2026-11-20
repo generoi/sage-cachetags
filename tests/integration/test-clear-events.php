@@ -1,6 +1,7 @@
 <?php
 
 use Genero\Sage\CacheTags\Actions\Core;
+use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tests\RestTestCase;
 
 /**
@@ -61,6 +62,71 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("post:{$postId}", $tags);
         $this->assertContains('archive:post', $tags);
         $this->assertContains('archive:post:any', $tags);
+    }
+
+    // WP's daily wp_scheduled_auto_draft_delete and wp_scheduled_delete remove
+    // posts no listing ever showed; they must not purge every listing page.
+    public function test_deleting_an_auto_draft_or_trashed_post_only_clears_the_post(): void
+    {
+        $autoDraft = self::factory()->post->create(['post_status' => 'auto-draft']);
+        $trashed = self::factory()->post->create(['post_status' => 'publish']);
+        wp_trash_post($trashed);
+
+        foreach (['auto-draft' => $autoDraft, 'trash' => $trashed] as $status => $postId) {
+            $this->resetCacheTags();
+
+            wp_delete_post($postId, true);
+
+            $tags = $this->queuedPurgeTags();
+            $this->assertContains("post:{$postId}", $tags, $status);
+            $this->assertNotContains('archive:post', $tags, $status);
+            $this->assertNotContains('archive:post:any', $tags, $status);
+            $this->assertNotContains('taxonomy:category', $tags, $status);
+        }
+    }
+
+    public function test_creating_or_saving_a_draft_does_not_clear_listings(): void
+    {
+        $this->resetCacheTags();
+        $postId = self::factory()->post->create(['post_status' => 'auto-draft']);
+        $this->assertNotContains('archive:post:any', $this->queuedPurgeTags(), 'auto-draft');
+
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_status' => 'draft', 'post_title' => 'Draft']);
+        wp_update_post(['ID' => $postId, 'post_title' => 'Edited draft']);
+
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains("post:{$postId}", $tags);
+        $this->assertNotContains('archive:post:any', $tags);
+        $this->assertNotContains('archive:post', $tags);
+    }
+
+    public function test_editing_or_unpublishing_a_published_post_still_clears_listings(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_title' => 'Edited']);
+        $this->assertContains('archive:post:any', $this->queuedPurgeTags(), 'edit');
+
+        $this->resetCacheTags();
+        wp_update_post(['ID' => $postId, 'post_status' => 'draft']);
+        $tags = $this->queuedPurgeTags();
+        $this->assertContains('archive:post:any', $tags, 'unpublish');
+        $this->assertContains('archive:post', $tags, 'unpublish');
+    }
+
+    public function test_deleting_an_attachment_still_clears_its_listings(): void
+    {
+        if (! CoreTags::isCacheablePostType('attachment')) {
+            $this->markTestSkipped('Attachments are not a cacheable post type here.');
+        }
+        $attachmentId = self::factory()->attachment->create(['post_status' => 'inherit']);
+        $this->resetCacheTags();
+
+        wp_delete_attachment($attachmentId, true);
+
+        $this->assertContains('archive:attachment:any', $this->queuedPurgeTags());
     }
 
     public function test_changing_a_user_role_clears_user_and_both_roles(): void
