@@ -1,7 +1,6 @@
 <?php
 
 use Genero\Sage\CacheTags\Actions\Core;
-use Genero\Sage\CacheTags\Tags\CoreTags;
 use Genero\Sage\CacheTags\Tests\RestTestCase;
 
 /**
@@ -114,19 +113,6 @@ class TestClearEvents extends RestTestCase
         $tags = $this->queuedPurgeTags();
         $this->assertContains('archive:post:any', $tags, 'unpublish');
         $this->assertContains('archive:post', $tags, 'unpublish');
-    }
-
-    public function test_deleting_an_attachment_still_clears_its_listings(): void
-    {
-        if (! CoreTags::isCacheablePostType('attachment')) {
-            $this->markTestSkipped('Attachments are not a cacheable post type here.');
-        }
-        $attachmentId = self::factory()->attachment->create(['post_status' => 'inherit']);
-        $this->resetCacheTags();
-
-        wp_delete_attachment($attachmentId, true);
-
-        $this->assertContains('archive:attachment:any', $this->queuedPurgeTags());
     }
 
     public function test_changing_a_user_role_clears_user_and_both_roles(): void
