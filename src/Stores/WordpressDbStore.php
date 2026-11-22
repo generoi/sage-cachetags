@@ -7,6 +7,7 @@ use Genero\Sage\CacheTags\Contracts\InspectableStore;
 use Genero\Sage\CacheTags\Contracts\ListableStore;
 use Genero\Sage\CacheTags\Contracts\PrunableStore;
 use Genero\Sage\CacheTags\Contracts\Store;
+use Genero\Sage\CacheTags\Util;
 
 class WordpressDbStore implements InspectableStore, ListableStore, PrunableStore, Store
 {
@@ -17,6 +18,11 @@ class WordpressDbStore implements InspectableStore, ListableStore, PrunableStore
     {
         if (empty($tags)) {
             return true;
+        }
+
+        // Don't let MySQL truncate it into a key that matches no page.
+        if (! Util::isStorableUrl($url)) {
+            return false;
         }
 
         global $wpdb;

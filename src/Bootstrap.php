@@ -222,6 +222,7 @@ class Bootstrap
         if (! $this->disable) {
             $this->bindActions();
 
+            add_action('template_redirect', [$this, 'preventCachingUnstorableUrl']);
             add_action('wp_footer', [$this, 'saveCacheTags']);
             add_filter('rest_post_dispatch', [$this, 'saveCacheTagsRest'], 10, 3);
             add_action('shutdown', [$this, 'purgeCacheTags']);
@@ -405,6 +406,23 @@ class Bootstrap
             // theme/VCL consulting Util::isCacheableRequest().
             define('DONOTCACHEPAGE', true);
         }
+    }
+
+    /**
+     * A page whose URL is too long for the store can't be purged, so keep every
+     * cache off it: DONOTCACHEPAGE for page caches, no-cache headers (sent
+     * before output) for the edge.
+     */
+    public function preventCachingUnstorableUrl(): void
+    {
+        if (Util::isStorableUrl(Util::currentUrl())) {
+            return;
+        }
+
+        if (! defined('DONOTCACHEPAGE')) {
+            define('DONOTCACHEPAGE', true);
+        }
+        nocache_headers();
     }
 
     public function saveCacheTagsRest($response, $server, WP_REST_Request $request)

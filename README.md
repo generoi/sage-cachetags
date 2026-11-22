@@ -99,7 +99,8 @@ Front-end pages are stored under the **actual requested URL** (including its que
 string), so a URL-based purge matches the variant a page cache keyed on. A default
 set of tracking/volatile params (`utm_*`, `gclid`/`fbclid`/`dclid`/…, `_wpnonce`,
 `_`) is stripped and the rest sorted; a key longer than the `varchar(191)`
-column falls back to the path. The Kinsta invalidators also strip `_ga`,
+column falls back to the path, and a page whose path alone is longer isn't cached
+at all (see Cacheability). The Kinsta invalidators also strip `_ga`,
 `mc_cid`, `mc_eid` and `ref`, which Kinsta's edge leaves out of its cache key and
 serves from the bare URL's entry; edges that cache them as their own key
 (SiteGround, WP Rocket, Super Cache) keep them.
@@ -575,8 +576,10 @@ filter. The header-size collapse keeps the broader tag set bounded.
 ## Cacheability
 
 Some responses must never be stored in a shared cache. `Util::isCacheableRequest()`
-returns `false` for previews and any request showing the admin bar (per-user
-chrome baked into the HTML), and — by default — for logged-in users. When a
+returns `false` for previews, any request showing the admin bar (per-user
+chrome baked into the HTML), a page whose stored URL is longer than the
+`varchar(191)` url column (it can't be stored, so nothing could purge it; such
+pages also get `nocache_headers()`), and — by default — for logged-in users. When a
 request is not cacheable the plugin skips tagging it and defines `DONOTCACHEPAGE`
 so page caches (WP Super Cache, Batcache, theme cache-control providers) don't
 store it; edge caches should consult `Util::isCacheableRequest()` from the
