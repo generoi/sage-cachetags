@@ -87,6 +87,12 @@ class Util
             return false;
         }
 
+        // A URL too long for the store gets no row, so no purge could reach a
+        // cached copy. Never cache it — not overridable.
+        if (! self::isStorableUrl(self::currentUrl())) {
+            return false;
+        }
+
         // Logged-in requests are non-cacheable by default. An opt-in such as
         // CacheCustomers re-enables specific users by filtering at an earlier
         // priority (<10); the response vetoes (cart, forms) run at the default
@@ -135,6 +141,16 @@ class Util
      * Max length of a stored tag or URL — the `varchar(191)` store columns.
      */
     const MAX_LENGTH = 191;
+
+    /**
+     * Whether a URL fits the store's url column. Longer URLs are never stored
+     * (MySQL would reject or silently truncate them into a key that matches no
+     * page), so a page under one must not be cached.
+     */
+    public static function isStorableUrl(string $url): bool
+    {
+        return strlen($url) <= self::MAX_LENGTH;
+    }
 
     /**
      * Parse a human age like "30d", "12h" or "4w" (hours/days/weeks) into the
