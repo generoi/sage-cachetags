@@ -11,6 +11,9 @@ use Genero\Sage\CacheTags\Util;
 
 class WordpressDbStore implements InspectableStore, ListableStore, PrunableStore, Store
 {
+    /** Re-run a deadlocked save() this many times before giving up. */
+    const DEADLOCK_RETRIES = 2;
+
     /**
      * @param  string[]  $tags
      */
@@ -24,6 +27,12 @@ class WordpressDbStore implements InspectableStore, ListableStore, PrunableStore
         if (! Util::isStorableUrl($url)) {
             return false;
         }
+
+        // Concurrent renders upsert overlapping (tag, url) keys — every page
+        // shares tags like site:1. Locking them in the same (index) order in
+        // every statement stops two saves from each holding a key the other
+        // waits on.
+        sort($tags, SORT_STRING);
 
         global $wpdb;
         $placeholders = implode(',', array_fill(0, count($tags), '(%s, %s)'));
@@ -42,15 +51,39 @@ class WordpressDbStore implements InspectableStore, ListableStore, PrunableStore
         // row on every cache miss and hammer the DB. When the row was seen within
         // the last day the UPDATE sets created_at to itself — a no-op InnoDB skips
         // (no write). GC TTLs are measured in weeks, so a day of slack is free.
-        $result = $wpdb->query($wpdb->prepare("
+        $sql = $wpdb->prepare("
             INSERT INTO `{$wpdb->prefix}cache_tags` (`tag`, `url`)
             VALUES {$placeholders}
             ON DUPLICATE KEY UPDATE created_at = IF(
                 created_at < (NOW() - INTERVAL 1 DAY), NOW(), created_at
             )
-        ", ...$values));
+        ", ...$values);
+
+        // A deadlock can still happen against a purge's DELETE by url. InnoDB
+        // rolls the victim back, so the statement is safe to re-run; without the
+        // retry the page stays cached with no tags and no purge reaches it.
+        $attempt = 0;
+        do {
+            $result = $this->query($sql);
+        } while (
+            $result === false
+            && $attempt++ < static::DEADLOCK_RETRIES
+            && str_contains((string) $wpdb->last_error, 'Deadlock')
+        );
 
         return $result !== false;
+    }
+
+    /**
+     * Run a write — isolated as a seam so the deadlock retry can be tested.
+     *
+     * @return int|bool
+     */
+    protected function query(string $sql)
+    {
+        global $wpdb;
+
+        return $wpdb->query($sql);
     }
 
     /**
