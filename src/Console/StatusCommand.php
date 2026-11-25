@@ -5,6 +5,7 @@ namespace Genero\Sage\CacheTags\Console;
 use Genero\Sage\CacheTags\Actions\KinstaTermMenuClears;
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\InspectableStore;
+use Genero\Sage\CacheTags\DeferredQueue;
 use Roots\Acorn\Console\Commands\Command;
 
 class StatusCommand extends Command
@@ -56,6 +57,30 @@ class StatusCommand extends Command
             $ok ? $this->line($message) : $this->warn($message);
         }
 
+        foreach ($this->app->make(CacheTags::class)->invalidators as $invalidator) {
+            if (method_exists($invalidator, 'deferred')) {
+                $this->deferredStatus(get_class($invalidator), $invalidator::deferred());
+            }
+        }
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Rate-limited purges wait for a cron retry; a queue whose retry is overdue
+     * means cron isn't running and the edge is serving stale content.
+     */
+    protected function deferredStatus(string $invalidator, DeferredQueue $queue): void
+    {
+        $entries = $queue->all();
+        if ($entries === []) {
+            return;
+        }
+
+        $count = array_sum(array_map(fn ($items) => $items === true ? 1 : count($items), $entries));
+        $next = wp_next_scheduled($queue->hook);
+        $message = sprintf('%s: %d deferred purge(s), retry %s', class_basename($invalidator), $count, $next ? human_time_diff($next).($next < time() ? ' overdue' : ' from now') : 'not scheduled');
+
+        $next && $next > time() - 5 * MINUTE_IN_SECONDS ? $this->line($message) : $this->warn($message);
     }
 }

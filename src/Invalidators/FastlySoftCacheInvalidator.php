@@ -28,6 +28,18 @@ class FastlySoftCacheInvalidator extends FastlyCacheInvalidator implements SoftI
         }
     }
 
+    public function hardClear(array $urls, array $tags): bool
+    {
+        $hard = $this->hard;
+        $this->hard = true;
+
+        try {
+            return parent::clear($urls, $tags);
+        } finally {
+            $this->hard = $hard;
+        }
+    }
+
     public function hardFlush(): bool
     {
         $this->hard = true;

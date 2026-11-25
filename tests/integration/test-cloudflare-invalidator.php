@@ -1,5 +1,6 @@
 <?php
 
+use Genero\Sage\CacheTags\Actions\Site;
 use Genero\Sage\CacheTags\Invalidators\CloudflareCacheInvalidator;
 use Genero\Sage\CacheTags\Invalidators\CloudflareSoftCacheInvalidator;
 use WpOrg\Requests\Response;
@@ -57,6 +58,23 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
 
             /** @var string[] zones whose purge failure was logged */
             public array $failures = [];
+
+            /** Whether the Site action is bound (scoping tags per site). */
+            public bool $siteAction = false;
+
+            public int $flushes = 0;
+
+            public function flush(): bool
+            {
+                $this->flushes++;
+
+                return parent::flush();
+            }
+
+            protected function hasAction(string $action): bool
+            {
+                return $action === Site::class ? $this->siteAction : parent::hasAction($action);
+            }
 
             /** @var callable */
             private $respond;
@@ -235,6 +253,35 @@ class TestCloudflareInvalidator extends WP_UnitTestCase
             'zone-a' => [['purge_everything' => true]],
             'zone-b' => [['purge_everything' => true]],
         ], $invalidator->payloadsByZone(), 'one request per zone');
+    }
+
+    /**
+     * One site's bulk purge carries that site's tags only; a flush would empty
+     * every site's cache.
+     */
+    public function test_a_bulk_purge_with_the_site_action_purges_only_the_current_site(): void
+    {
+        $current = get_current_blog_id();
+        $invalidator = $this->invalidator(fn () => self::OK);
+        $invalidator->siteAction = true;
+        $tags = array_map(fn ($i) => "site:{$current}:post:{$i}", range(1, CloudflareCacheInvalidator::BULK_PURGE_THRESHOLD + 1));
+
+        $this->assertTrue($invalidator->clear([], $tags));
+
+        $this->assertSame(0, $invalidator->flushes);
+        $this->assertSame([['tags' => ["site:{$current}"]]], $invalidator->payloadsByZone()['zone-a']);
+    }
+
+    public function test_the_soft_invalidator_hard_clear_purges(): void
+    {
+        $invalidator = $this->softInvalidator();
+
+        $this->assertTrue($invalidator->hardClear([], ['post:1']));
+        $this->assertSame(['purge_cache', 'purge_cache'], $invalidator->endpoints);
+
+        $invalidator->endpoints = [];
+        $invalidator->clear([], ['post:1']);
+        $this->assertSame(['invalidate_cache', 'invalidate_cache'], $invalidator->endpoints, 'the next clear is soft again');
     }
 
     public function test_the_bulk_threshold_is_filterable(): void

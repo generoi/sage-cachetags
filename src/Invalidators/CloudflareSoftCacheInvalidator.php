@@ -40,6 +40,18 @@ class CloudflareSoftCacheInvalidator extends CloudflareCacheInvalidator implemen
         }
     }
 
+    public function hardClear(array $urls, array $tags): bool
+    {
+        $hard = $this->hard;
+        $this->hard = true;
+
+        try {
+            return parent::clear($urls, $tags);
+        } finally {
+            $this->hard = $hard;
+        }
+    }
+
     public function hardFlush(): bool
     {
         $this->hard = true;

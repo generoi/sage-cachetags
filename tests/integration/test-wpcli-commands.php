@@ -114,6 +114,11 @@ class TestWpCliCommands extends WP_UnitTestCase
 
                 return true;
             }
+
+            public function hardClear(array $urls, array $tags): bool
+            {
+                return true;
+            }
         };
         $this->prop()->setValue(null, null);
         CacheTags::make(new CacheTagStore, false, 'Cache-Tag', [$soft, new DebugCacheInvalidator]);

@@ -265,8 +265,10 @@ multi-domain site on Free runs out quickly. In WP-CLI and cron a rate-limited
 waits, since purges run before the visitor's response is finished. Whatever is
 still limited goes into a per-zone `DeferredQueue` (`cachetags_deferred_cloudflare:*`
 options) and is retried by a single WP-cron event a minute later, coalesced, until
-it goes through. Make sure WP-cron runs on the site. Failures other than 429 are
-logged with `error_log`.
+it goes through. Make sure WP-cron runs on the site; `wp cachetags status` warns
+when a retry is overdue. Failures other than 429 are logged with `error_log`, and
+any failed purge or flush fires `cachetags/purge-failed` with the message, for a
+site's own alerting.
 
 `Genero\Sage\CacheTags\DeferredQueue` is generic, for any invalidator whose API
 rate-limits (Kinsta and SiteGround do too): `push(['key' => [...tags or URLs]])` or
@@ -640,7 +642,8 @@ Two ways to handle a page that bakes a nonce into its HTML:
    ```
 
    A purge that includes one of these tags goes hard as a whole. One that is
-   rate-limited and deferred to cron is retried soft.
+   rate-limited and deferred to cron is retried soft. Taking a post down
+   (unpublishing, trashing, giving it a password) also purges hard.
 
 2. **Mark it non-cacheable** when the page also shows genuinely real-time data
    (e.g. live availability), where a 12h refresh isn't enough:
@@ -884,7 +887,8 @@ wp acorn cachetags:database
 # Migrate the table to the latest schema (drop + recreate + flush the cache)
 wp acorn cachetags:database --rebuild
 
-# Inspect the store: row/tag/url counts and the widest-fan-out tags
+# Inspect the store: row/tag/url counts and the widest-fan-out tags, and
+# rate-limited purges still waiting for their cron retry
 wp acorn cachetags:status
 # …or the tags a given URL is stored under (an argument: WP-CLI takes --url
 # as its own global flag)
