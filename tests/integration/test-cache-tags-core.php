@@ -3,6 +3,7 @@
 use Genero\Sage\CacheTags\CacheTags;
 use Genero\Sage\CacheTags\Contracts\Action;
 use Genero\Sage\CacheTags\Contracts\Invalidator;
+use Genero\Sage\CacheTags\Contracts\SoftInvalidator;
 use Genero\Sage\CacheTags\Contracts\Store;
 
 class RecordingStore implements Store
@@ -146,6 +147,57 @@ class TestCacheTagsCore extends WP_UnitTestCase
 
         $this->assertFalse($cacheTags->purgeQueued());
         $this->assertEmpty($store->cleared, 'store left intact when a purge fails');
+    }
+
+    public function test_a_required_hard_purge_goes_hard_through_soft_invalidators_once(): void
+    {
+        $soft = new class extends RecordingInvalidator implements SoftInvalidator
+        {
+            public array $hardClearedWith = [];
+
+            public function hardClear(array $urls, array $tags): bool
+            {
+                $this->hardClearedWith[] = $tags;
+
+                return true;
+            }
+
+            public function hardFlush(): bool
+            {
+                return true;
+            }
+        };
+        $plain = new RecordingInvalidator;
+        $cacheTags = $this->make(new RecordingStore, [$soft, $plain]);
+
+        $cacheTags->requireHardPurge();
+        $cacheTags->clear(['post:1']);
+        $cacheTags->purgeQueued();
+
+        $this->assertSame([['post:1']], $soft->hardClearedWith);
+        $this->assertSame([], $soft->clearedWith);
+        $this->assertCount(1, $plain->clearedWith, 'a hard-only invalidator clears as always');
+
+        $cacheTags->clear(['post:2']);
+        $cacheTags->purgeQueued();
+        $this->assertCount(1, $soft->clearedWith, 'the next purge is soft again');
+    }
+
+    public function test_a_failed_purge_fires_purge_failed(): void
+    {
+        $invalidator = new RecordingInvalidator;
+        $invalidator->clearResult = false;
+        $cacheTags = $this->make(new RecordingStore, [$invalidator]);
+        $messages = [];
+        add_action('cachetags/purge-failed', function (string $message) use (&$messages) {
+            $messages[] = $message;
+        });
+
+        $cacheTags->clear(['post:1']);
+        $cacheTags->purgeQueued();
+
+        $this->assertCount(1, $messages);
+        $this->assertStringContainsString('post:1', $messages[0]);
     }
 
     public function test_purge_queued_is_a_noop_without_queued_tags(): void

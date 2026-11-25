@@ -53,6 +53,19 @@ abstract class RestTestCase extends WP_UnitTestCase
             $prop->setAccessible(true);
             $prop->setValue($this->cacheTags, []);
         }
+
+        $prop = $reflection->getProperty('hardPurge');
+        $prop->setAccessible(true);
+        $prop->setValue($this->cacheTags, false);
+    }
+
+    /** Whether the queued purge is to be sent hard (CacheTags::requireHardPurge()). */
+    protected function hardPurgeRequired(): bool
+    {
+        $prop = (new ReflectionObject($this->cacheTags))->getProperty('hardPurge');
+        $prop->setAccessible(true);
+
+        return $prop->getValue($this->cacheTags);
     }
 
     /**

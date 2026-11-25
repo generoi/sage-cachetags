@@ -53,6 +53,7 @@ class Core implements Action
 
         // Clear caches
         \add_action('transition_post_status', [$this, 'onPostStatusTransition'], 10, 3);
+        \add_action('post_updated', [$this, 'onPostPasswordChange'], 10, 3);
         \add_action('before_delete_post', [$this, 'onPostDelete']);
         \add_action('transition_comment_status', [$this, 'onCommentStatusTransition'], 10, 3);
         \add_action('comment_post', [$this, 'onCommentPost'], 10, 3);
@@ -376,7 +377,24 @@ class Core implements Action
             ];
         }
 
+        // Taken down: a soft purge would keep serving it while it revalidates.
+        if ($oldStatus === 'publish' && $newStatus !== 'publish') {
+            $this->cacheTags->requireHardPurge();
+        }
+
         $this->cacheTags->clear($cacheTags);
+    }
+
+    /**
+     * A published post given a password (or a new one) is taken down for
+     * everyone without it: purge hard. The save's own purge is queued by
+     * onPostStatusTransition.
+     */
+    public function onPostPasswordChange(int $postId, WP_Post $after, WP_Post $before): void
+    {
+        if ($after->post_status === 'publish' && $after->post_password !== '' && $after->post_password !== $before->post_password) {
+            $this->cacheTags->requireHardPurge();
+        }
     }
 
     /**

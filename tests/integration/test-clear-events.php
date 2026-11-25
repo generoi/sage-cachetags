@@ -50,6 +50,41 @@ class TestClearEvents extends RestTestCase
         $this->assertContains("post:{$postId}", $tags);
     }
 
+    public function test_taking_a_post_down_purges_hard(): void
+    {
+        foreach (['draft', 'private', 'trash'] as $status) {
+            $postId = self::factory()->post->create(['post_status' => 'publish']);
+            $this->resetCacheTags();
+
+            wp_update_post(['ID' => $postId, 'post_status' => $status]);
+
+            $this->assertTrue($this->hardPurgeRequired(), $status);
+            $this->assertContains("post:{$postId}", $this->queuedPurgeTags(), $status);
+        }
+    }
+
+    public function test_giving_a_published_post_a_password_purges_hard(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $this->resetCacheTags();
+
+        wp_update_post(['ID' => $postId, 'post_password' => 'secret']);
+
+        $this->assertTrue($this->hardPurgeRequired());
+    }
+
+    public function test_an_ordinary_edit_or_publish_purges_soft(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'draft']);
+        $this->resetCacheTags();
+
+        wp_update_post(['ID' => $postId, 'post_status' => 'publish']);
+        $this->assertFalse($this->hardPurgeRequired(), 'publishing');
+
+        wp_update_post(['ID' => $postId, 'post_title' => 'Edited']);
+        $this->assertFalse($this->hardPurgeRequired(), 'editing');
+    }
+
     public function test_permanently_deleting_a_post_clears_it_and_its_listings(): void
     {
         $postId = self::factory()->post->create(['post_status' => 'publish']);

@@ -6,6 +6,7 @@ use Genero\Sage\CacheTags\Console\ClearCommand;
 use Genero\Sage\CacheTags\Console\DatabaseCommand;
 use Genero\Sage\CacheTags\Console\FlushCommand;
 use Genero\Sage\CacheTags\Console\StatusCommand;
+use Genero\Sage\CacheTags\Invalidators\CloudflareCacheInvalidator;
 use Genero\Sage\CacheTags\Invalidators\DebugCacheInvalidator;
 use Genero\Sage\CacheTags\Invalidators\KinstaGroupCacheInvalidator;
 use Genero\Sage\CacheTags\Stores\CacheTagStore;
@@ -141,5 +142,26 @@ class TestConsoleCommands extends WP_UnitTestCase
         $this->assertSame(Command::SUCCESS, $exitCode);
         $this->assertStringContainsString('Kinsta full clears removed from: edited_term, delete_term.', $output);
         $this->assertStringContainsString("wasn't hooked on wp_update_nav_menu", $output);
+    }
+
+    public function test_status_command_reports_deferred_purges_and_an_overdue_retry(): void
+    {
+        $this->prop()->setValue(null, null);
+        $this->container->instance(CacheTags::class, CacheTags::make(new WordpressDbStore, false, 'Cache-Tag', [new CloudflareCacheInvalidator]));
+        $queue = CloudflareCacheInvalidator::deferred();
+        $queue->push(['zone-a' => ['post:1', 'post:2']]);
+
+        try {
+            [, $output] = $this->runCommand(new StatusCommand);
+            $this->assertStringContainsString('CloudflareCacheInvalidator: 2 deferred purge(s), retry', $output);
+            $this->assertStringContainsString('from now', $output);
+
+            wp_clear_scheduled_hook($queue->hook);
+            wp_schedule_single_event(time() - HOUR_IN_SECONDS, $queue->hook);
+            [, $output] = $this->runCommand(new StatusCommand);
+            $this->assertStringContainsString('overdue', $output, 'cron is not running the retry');
+        } finally {
+            $queue->clear();
+        }
     }
 }

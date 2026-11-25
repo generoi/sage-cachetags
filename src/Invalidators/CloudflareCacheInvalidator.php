@@ -45,8 +45,8 @@ class CloudflareCacheInvalidator implements Invalidator
     const DEFERRED_DELAY = 60;
 
     /**
-     * Above this many tags a purge flushes instead (the site tags, or everything
-     * without the Site action): one request per zone instead of one per 100 tags,
+     * Above this many tags a purge flushes instead (the current site's tag, or
+     * everything without the Site action): one request per zone instead of one per 100 tags,
      * which on a multi-zone Free plan would sit in the deferred queue for an hour.
      * A hard purge leaves the site cold; with the soft invalidator it is served
      * stale while it revalidates.
@@ -86,7 +86,11 @@ class CloudflareCacheInvalidator implements Invalidator
         }
 
         if (count($tags) > (int) apply_filters('cachetags/cloudflare-bulk-purge-threshold', self::BULK_PURGE_THRESHOLD)) {
-            return $this->flush();
+            // The tags are this site's (the Site action scopes them), so its own
+            // site tag covers them; flush() would empty every site's cache.
+            return $this->hasAction(Site::class)
+                ? $this->purge($this->tagPayloads(Tag::toStrings(SiteTags::sites())))
+                : $this->flush();
         }
 
         return $this->purge($this->tagPayloads($tags));

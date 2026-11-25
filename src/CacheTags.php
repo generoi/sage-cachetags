@@ -34,6 +34,9 @@ class CacheTags
      */
     protected array $purgeTags = [];
 
+    /** Send the queued purge hard even through soft invalidators. @see requireHardPurge() */
+    protected bool $hardPurge = false;
+
     /**
      * Memoized result of get() — the normalize + filter + bound pipeline is run
      * once per request, not on each of the save() and header consumers. Reset
@@ -299,9 +302,21 @@ class CacheTags
         }
     }
 
+    /**
+     * Send this request's queued purge hard, also through soft invalidators: for
+     * content that must stop being served at once (Core calls it when a post is
+     * unpublished or given a password).
+     */
+    public function requireHardPurge(): void
+    {
+        $this->hardPurge = true;
+    }
+
     public function purgeQueued(): bool
     {
         $tags = Tag::toStrings($this->resolveTags($this->purgeTags));
+        $hard = $this->hardPurge;
+        $this->hardPurge = false;
 
         if (empty($tags)) {
             return true;
@@ -318,7 +333,7 @@ class CacheTags
         // Run all invalidators but keep track if something failed.
         $result = array_reduce(
             $this->invalidators,
-            fn ($result, $invalidator) => $invalidator->clear($urls, $tags) ? $result : false,
+            fn ($result, $invalidator) => ($hard && $invalidator instanceof SoftInvalidator ? $invalidator->hardClear($urls, $tags) : $invalidator->clear($urls, $tags)) ? $result : false,
             true
         );
 
@@ -373,6 +388,10 @@ class CacheTags
 
     protected function logFailure(string $message): void
     {
+        // For a site's own alerting: the logger below may write to a file no
+        // one watches.
+        do_action('cachetags/purge-failed', $message);
+
         $message = "[cachetags] {$message}";
 
         // Prefer a framework logger (Acorn/Laravel) so failures land in the
